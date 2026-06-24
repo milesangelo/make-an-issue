@@ -41,11 +41,11 @@ Plans:
   1. The global shortcut fires while another app is focused (background hotkey works).
   2. Holding the shortcut records and releasing it stops, with the menu reflecting the recording state.
   3. A 16 kHz mono WAV file is produced from the spoken audio.
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 02-01: Integrate KeyboardShortcuts; configurable push-to-talk shortcut with `onKeyDown`/`onKeyUp`
-- [ ] 02-02: AVFoundation mic capture to 16 kHz mono WAV + microphone permission handling
+- [ ] 02-01-PLAN.md — KeyboardShortcuts integration + AppState push-to-talk state machine (default Control-Option-I, configurable; ignore-repeat guard)
+- [ ] 02-02-PLAN.md — AVFoundation 16 kHz mono WAV capture, mic permission + Info.plist, recorder wiring, and menu recording indicator
 
 ### Phase 3: Local Transcription
 **Goal**: Invoke the user-configured local ASR CLI on the recorded WAV and capture the transcript text.
@@ -94,7 +94,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Menu-Bar App + Repo-Bound Launch | 3/3 | Complete | 2026-06-23 |
+| 1. Menu-Bar App + Repo-Bound Launch | 3/3 | Complete | 2026-06-24 |
 | 2. Push-to-Talk Voice Capture | 0/2 | Not started | - |
 | 3. Local Transcription | 0/2 | Not started | - |
 | 4. Repo Investigation → Issue Draft | 0/2 | Not started | - |
