@@ -6,6 +6,8 @@ import KeyboardShortcuts
 enum CaptureState: Equatable {
     case idle
     case recording
+    /// ASR command is executing; results are in-flight (D-10).
+    case transcribing
     case finished
 }
 
@@ -15,12 +17,19 @@ extension KeyboardShortcuts.Name {
 
 @MainActor
 final class AppState: ObservableObject {
+    /// Shared UserDefaults key for the ASR command — must match @AppStorage in MenuView (Pitfall 5).
+    static let asrCommandKey = "asrCommand"
+
     @Published var statusText: String
     @Published var launchCWD: String?
     @Published var boundRepo: RepoBinding?
     @Published var boundRepoDisplayText: String
     @Published var captureState: CaptureState = .idle
     @Published var micPermissionGranted: Bool = false
+    /// Last successful transcript text (D-09, TRANSCRIBE-02).
+    @Published var transcript: String?
+    /// Last transcription failure reason; cleared when a new transcription starts.
+    @Published var transcriptError: String?
 
     // Anchors the AudioRecorder's lifetime and is the integration point for its
     // delegate callbacks (onRecordingError, wired in init). The start/stop seam
@@ -28,6 +37,8 @@ final class AppState: ObservableObject {
     private let audioRecorder: AudioRecorder
     private let onStartRecording: () -> Bool
     private let onStopRecording: () -> Void
+    /// Seam for transcription — the default wires the real Transcriber; tests inject a stub.
+    private let onRunTranscription: (URL) async throws -> String
 
     /// Maximum recording duration. If a key-up event is missed (focus change while
     /// held, dropped system event, menu-mode flapping), this caps the stuck
@@ -35,7 +46,7 @@ final class AppState: ObservableObject {
     private let maxRecordingDuration: Duration
     private var recordingTimeoutTask: Task<Void, Never>?
 
-    /// Convenience init for the running app: wires a real AudioRecorder into the seam.
+    /// Convenience init for the running app: wires a real AudioRecorder and Transcriber into the seams.
     convenience init(
         statusText: String = "Ready",
         launchCWD: String? = nil,
@@ -55,6 +66,10 @@ final class AppState: ObservableObject {
     }
 
     /// Designated init: accepts explicit seam closures for testing.
+    ///
+    /// - Parameters:
+    ///   - onRunTranscription: Closure injected for testing — default wires the real Transcriber.
+    ///     Signature: `(URL) async throws -> String` (wavURL → trimmed transcript or throws TranscriberError).
     init(
         statusText: String = "Ready",
         launchCWD: String? = nil,
@@ -63,7 +78,11 @@ final class AppState: ObservableObject {
         onStartRecording: @escaping () -> Bool,
         onStopRecording: @escaping () -> Void,
         audioRecorder: AudioRecorder = AudioRecorder(),
-        maxRecordingDuration: Duration = .seconds(120)
+        maxRecordingDuration: Duration = .seconds(120),
+        onRunTranscription: @escaping (URL) async throws -> String = { url in
+            let cmd = UserDefaults.standard.string(forKey: AppState.asrCommandKey) ?? ""
+            return try await Transcriber.run(command: cmd, wavURL: url)
+        }
     ) {
         self.statusText = statusText
         self.launchCWD = launchCWD
@@ -73,6 +92,7 @@ final class AppState: ObservableObject {
         self.onStartRecording = onStartRecording
         self.onStopRecording = onStopRecording
         self.maxRecordingDuration = maxRecordingDuration
+        self.onRunTranscription = onRunTranscription
 
         // Route encode/IO errors that occur after recording starts back into the
         // state machine. The delegate fires on a background audio thread, so hop
@@ -139,7 +159,56 @@ final class AppState: ObservableObject {
         recordingTimeoutTask?.cancel()
         recordingTimeoutTask = nil
         onStopRecording()
-        captureState = .finished
+        captureState = .transcribing   // D-10: show transcribing state immediately
+        transcriptError = nil           // clear stale error from prior attempt
+
+        guard let wavURL = audioRecorder.latestWavURL else {
+            captureState = .idle
+            statusText = "Transcription failed — recording not found"
+            return
+        }
+
+        Task {
+            do {
+                let text = try await onRunTranscription(wavURL)
+                await MainActor.run {
+                    self.transcript = text
+                    self.captureState = .finished
+                    NSLog("MakeAnIssue transcript: \(text)")   // D-09
+                }
+            } catch let error as TranscriberError {
+                let message = Self.message(for: error)
+                await MainActor.run {
+                    self.transcriptError = message
+                    self.statusText = message
+                    self.captureState = .idle   // D-11: reset so next push-to-talk works
+                }
+            } catch {
+                let message = "Transcription failed — \(error.localizedDescription)"
+                await MainActor.run {
+                    self.transcriptError = message
+                    self.statusText = message
+                    self.captureState = .idle
+                }
+            }
+        }
+    }
+
+    /// Map a `TranscriberError` to a short user-facing message (D-11).
+    private static func message(for error: TranscriberError) -> String {
+        switch error {
+        case .emptyCommand:
+            return "Set your ASR command in the menu to transcribe"
+        case .missingWavToken:
+            return "ASR command must include {wav} — add it where the audio path goes"
+        case .asrFailed(let exitCode, let stderr):
+            let tail = stderr.split(separator: "\n").last.map(String.init) ?? stderr
+            return "ASR failed (exit \(exitCode))\(tail.isEmpty ? "" : " — \(tail)")"
+        case .asrTimedOut:
+            return "ASR timed out after 120s"
+        case .emptyTranscript:
+            return "ASR produced no output — check your command"
+        }
     }
 
     /// Recovery path for a stuck recording (missed key-up). Auto-stops and returns

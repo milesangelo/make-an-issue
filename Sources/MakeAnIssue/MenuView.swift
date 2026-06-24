@@ -52,9 +52,10 @@ struct MenuView: View {
 
     private var captureStateLabel: String {
         switch appState.captureState {
-        case .idle:      return "Idle"
-        case .recording: return "Recording…"
-        case .finished:  return "Done"
+        case .idle:          return "Idle"
+        case .recording:     return "Recording…"
+        case .transcribing:  return "Transcribing…"
+        case .finished:      return "Done"
         }
     }
 }
