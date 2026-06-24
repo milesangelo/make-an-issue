@@ -1,3 +1,4 @@
+import KeyboardShortcuts
 import SwiftUI
 
 struct MenuView: View {
@@ -21,8 +22,20 @@ struct MenuView: View {
             } else {
                 LabeledContent("Repository", value: appState.boundRepoDisplayText)
             }
+
+            LabeledContent("Recording", value: captureStateLabel)
+
+            KeyboardShortcuts.Recorder("Push-to-Talk:", name: .pushToTalk)
         }
         .padding()
         .frame(width: 320, alignment: .leading)
+    }
+
+    private var captureStateLabel: String {
+        switch appState.captureState {
+        case .idle:      return "Idle"
+        case .recording: return "Recording…"
+        case .finished:  return "Done"
+        }
     }
 }
