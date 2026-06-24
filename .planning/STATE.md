@@ -3,10 +3,10 @@ gsd_state_version: '1.0'
 status: planning
 progress:
   total_phases: 5
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 11
-  completed_plans: 2
-  percent: 18
+  completed_plans: 3
+  percent: 27
 ---
 
 # Project State
@@ -21,11 +21,11 @@ See: .planning/PROJECT.md (updated 2026-06-23)
 ## Current Position
 
 Phase: 1 of 5 (Menu-Bar App + Repo-Bound Launch)
-Plan: 2 of 3 executed (3 planned)
-Status: Executing Phase 1
-Last activity: 2026-06-23 — Completed Plan 01-02 launcher handoff
+Plan: 3 of 3 executed (3 planned)
+Status: Phase 1 complete; ready for verification
+Last activity: 2026-06-23 — Completed Plan 01-03 repo binding and menu display
 
-Progress: [██░░░░░░░░] 18%
+Progress: [███░░░░░░░] 27%
 
 ## Accumulated Context
 
@@ -39,7 +39,7 @@ Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecti
 
 ### Pending Todos
 
-- Execute Phase 1 Plan 01-03: resolve git root from launch cwd and display bound repo.
+- Verify Phase 1 end-to-end behavior, including visual same-instance menu-bar smoke check.
 
 ### Blockers/Concerns
 
@@ -54,5 +54,5 @@ Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecti
 ## Session Continuity
 
 Last session: 2026-06-23
-Stopped at: Completed 01-02-PLAN.md; ready for 01-03.
+Stopped at: Phase 1 complete; ready for `$gsd-verify-work 1`.
 Resume file: None

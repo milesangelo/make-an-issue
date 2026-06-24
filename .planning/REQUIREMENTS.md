@@ -9,9 +9,9 @@ Happy-path only. Each requirement maps to exactly one roadmap phase.
 
 ### Launch & Repo Binding
 
-- [ ] **LAUNCH-01**: A repo-local command launches the menu-bar app if it is not running, or activates the existing single instance.
-- [ ] **LAUNCH-02**: On launch/activation, the app binds the session to the git repository resolved from the command's working directory.
-- [ ] **LAUNCH-03**: The app runs as a native background menu-bar utility (no Dock icon) and displays the currently bound repository.
+- [x] **LAUNCH-01**: A repo-local command launches the menu-bar app if it is not running, or activates the existing single instance.
+- [x] **LAUNCH-02**: On launch/activation, the app binds the session to the git repository resolved from the command's working directory.
+- [x] **LAUNCH-03**: The app runs as a native background menu-bar utility (no Dock icon) and displays the currently bound repository.
 
 ### Voice Capture
 
@@ -71,9 +71,9 @@ Each v1 requirement maps to exactly one phase.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| LAUNCH-01 | Phase 1 | Pending |
-| LAUNCH-02 | Phase 1 | Pending |
-| LAUNCH-03 | Phase 1 | Pending |
+| LAUNCH-01 | Phase 1 | Complete |
+| LAUNCH-02 | Phase 1 | Complete |
+| LAUNCH-03 | Phase 1 | Complete |
 | CAPTURE-01 | Phase 2 | Pending |
 | CAPTURE-02 | Phase 2 | Pending |
 | CAPTURE-03 | Phase 2 | Pending |

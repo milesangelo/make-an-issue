@@ -10,7 +10,7 @@ happy path: speak a thought → a GitHub issue is filed in the right repo → th
 
 ## Phases
 
-- [ ] **Phase 1: Menu-Bar App + Repo-Bound Launch** - A no-Dock menu-bar agent a repo-local command launches/activates, bound to that repo
+- [x] **Phase 1: Menu-Bar App + Repo-Bound Launch** - A no-Dock menu-bar agent a repo-local command launches/activates, bound to that repo
 - [ ] **Phase 2: Push-to-Talk Voice Capture** - Global shortcut records mic audio to an ASR-ready WAV while held
 - [ ] **Phase 3: Local Transcription** - Configured ASR CLI turns the recording into transcript text
 - [ ] **Phase 4: Repo Investigation → Issue Draft** - Configured model CLI turns transcript + repo context into a title and body
@@ -31,7 +31,7 @@ happy path: speak a thought → a GitHub issue is filed in the right repo → th
 Plans:
 - [x] 01-01-PLAN.md — SwiftUI `MenuBarExtra` app shell (`LSUIElement`, `.window` style, non-sandboxed) showing status
 - [x] 01-02-PLAN.md — Repo-local launcher command + single-instance activation + cwd hand-off
-- [ ] 01-03-PLAN.md — Resolve git root from cwd and display the bound repo in the menu
+- [x] 01-03-PLAN.md — Resolve git root from cwd and display the bound repo in the menu
 
 ### Phase 2: Push-to-Talk Voice Capture
 **Goal**: A user-configurable global shortcut records microphone audio while held and writes an ASR-ready WAV on release.
@@ -94,7 +94,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Menu-Bar App + Repo-Bound Launch | 2/3 | In Progress | - |
+| 1. Menu-Bar App + Repo-Bound Launch | 3/3 | Complete | 2026-06-23 |
 | 2. Push-to-Talk Voice Capture | 0/2 | Not started | - |
 | 3. Local Transcription | 0/2 | Not started | - |
 | 4. Repo Investigation → Issue Draft | 0/2 | Not started | - |
