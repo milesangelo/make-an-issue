@@ -4,17 +4,17 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 03
 current_phase_name: local-transcription
-status: executing
+status: verifying
 stopped_at: Phase 3 context gathered
-last_updated: "2026-06-24T21:05:00.522Z"
+last_updated: "2026-06-24T21:13:21.223Z"
 last_activity: 2026-06-24
 last_activity_desc: Phase 03 execution started
 progress:
   total_phases: 5
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 7
-  completed_plans: 6
-  percent: 40
+  completed_plans: 7
+  percent: 60
 ---
 
 # Project State
@@ -30,10 +30,10 @@ See: .planning/PROJECT.md (updated 2026-06-24)
 
 Phase: 03 (local-transcription) — EXECUTING
 Plan: 2 of 2
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-06-24 — Phase 03 execution started
 
-Progress: [███░░░░░░░] 27%
+Progress: [██████████] 100%
 
 ## Accumulated Context
 
@@ -48,6 +48,9 @@ Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecti
 - Phase 1: Launcher test override for the open command must be an absolute path.
 - [Phase ?]: Closure seam over protocol for recorder injection in AppState — simpler for single-use test injection
 - [Phase ?]: MainActor.assumeIsolated used in KeyboardShortcuts callbacks for Swift 6 strict concurrency compatibility
+- Phase 03-02: onRunTranscription seam: (URL) async throws -> String — closure injected at AppState.init; default wires Transcriber.run
+- Phase 03-02: captureState after successful transcription: .finished (user can start new recording from .finished)
+- Phase 03-02: asrCommandKey = "asrCommand" — single static constant shared between AppState.UserDefaults and MenuView.@AppStorage
 
 ### Pending Todos
 
@@ -66,12 +69,14 @@ Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecti
 
 ## Session Continuity
 
-Last session: 2026-06-24T21:05:00.519Z
-Stopped at: Phase 3 context gathered
-Resume file: .planning/phases/03-local-transcription/03-CONTEXT.md
+Last session: 2026-06-24T21:13:21.220Z
+Stopped at: Completed 03-02-PLAN.md (Transcriber + AppState + MenuView)
+Resume file: None
 
 ## Performance Metrics
 
 | Phase | Plan | Duration | Notes |
 |-------|------|----------|-------|
 | Phase 02 P01 | 115s | 2 tasks | 3 files |
+| Phase 03 P01 | 101s | 2 tasks | 2 files |
+| Phase 03 P02 | 295s | 3 tasks | 5 files |
