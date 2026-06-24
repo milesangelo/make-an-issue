@@ -22,6 +22,9 @@ final class AppState: ObservableObject {
     @Published var captureState: CaptureState = .idle
     @Published var micPermissionGranted: Bool = false
 
+    // Anchors the AudioRecorder's lifetime and is the integration point for its
+    // delegate callbacks (onRecordingError, wired in init). The start/stop seam
+    // closures route commands; this property routes errors back. (IN-01)
     private let audioRecorder: AudioRecorder
     private let onStartRecording: () -> Bool
     private let onStopRecording: () -> Void
