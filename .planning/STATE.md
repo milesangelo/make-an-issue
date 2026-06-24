@@ -1,6 +1,14 @@
 ---
-gsd_state_version: '1.0'
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+current_phase: 2
+current_phase_name: Push-to-Talk Voice Capture
 status: planning
+stopped_at: Phase 2 context gathered; ready for `$gsd-plan-phase 2`.
+last_updated: "2026-06-24T16:38:43.051Z"
+last_activity: 2026-06-24
+last_activity_desc: Captured Phase 2 push-to-talk context
 progress:
   total_phases: 5
   completed_phases: 1
@@ -13,17 +21,17 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-23)
+See: .planning/PROJECT.md (updated 2026-06-24)
 
 **Core value:** Capture a repo-aware GitHub issue by voice in seconds — spoken word to filed issue, end to end.
-**Current focus:** Phase 1 — Menu-Bar App + Repo-Bound Launch
+**Current focus:** Phase 2 — Push-to-Talk Voice Capture
 
 ## Current Position
 
-Phase: 1 of 5 (Menu-Bar App + Repo-Bound Launch)
-Plan: 3 of 3 executed (3 planned)
-Status: Phase 1 complete; ready for verification
-Last activity: 2026-06-23 — Completed Plan 01-03 repo binding and menu display
+Phase: 2 of 5 (Push-to-Talk Voice Capture)
+Plan: 0 of 2 executed (2 planned)
+Status: Phase 2 context gathered; ready to plan Phase 2
+Last activity: 2026-06-24 — Captured Phase 2 push-to-talk context
 
 Progress: [███░░░░░░░] 27%
 
@@ -36,14 +44,17 @@ Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecti
 - Init: Native Swift menu-bar app (`MenuBarExtra` + `LSUIElement`, non-sandboxed for v1).
 - Init: Global push-to-talk shortcut (KeyboardShortcuts), not a wake phrase.
 - Init: Local models via configured CLI commands; repo binding from launch cwd; auto issue creation via `gh`.
+- Phase 1: Repo binding is filesystem-only for v1; it walks parent directories for `.git` markers and does not shell out.
+- Phase 1: Launcher test override for the open command must be an absolute path.
 
 ### Pending Todos
 
-- Verify Phase 1 end-to-end behavior, including visual same-instance menu-bar smoke check.
+- Plan Phase 2 push-to-talk capture.
 
 ### Blockers/Concerns
 
 - Tooling: Global GSD CLI (`~/.codex/gsd-core/bin/gsd-tools.cjs`) fails to load — `runtime-artifact-conversion.cjs` requires a missing `../../../package.json`. Bypassed by authoring artifacts directly from GSD templates. Re-run GSD commands only after the global install is fixed/updated.
+- Phase 2: KeyboardShortcuts and microphone capture require macOS permissions that will need hands-on verification outside the non-GUI test runner.
 
 ## Deferred Items
 
@@ -53,6 +64,6 @@ Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecti
 
 ## Session Continuity
 
-Last session: 2026-06-23
-Stopped at: Phase 1 complete; ready for `$gsd-verify-work 1`.
-Resume file: None
+Last session: 2026-06-24
+Stopped at: Phase 2 context gathered; ready for `$gsd-plan-phase 2`.
+Resume file: .planning/phases/02-push-to-talk-voice-capture/02-CONTEXT.md
