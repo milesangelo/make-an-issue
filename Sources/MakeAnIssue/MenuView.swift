@@ -5,6 +5,10 @@ import SwiftUI
 struct MenuView: View {
     @EnvironmentObject private var appState: AppState
 
+    // Persisted via the shared key so MenuView's @AppStorage and AppState's
+    // UserDefaults.standard.string(forKey:) read and write the same value (Pitfall 5).
+    @AppStorage(AppState.asrCommandKey) private var asrCommand: String = ""
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Make an Issue")
@@ -34,7 +38,21 @@ struct MenuView: View {
                 }
             }
 
+            // Transcript display — selectable text block shown after successful transcription (D-09, TRANSCRIBE-02).
+            if let transcript = appState.transcript {
+                LabeledContent("Transcript") {
+                    Text(transcript)
+                        .textSelection(.enabled)
+                }
+            }
+
             KeyboardShortcuts.Recorder("Push-to-Talk:", name: .pushToTalk)
+
+            // ASR command field — persisted via @AppStorage using the shared key (D-01, Pitfall 5).
+            // The {wav} placeholder is where the app inserts the absolute path to latest.wav (D-04).
+            LabeledContent("ASR Command") {
+                TextField("e.g. whisper {wav} --model base", text: $asrCommand)
+            }
         }
         .padding()
         .frame(width: 320, alignment: .leading)
