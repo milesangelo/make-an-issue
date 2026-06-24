@@ -11,9 +11,18 @@ struct MenuView: View {
             Divider()
 
             LabeledContent("Status", value: appState.statusText)
-            LabeledContent("Bound Repo", value: appState.boundRepoDisplayText)
+
+            if let boundRepo = appState.boundRepo {
+                LabeledContent("Repository", value: boundRepo.displayName)
+                Text(boundRepo.displayPath)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            } else {
+                LabeledContent("Repository", value: appState.boundRepoDisplayText)
+            }
         }
         .padding()
-        .frame(width: 280, alignment: .leading)
+        .frame(width: 320, alignment: .leading)
     }
 }
