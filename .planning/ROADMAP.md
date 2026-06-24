@@ -48,12 +48,12 @@ Plans:
   2. Holding the shortcut records and releasing it stops, with the menu reflecting the recording state.
   3. A 16 kHz mono WAV file is produced from the spoken audio.
 
-**Plans**: 2 plans
+**Plans**: 1/2 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 02-01-PLAN.md — KeyboardShortcuts integration + AppState push-to-talk state machine (default Control-Option-I, configurable; ignore-repeat guard)
+- [x] 02-01-PLAN.md — KeyboardShortcuts integration + AppState push-to-talk state machine (default Control-Option-I, configurable; ignore-repeat guard)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -119,7 +119,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Menu-Bar App + Repo-Bound Launch | 3/3 | Complete | 2026-06-24 |
-| 2. Push-to-Talk Voice Capture | 0/2 | Not started | - |
+| 2. Push-to-Talk Voice Capture | 1/2 | In Progress|  |
 | 3. Local Transcription | 0/2 | Not started | - |
 | 4. Repo Investigation → Issue Draft | 0/2 | Not started | - |
 | 5. Automatic Issue Creation + Spoken Confirmation | 0/2 | Not started | - |

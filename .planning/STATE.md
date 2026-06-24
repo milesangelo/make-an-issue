@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 2
-current_phase_name: Push-to-Talk Voice Capture
-status: planning
-stopped_at: Phase 2 context gathered; ready for `$gsd-plan-phase 2`.
-last_updated: "2026-06-24T16:38:43.051Z"
+current_phase: 02
+current_phase_name: push-to-talk-voice-capture
+status: executing
+stopped_at: Completed 02-01-PLAN.md — KeyboardShortcuts + push-to-talk state machine
+last_updated: "2026-06-24T16:53:48.579Z"
 last_activity: 2026-06-24
-last_activity_desc: Captured Phase 2 push-to-talk context
+last_activity_desc: Phase 02 execution started
 progress:
   total_phases: 5
   completed_phases: 1
-  total_plans: 11
-  completed_plans: 3
-  percent: 27
+  total_plans: 5
+  completed_plans: 4
+  percent: 20
 ---
 
 # Project State
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-24)
 
 **Core value:** Capture a repo-aware GitHub issue by voice in seconds — spoken word to filed issue, end to end.
-**Current focus:** Phase 2 — Push-to-Talk Voice Capture
+**Current focus:** Phase 02 — push-to-talk-voice-capture
 
 ## Current Position
 
-Phase: 2 of 5 (Push-to-Talk Voice Capture)
-Plan: 0 of 2 executed (2 planned)
-Status: Phase 2 context gathered; ready to plan Phase 2
-Last activity: 2026-06-24 — Captured Phase 2 push-to-talk context
+Phase: 02 (push-to-talk-voice-capture) — EXECUTING
+Plan: 2 of 2
+Status: Ready to execute
+Last activity: 2026-06-24 — Phase 02 execution started
 
 Progress: [███░░░░░░░] 27%
 
@@ -46,6 +46,8 @@ Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecti
 - Init: Local models via configured CLI commands; repo binding from launch cwd; auto issue creation via `gh`.
 - Phase 1: Repo binding is filesystem-only for v1; it walks parent directories for `.git` markers and does not shell out.
 - Phase 1: Launcher test override for the open command must be an absolute path.
+- [Phase ?]: Closure seam over protocol for recorder injection in AppState — simpler for single-use test injection
+- [Phase ?]: MainActor.assumeIsolated used in KeyboardShortcuts callbacks for Swift 6 strict concurrency compatibility
 
 ### Pending Todos
 
@@ -64,6 +66,12 @@ Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecti
 
 ## Session Continuity
 
-Last session: 2026-06-24
-Stopped at: Phase 2 context gathered; ready for `$gsd-plan-phase 2`.
-Resume file: .planning/phases/02-push-to-talk-voice-capture/02-CONTEXT.md
+Last session: 2026-06-24T16:53:48.576Z
+Stopped at: Completed 02-01-PLAN.md — KeyboardShortcuts + push-to-talk state machine
+Resume file: None
+
+## Performance Metrics
+
+| Phase | Plan | Duration | Notes |
+|-------|------|----------|-------|
+| Phase 02 P01 | 115s | 2 tasks | 3 files |
