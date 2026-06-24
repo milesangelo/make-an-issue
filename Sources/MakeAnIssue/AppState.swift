@@ -103,16 +103,19 @@ final class AppState: ObservableObject {
             }
         }
 
-        KeyboardShortcuts.onKeyDown(for: .pushToTalk) { [self] in
+        // [weak self] mirrors the recorder/permission closures above and avoids a
+        // retain cycle through the global KeyboardShortcuts handler registry, which
+        // would otherwise pin every AppState instance for the process lifetime (WR-03).
+        KeyboardShortcuts.onKeyDown(for: .pushToTalk) { [weak self] in
             MainActor.assumeIsolated {
-                guard captureState != .recording else { return }
-                startRecording()
+                guard let self, self.captureState != .recording else { return }
+                self.startRecording()
             }
         }
-        KeyboardShortcuts.onKeyUp(for: .pushToTalk) { [self] in
+        KeyboardShortcuts.onKeyUp(for: .pushToTalk) { [weak self] in
             MainActor.assumeIsolated {
-                guard captureState == .recording else { return }
-                stopRecording()
+                guard let self, self.captureState == .recording else { return }
+                self.stopRecording()
             }
         }
 
