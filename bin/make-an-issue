@@ -1,0 +1,24 @@
+#!/bin/sh
+set -eu
+
+launcher_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+repo_root=$(CDPATH= cd -- "$launcher_dir/.." && pwd -P)
+app_dir="$repo_root/.build/MakeAnIssue.app"
+request_dir="${MAKE_AN_ISSUE_REQUEST_DIR:-$HOME/Library/Application Support/make-an-issue}"
+open_command="${MAKE_AN_ISSUE_OPEN_COMMAND:-/usr/bin/open}"
+
+if [ ! -d "$app_dir" ]; then
+    printf 'MakeAnIssue app bundle not found. Run: %s/scripts/build-app.sh\n' "$repo_root" >&2
+    exit 1
+fi
+
+cwd=$(pwd -P)
+created_at=$(date +%s)
+request_file="$request_dir/launch-request.json"
+escaped_cwd=$(printf '%s' "$cwd" | sed 's/\\/\\\\/g; s/"/\\"/g')
+
+mkdir -p "$request_dir"
+umask 077
+printf '{"cwd":"%s","createdAtUnixSeconds":%s}\n' "$escaped_cwd" "$created_at" > "$request_file"
+
+"$open_command" "$app_dir"
