@@ -119,7 +119,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Menu-Bar App + Repo-Bound Launch | 3/3 | Complete | 2026-06-24 |
-| 2. Push-to-Talk Voice Capture | 2/2 | Complete   | 2026-06-24 |
+| 2. Push-to-Talk Voice Capture | 2/2 | Complete    | 2026-06-24 |
 | 3. Local Transcription | 0/2 | Not started | - |
 | 4. Repo Investigation → Issue Draft | 0/2 | Not started | - |
 | 5. Automatic Issue Creation + Spoken Confirmation | 0/2 | Not started | - |

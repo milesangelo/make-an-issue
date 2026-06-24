@@ -15,9 +15,9 @@ Happy-path only. Each requirement maps to exactly one roadmap phase.
 
 ### Voice Capture
 
-- [ ] **CAPTURE-01**: A user-configurable global shortcut is registered and triggers while the app is in the background.
-- [ ] **CAPTURE-02**: Holding the shortcut records microphone audio (push-to-talk); releasing it stops the recording.
-- [ ] **CAPTURE-03**: The recording is saved as a 16 kHz mono WAV suitable as input to the ASR CLI.
+- [x] **CAPTURE-01**: A user-configurable global shortcut is registered and triggers while the app is in the background.
+- [x] **CAPTURE-02**: Holding the shortcut records microphone audio (push-to-talk); releasing it stops the recording.
+- [x] **CAPTURE-03**: The recording is saved as a 16 kHz mono WAV suitable as input to the ASR CLI.
 
 ### Transcription
 
@@ -74,9 +74,9 @@ Each v1 requirement maps to exactly one phase.
 | LAUNCH-01 | Phase 1 | Complete |
 | LAUNCH-02 | Phase 1 | Complete |
 | LAUNCH-03 | Phase 1 | Complete |
-| CAPTURE-01 | Phase 2 | Pending |
-| CAPTURE-02 | Phase 2 | Pending |
-| CAPTURE-03 | Phase 2 | Pending |
+| CAPTURE-01 | Phase 2 | Complete |
+| CAPTURE-02 | Phase 2 | Complete |
+| CAPTURE-03 | Phase 2 | Complete |
 | TRANSCRIBE-01 | Phase 3 | Pending |
 | TRANSCRIBE-02 | Phase 3 | Pending |
 | ANALYZE-01 | Phase 4 | Pending |
@@ -86,6 +86,7 @@ Each v1 requirement maps to exactly one phase.
 | FEEDBACK-01 | Phase 5 | Pending |
 
 **Coverage:**
+
 - v1 requirements: 13 total
 - Mapped to phases: 13
 - Unmapped: 0 ✓
