@@ -16,7 +16,15 @@ findings:
   warning: 4
   info: 2
   total: 7
-status: issues_found
+status: resolved
+resolution:
+  resolved: 2026-06-24
+  actionable_findings_fixed: 5
+  info_findings_deferred: 2
+  commits:
+    - "0fee252 — CR-01, WR-01, WR-04 (CLIRunner synchronization + timeout cancel)"
+    - "b71f609 — WR-02 (transcribe captured audio on max-duration cap)"
+    - "00c90db — WR-03 (weak self in shortcut closures)"
 ---
 
 # Phase 03: Code Review Report
@@ -24,7 +32,23 @@ status: issues_found
 **Reviewed:** 2026-06-24
 **Depth:** standard
 **Files Reviewed:** 7
-**Status:** issues_found
+**Status:** resolved — all 5 actionable findings fixed; 2 info items acknowledged (no action required)
+
+## Resolution (2026-06-24)
+
+All 1 critical + 4 warning findings fixed and committed; full suite green at 59 tests, 0 failures.
+
+| Finding | Status | Commit |
+|---------|--------|--------|
+| CR-01 (CLIRunner data race) | ✓ Fixed — lock-backed `RunState`, atomic `claim()` | `0fee252` |
+| WR-01 (accumulator memory barrier) | ✓ Fixed — appends/decode under the same lock | `0fee252` |
+| WR-04 (lingering timeout Task) | ✓ Fixed — Task captured and cancelled on resolve | `0fee252` |
+| WR-02 (cap discards audio) | ✓ Fixed — shared `beginTranscription()` from cap path | `b71f609` |
+| WR-03 (strong `[self]` capture) | ✓ Fixed — `[weak self]` + guard | `00c90db` |
+| IN-01 (`/bin/zsh -lc` exec) | ◦ Acknowledged — intentional local-only design; revisit only if command becomes remotely settable | — |
+| IN-02 (spawn-fail vs ASR-fail) | ◦ Deferred — optional diagnosability nit; distinct `CLIResult.spawnFailed` not adopted for v1 | — |
+
+A `testTimeoutAndExitBoundaryResolvesExactlyOnce` regression test (40 iterations across the terminate-vs-exit boundary) was added for CR-01.
 
 ## Summary
 
