@@ -69,12 +69,17 @@ Plans:
   1. Releasing the shortcut runs the configured ASR command on the recording.
   2. The transcript text is captured and shown (menu/log) for the request.
 
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
 
-- [ ] 03-01: Shared `CLIRunner` (`Process` wrapper: working dir, configurable PATH, stdout/exit capture)
-- [ ] 03-02: Transcriber — run configured ASR command on the WAV and capture transcript text
+**Wave 1**
+
+- [ ] 03-01-PLAN.md — Shared `CLIRunner` (`Process` wrapper: `/bin/zsh -lc`, separate stdout/stderr+exit capture via concurrent readabilityHandlers, single-resume 120s timeout; reusable by Phases 4/5)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 03-02-PLAN.md — `Transcriber` (validate command + shell-safe `{wav}` substitution, run via CLIRunner, trim stdout) + AppState/MenuView integration (`.transcribing` state, async off MainActor, transcript display + NSLog, `asrCommand` field, `onRunTranscription` seam)
 
 ### Phase 4: Repo Investigation → Issue Draft
 
