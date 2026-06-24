@@ -69,13 +69,13 @@ Plans:
   1. Releasing the shortcut runs the configured ASR command on the recording.
   2. The transcript text is captured and shown (menu/log) for the request.
 
-**Plans**: 2 plans
+**Plans**: 1/2 plans executed
 
 Plans:
 
 **Wave 1**
 
-- [ ] 03-01-PLAN.md — Shared `CLIRunner` (`Process` wrapper: `/bin/zsh -lc`, separate stdout/stderr+exit capture via concurrent readabilityHandlers, single-resume 120s timeout; reusable by Phases 4/5)
+- [x] 03-01-PLAN.md — Shared `CLIRunner` (`Process` wrapper: `/bin/zsh -lc`, separate stdout/stderr+exit capture via concurrent readabilityHandlers, single-resume 120s timeout; reusable by Phases 4/5)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -125,6 +125,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 |-------|----------------|--------|-----------|
 | 1. Menu-Bar App + Repo-Bound Launch | 3/3 | Complete | 2026-06-24 |
 | 2. Push-to-Talk Voice Capture | 2/2 | Complete    | 2026-06-24 |
-| 3. Local Transcription | 0/2 | Not started | - |
+| 3. Local Transcription | 1/2 | In Progress|  |
 | 4. Repo Investigation → Issue Draft | 0/2 | Not started | - |
 | 5. Automatic Issue Creation + Spoken Confirmation | 0/2 | Not started | - |
