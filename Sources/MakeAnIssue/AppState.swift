@@ -64,7 +64,7 @@ final class AppState: ObservableObject {
 
         KeyboardShortcuts.onKeyDown(for: .pushToTalk) { [self] in
             MainActor.assumeIsolated {
-                guard captureState == .idle else { return }
+                guard captureState != .recording else { return }
                 startRecording()
             }
         }
@@ -91,7 +91,10 @@ final class AppState: ObservableObject {
     }
 
     func startRecording() {
-        guard captureState == .idle else { return }
+        // Allow starting from .idle or .finished (a new press after a completed
+        // recording). Only an in-progress recording suppresses a fresh start —
+        // this also enforces D-04 (ignore key repeats while already recording).
+        guard captureState != .recording else { return }
         captureState = .recording
         onStartRecording()
     }
