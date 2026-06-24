@@ -26,12 +26,12 @@ happy path: speak a thought → a GitHub issue is filed in the right repo → th
   1. Running the repo-local command from a git repo shows a menu-bar icon and no Dock icon.
   2. Running the command a second time activates the same instance rather than spawning a duplicate.
   3. The menu shows the bound repository (the git root of the launching directory).
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 01-01: SwiftUI `MenuBarExtra` app shell (`LSUIElement`, `.window` style, non-sandboxed) showing status
-- [ ] 01-02: Repo-local launcher command + single-instance activation + cwd hand-off
-- [ ] 01-03: Resolve git root from cwd and display the bound repo in the menu
+- [x] 01-01-PLAN.md — SwiftUI `MenuBarExtra` app shell (`LSUIElement`, `.window` style, non-sandboxed) showing status
+- [ ] 01-02-PLAN.md — Repo-local launcher command + single-instance activation + cwd hand-off
+- [ ] 01-03-PLAN.md — Resolve git root from cwd and display the bound repo in the menu
 
 ### Phase 2: Push-to-Talk Voice Capture
 **Goal**: A user-configurable global shortcut records microphone audio while held and writes an ASR-ready WAV on release.
@@ -94,7 +94,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Menu-Bar App + Repo-Bound Launch | 0/3 | Not started | - |
+| 1. Menu-Bar App + Repo-Bound Launch | 1/3 | In Progress | - |
 | 2. Push-to-Talk Voice Capture | 0/2 | Not started | - |
 | 3. Local Transcription | 0/2 | Not started | - |
 | 4. Repo Investigation → Issue Draft | 0/2 | Not started | - |
