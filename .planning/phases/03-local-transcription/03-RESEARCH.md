@@ -653,17 +653,17 @@ if let transcript = appState.transcript {
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **`onRunTranscription` return type**
    - What we know: The seam must return either a transcript string (success) or a description of failure (error).
    - What's unclear: Should the closure return a `Result<String, TranscriberError>` or throw? Throwing is idiomatic Swift async but requires `try` at every call site.
-   - Recommendation: Use `throws` — matches the async pattern already used in `requestMicrophonePermission()`. Tests can use `{ _ in return "text" }` (success) or `{ _ in throw TranscriberError.emptyCommand }` (error).
+   - RESOLVED: Use `throws` — matches the async pattern already used in `requestMicrophonePermission()`. Tests can use `{ _ in return "text" }` (success) or `{ _ in throw TranscriberError.emptyCommand }` (error). Implemented in 03-02 Task 2 (`onRunTranscription: (URL) async throws -> String`).
 
 2. **`captureState` after successful transcription**
    - What we know: D-11 says failure → `.idle` so new PTT works. D-09 says success → show transcript.
    - What's unclear: After success, should state be `.finished` (recording done, transcript shown) or `.idle` (fully reset)?
-   - Recommendation: `.finished` on success (transcript visible in menu); next key-down transitions to `.recording` from `.finished` (which `startRecording()` already permits — `guard captureState != .recording`).
+   - RESOLVED: `.finished` on success (transcript visible in menu); next key-down transitions to `.recording` from `.finished` (which `startRecording()` already permits — `guard captureState != .recording`). Implemented in 03-02 Task 2 (must_haves truth: success → `.finished`).
 
 ---
 
