@@ -16,4 +16,10 @@ final class AppState: ObservableObject {
         self.launchCWD = launchCWD
         self.boundRepoDisplayText = boundRepoDisplayText
     }
+
+    func handleLaunchRequest(_ request: LaunchRequest) {
+        launchCWD = request.cwd
+        statusText = "Launch request received"
+        boundRepoDisplayText = request.cwd
+    }
 }
