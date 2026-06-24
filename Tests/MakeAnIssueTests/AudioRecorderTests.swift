@@ -47,4 +47,24 @@ final class AudioRecorderTests: XCTestCase {
 
         XCTAssertEqual(settings[AVLinearPCMBitDepthKey] as? Int, 16)
     }
+
+    func testStopWithoutStartIsSafe() {
+        let recorder = AudioRecorder()
+
+        // Calling stop() before any start() must not crash.
+        recorder.stop()
+    }
+
+    func testReadingURLsHasNoFilesystemSideEffect() throws {
+        let recorder = AudioRecorder()
+        let directory = try XCTUnwrap(recorder.outputDirectory)
+
+        // Reading the path properties must be pure (WR-03): merely asking for the
+        // URL must not create the directory on disk.
+        try? FileManager.default.removeItem(at: directory)
+        _ = recorder.latestWavURL
+        _ = recorder.outputDirectory
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: directory.path))
+    }
 }
