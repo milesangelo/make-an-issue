@@ -62,6 +62,28 @@ final class CLIRunnerTests: XCTestCase {
         XCTAssertLessThan(elapsed, 4.0, "Timeout should resolve well before 5s; elapsed: \(elapsed)s")
     }
 
+    // MARK: - Single-resume holds under the timeout/exit race (CR-01 regression)
+
+    func testTimeoutAndExitBoundaryResolvesExactlyOnce() async throws {
+        // Stress the boundary where the natural-exit terminationHandler and the
+        // timeout Task can fire near-simultaneously: a command whose sleep is the
+        // same order as the timeout, run many times. A double-resume would trap
+        // with SWIFT TASK CONTINUATION MISUSE and crash this test process, so
+        // simply reaching the end of the loop proves the single-resume guard held.
+        for _ in 0..<40 {
+            let result = await CLIRunner().run(
+                command: "sleep 0.05",
+                timeout: .milliseconds(50)
+            )
+            // Any single resolution is acceptable at this boundary; the contract
+            // under test is "resolved exactly once without crashing", not which arm.
+            switch result {
+            case .success, .failed, .timeout:
+                break
+            }
+        }
+    }
+
     // MARK: - Working directory respected
 
     func testWorkingDirectoryRespected() async throws {

@@ -16,11 +16,47 @@ enum CLIResult {
 /// `readabilityHandler` closures before `process.run()` so neither pipe fills the
 /// OS pipe buffer (~64 KB) and deadlocks the writer (Pitfall 1 from research).
 ///
-/// Single-resume guarantee: a `resumed` flag shared between `terminationHandler`
+/// Single-resume guarantee: a lock-backed `RunState` shared between the
+/// `readabilityHandler` callbacks, `terminationHandler`, the spawn-failure path,
 /// and the timeout `Task` ensures the `CheckedContinuation` is resumed exactly
-/// once even when `process.terminate()` triggers both concurrently (Pitfall 2 /
-/// T-03-03).
+/// once even when `process.terminate()` and natural exit race (Pitfall 2 / T-03-03).
 struct CLIRunner {
+
+    /// Shared mutable state for one `run`. A single `NSLock` gives two guarantees the
+    /// previous `nonisolated(unsafe)` flags could not (CR-01, WR-01):
+    ///   1. `claim()` is an atomic check-then-act, so exactly one of the three
+    ///      concurrent completion paths (terminationHandler, timeout Task,
+    ///      spawn-failure) ever resumes the continuation — no double-resume trap.
+    ///   2. Output appends and the final decode happen under the same lock, so the
+    ///      decoded bytes have a happens-before edge and cannot tear or race.
+    private final class RunState: @unchecked Sendable {
+        private let lock = NSLock()
+        private var stdoutData = Data()
+        private var stderrData = Data()
+        private var resumed = false
+
+        func appendStdout(_ chunk: Data) {
+            lock.lock(); defer { lock.unlock() }
+            stdoutData.append(chunk)
+        }
+
+        func appendStderr(_ chunk: Data) {
+            lock.lock(); defer { lock.unlock() }
+            stderrData.append(chunk)
+        }
+
+        /// Atomically claims the single resume slot. The first caller receives the
+        /// decoded `(stdout, stderr)` snapshot; every later caller receives `nil`
+        /// and must not touch the continuation.
+        func claim() -> (stdout: String, stderr: String)? {
+            lock.lock(); defer { lock.unlock() }
+            guard !resumed else { return nil }
+            resumed = true
+            let out = String(data: stdoutData, encoding: .utf8) ?? ""
+            let err = String(data: stderrData, encoding: .utf8) ?? ""
+            return (out, err)
+        }
+    }
 
     /// Run `command` through `/bin/zsh -lc` with separate stdout/stderr capture and
     /// a hard timeout.
@@ -48,41 +84,33 @@ struct CLIRunner {
         process.standardOutput = stdoutPipe
         process.standardError  = stderrPipe
 
-        // Accumulators written by the readabilityHandler callbacks.
-        // Foundation fires each handler on a private background Dispatch queue;
-        // the handlers are detached (set to nil) before any resume so the
-        // accumulated data is stable when we decode it.
-        nonisolated(unsafe) var stdoutData = Data()
-        nonisolated(unsafe) var stderrData = Data()
+        let state = RunState()
 
         // Attach handlers BEFORE process.run() — Pattern 1 (safe concurrent drain).
         stdoutPipe.fileHandleForReading.readabilityHandler = { handle in
             let chunk = handle.availableData
             // Empty data == EOF sentinel (Pitfall 3) — do not append.
-            if !chunk.isEmpty { stdoutData.append(chunk) }
+            if !chunk.isEmpty { state.appendStdout(chunk) }
         }
         stderrPipe.fileHandleForReading.readabilityHandler = { handle in
             let chunk = handle.availableData
-            if !chunk.isEmpty { stderrData.append(chunk) }
+            if !chunk.isEmpty { state.appendStderr(chunk) }
         }
 
-        // Single-resume guard: checked and set inside terminationHandler (which
-        // Foundation serialises) and in the timeout Task (which checks before
-        // setting). Only one path wins. (Pitfall 2 / Pattern 2)
-        nonisolated(unsafe) var resumed = false
+        // Holds the timeout Task so it can be cancelled the instant the process
+        // resolves normally. Without this the Task lingers sleeping the full
+        // timeout (120 s default) after every run, pinning the process and pipes
+        // until it wakes (WR-04).
+        var timeoutTask: Task<Void, Never>?
 
-        return await withCheckedContinuation { continuation in
+        let result: CLIResult = await withCheckedContinuation { continuation in
 
             process.terminationHandler = { p in
                 // Detach handlers first so no stale chunk arrives after exit.
                 stdoutPipe.fileHandleForReading.readabilityHandler = nil
                 stderrPipe.fileHandleForReading.readabilityHandler = nil
 
-                guard !resumed else { return }
-                resumed = true
-
-                let out = String(data: stdoutData, encoding: .utf8) ?? ""
-                let err = String(data: stderrData, encoding: .utf8) ?? ""
+                guard let (out, err) = state.claim() else { return }
 
                 if p.terminationStatus == 0 {
                     continuation.resume(
@@ -97,23 +125,33 @@ struct CLIRunner {
                 try process.run()
             } catch {
                 // Spawn failure (executable not found, permission denied, etc.)
-                guard !resumed else { return }
-                resumed = true
+                stdoutPipe.fileHandleForReading.readabilityHandler = nil
+                stderrPipe.fileHandleForReading.readabilityHandler = nil
+                guard state.claim() != nil else { return }
                 continuation.resume(
                     returning: .failed(exitCode: -1, stderr: error.localizedDescription))
                 return
             }
 
             // Timeout Task — mirrors AppState.scheduleRecordingTimeout (D-12).
-            Task {
+            timeoutTask = Task {
                 try? await Task.sleep(for: timeout)
-                guard !Task.isCancelled, !resumed else { return }
-                resumed = true
+                guard !Task.isCancelled else { return }
+                // Claim the resume slot BEFORE terminating, so we deterministically
+                // win the race against the terminationHandler that terminate() will
+                // fire. If the process already exited, claim() returns nil and we
+                // leave the already-delivered result untouched.
+                guard state.claim() != nil else { return }
                 process.terminate()
                 stdoutPipe.fileHandleForReading.readabilityHandler = nil
                 stderrPipe.fileHandleForReading.readabilityHandler = nil
                 continuation.resume(returning: .timeout)
             }
         }
+
+        // Normal completion path: cancel the still-sleeping timeout Task so it does
+        // not linger (WR-04). A no-op if the timeout already fired.
+        timeoutTask?.cancel()
+        return result
     }
 }
