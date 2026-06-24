@@ -19,14 +19,13 @@ opening a browser — the full path from spoken word to filed issue must work en
 
 <!-- Shipped and confirmed valuable. -->
 
-(None yet — ship to validate)
+- ✓ Repo-local command launches/activates the menu-bar app and binds it to the repo — Phase 1
+- ✓ Global push-to-talk shortcut captures microphone audio while held — Phase 2
 
 ### Active
 
 <!-- Current scope. Building toward these (v1 happy path). See REQUIREMENTS.md for detail. -->
 
-- [ ] Repo-local command launches/activates the menu-bar app and binds it to the repo
-- [ ] Global push-to-talk shortcut captures microphone audio while held
 - [ ] Recording is transcribed by a user-configured local ASR CLI
 - [ ] Bound repo is investigated by a user-configured local model CLI to draft the issue
 - [ ] Issue is created automatically via `gh issue create` and the number is spoken aloud
@@ -66,12 +65,14 @@ opening a browser — the full path from spoken word to filed issue must work en
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
 | Native Swift menu-bar app (`MenuBarExtra` + `LSUIElement`) | First-class menu-bar, hotkey, audio, TTS on macOS | — Pending |
-| Global shortcut push-to-talk, not wake phrase | Simpler, private, no false triggers | — Pending |
+| Global shortcut push-to-talk, not wake phrase | Simpler, private, no false triggers | Validated in Phase 2 (KeyboardShortcuts global Carbon hotkey) |
 | Local models invoked via configured CLI commands | Avoids embedded runtimes; reuses user's setup | — Pending |
-| Repo binding from launching command's working directory | No multi-repo UI needed in v1 | — Pending |
+| Repo binding from launching command's working directory | No multi-repo UI needed in v1 | Validated in Phase 1 |
+| Filesystem-only git-root resolver for Phase 1 | Avoids shelling out before the CLI pipeline exists; enough for visible repo binding | Validated in Phase 1 |
+| Launcher open-command test override must be absolute-path only | Keeps automated smoke tests possible without permitting PATH-based command ambiguity | Added during Phase 1 security gate |
 | Automatic issue creation (no review screen) in v1 | Fastest path; review deferred to v2 | — Pending |
 | Issue creation via `gh issue create` | Uses existing auth; no GitHub API client needed | — Pending |
 | v1 build runs non-sandboxed | App Sandbox blocks external CLI execution | — Pending |
 
 ---
-*Last updated: 2026-06-23 after project initialization*
+*Last updated: 2026-06-24 after Phase 2 verification*
