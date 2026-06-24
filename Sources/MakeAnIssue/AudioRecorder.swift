@@ -15,16 +15,21 @@ final class AudioRecorder: NSObject {
     // Stable output directory: Application Support/MakeAnIssue (D-06, D-09).
     // Pure path computation — no filesystem side effects. Directory creation
     // happens explicitly in start() so reading these properties stays side-effect free.
-    var outputDirectory: URL {
-        let support = FileManager.default
-            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+    // Optional because the application-support lookup can (in principle) return an
+    // empty array; we surface that as a failed start rather than crashing on [0].
+    var outputDirectory: URL? {
+        guard let support = FileManager.default
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            return nil
+        }
         return support.appendingPathComponent("MakeAnIssue", isDirectory: true)
     }
 
     // Stable output path: Application Support/MakeAnIssue/latest.wav (D-06, D-09).
-    // Pure — does not touch the filesystem.
-    var latestWavURL: URL {
-        outputDirectory.appendingPathComponent("latest.wav")
+    // Pure — does not touch the filesystem. nil when the output directory cannot
+    // be resolved.
+    var latestWavURL: URL? {
+        outputDirectory?.appendingPathComponent("latest.wav")
     }
 
     // WAV settings — URL extension (.wav) selects container; LinearPCM selects codec (D-08)
@@ -40,9 +45,12 @@ final class AudioRecorder: NSObject {
 
     @discardableResult
     func start() -> Bool {
-        let url = latestWavURL
+        guard let directory = outputDirectory, let url = latestWavURL else {
+            NSLog("AudioRecorder.start failed: could not resolve application support directory")
+            return false
+        }
         do {
-            try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             let recorder = try AVAudioRecorder(url: url, settings: Self.wavSettings)
             recorder.delegate = self
             self.recorder = recorder

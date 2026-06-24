@@ -3,22 +3,25 @@ import XCTest
 @testable import MakeAnIssue
 
 final class AudioRecorderTests: XCTestCase {
-    func testLatestWavURLEndsWithWavExtension() {
+    func testLatestWavURLEndsWithWavExtension() throws {
         let recorder = AudioRecorder()
 
-        XCTAssertEqual(recorder.latestWavURL.pathExtension, "wav")
+        let url = try XCTUnwrap(recorder.latestWavURL)
+        XCTAssertEqual(url.pathExtension, "wav")
     }
 
-    func testLatestWavURLLastComponentIsLatestWav() {
+    func testLatestWavURLLastComponentIsLatestWav() throws {
         let recorder = AudioRecorder()
 
-        XCTAssertEqual(recorder.latestWavURL.lastPathComponent, "latest.wav")
+        let url = try XCTUnwrap(recorder.latestWavURL)
+        XCTAssertEqual(url.lastPathComponent, "latest.wav")
     }
 
-    func testLatestWavURLIsUnderApplicationSupportMakeAnIssue() {
+    func testLatestWavURLIsUnderApplicationSupportMakeAnIssue() throws {
         let recorder = AudioRecorder()
 
-        XCTAssertTrue(recorder.latestWavURL.path.contains("Application Support/MakeAnIssue"))
+        let url = try XCTUnwrap(recorder.latestWavURL)
+        XCTAssertTrue(url.path.contains("Application Support/MakeAnIssue"))
     }
 
     func testWavSettingsHaveCorrectSampleRate() {
