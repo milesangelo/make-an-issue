@@ -1,3 +1,4 @@
+import AppKit
 import KeyboardShortcuts
 import SwiftUI
 
@@ -29,6 +30,16 @@ struct MenuView: View {
         }
         .padding()
         .frame(width: 320, alignment: .leading)
+        .onDisappear {
+            // KeyboardShortcuts pauses the global Carbon hotkey and falls back to a
+            // focus-only local key monitor whenever it believes a menu is open
+            // (HotKey `.menuOpen` mode). Opening this MenuBarExtra window fires
+            // NSMenu.didBeginTracking but no balanced didEndTracking on close, so
+            // `isMenuOpen` sticks true and push-to-talk stops firing while another
+            // app is focused. Post the end-tracking notification on close to restore
+            // global (.normal) mode.
+            NotificationCenter.default.post(name: NSMenu.didEndTrackingNotification, object: nil)
+        }
     }
 
     private var captureStateLabel: String {
