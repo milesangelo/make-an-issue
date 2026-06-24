@@ -75,14 +75,14 @@ final class AppStateTests: XCTestCase {
     }
 
     func testStartRecordingTransitionsToRecording() {
-        let state = AppState()
+        let state = AppState(onStartRecording: { true }, onStopRecording: {})
         state.startRecording()
 
         XCTAssertEqual(state.captureState, .recording)
     }
 
     func testSecondStartRecordingWhileRecordingIsIgnored() {
-        let state = AppState()
+        let state = AppState(onStartRecording: { true }, onStopRecording: {})
         state.startRecording()
         state.startRecording()
 
@@ -90,7 +90,7 @@ final class AppStateTests: XCTestCase {
     }
 
     func testStopRecordingTransitionsToFinished() {
-        let state = AppState()
+        let state = AppState(onStartRecording: { true }, onStopRecording: {})
         state.startRecording()
         state.stopRecording()
 
@@ -98,14 +98,14 @@ final class AppStateTests: XCTestCase {
     }
 
     func testStopRecordingWhileIdleIsNoOp() {
-        let state = AppState()
+        let state = AppState(onStartRecording: { true }, onStopRecording: {})
         state.stopRecording()
 
         XCTAssertEqual(state.captureState, .idle)
     }
 
     func testStartRecordingAfterFinishedStartsNewRecording() {
-        let state = AppState()
+        let state = AppState(onStartRecording: { true }, onStopRecording: {})
         state.startRecording()
         state.stopRecording()
 
@@ -118,7 +118,7 @@ final class AppStateTests: XCTestCase {
 
     func testStartRecordingAfterFinishedInvokesStartSeamAgain() {
         var startCount = 0
-        let state = AppState(onStartRecording: { startCount += 1 }, onStopRecording: {})
+        let state = AppState(onStartRecording: { startCount += 1; return true }, onStopRecording: {})
         state.startRecording()
         state.stopRecording()
         state.startRecording()
@@ -128,7 +128,7 @@ final class AppStateTests: XCTestCase {
 
     func testStartRecordingInvokesStartSeam() {
         var startCalled = false
-        let state = AppState(onStartRecording: { startCalled = true }, onStopRecording: {})
+        let state = AppState(onStartRecording: { startCalled = true; return true }, onStopRecording: {})
         state.startRecording()
 
         XCTAssertEqual(startCalled, true)
@@ -136,11 +136,19 @@ final class AppStateTests: XCTestCase {
 
     func testStopRecordingInvokesStopSeam() {
         var stopCalled = false
-        let state = AppState(onStartRecording: {}, onStopRecording: { stopCalled = true })
+        let state = AppState(onStartRecording: { true }, onStopRecording: { stopCalled = true })
         state.startRecording()
         state.stopRecording()
 
         XCTAssertEqual(stopCalled, true)
+    }
+
+    func testFailedStartKeepsStateIdleAndSurfacesStatus() {
+        let state = AppState(onStartRecording: { false }, onStopRecording: {})
+        state.startRecording()
+
+        XCTAssertEqual(state.captureState, .idle)
+        XCTAssertEqual(state.statusText, "Recording failed — check microphone permission")
     }
 
     private func makeRepo(named name: String) throws -> URL {

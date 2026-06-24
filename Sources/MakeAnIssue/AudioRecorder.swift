@@ -27,10 +27,18 @@ final class AudioRecorder: NSObject {
         AVLinearPCMIsBigEndianKey: false,  // little-endian; standard WAV
     ]
 
-    func start() {
+    @discardableResult
+    func start() -> Bool {
         let url = latestWavURL
-        recorder = try? AVAudioRecorder(url: url, settings: Self.wavSettings)
-        recorder?.record()
+        do {
+            let recorder = try AVAudioRecorder(url: url, settings: Self.wavSettings)
+            self.recorder = recorder
+            return recorder.record()
+        } catch {
+            NSLog("AudioRecorder.start failed: \(error)")
+            recorder = nil
+            return false
+        }
     }
 
     func stop() {

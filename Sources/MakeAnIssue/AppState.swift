@@ -22,7 +22,7 @@ final class AppState: ObservableObject {
     @Published var captureState: CaptureState = .idle
 
     private let audioRecorder: AudioRecorder
-    private let onStartRecording: () -> Void
+    private let onStartRecording: () -> Bool
     private let onStopRecording: () -> Void
 
     /// Convenience init for the running app: wires a real AudioRecorder into the seam.
@@ -50,7 +50,7 @@ final class AppState: ObservableObject {
         launchCWD: String? = nil,
         boundRepo: RepoBinding? = nil,
         boundRepoDisplayText: String = "No repository bound",
-        onStartRecording: @escaping () -> Void,
+        onStartRecording: @escaping () -> Bool,
         onStopRecording: @escaping () -> Void,
         audioRecorder: AudioRecorder = AudioRecorder()
     ) {
@@ -95,8 +95,12 @@ final class AppState: ObservableObject {
         // recording). Only an in-progress recording suppresses a fresh start —
         // this also enforces D-04 (ignore key repeats while already recording).
         guard captureState != .recording else { return }
+        guard onStartRecording() else {
+            statusText = "Recording failed — check microphone permission"
+            captureState = .idle
+            return
+        }
         captureState = .recording
-        onStartRecording()
     }
 
     func stopRecording() {
