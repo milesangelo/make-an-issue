@@ -26,6 +26,14 @@ struct MenuView: View {
 
             LabeledContent("Recording", value: captureStateLabel)
 
+            if appState.captureState == .recording {
+                // Click-to-stop recovery affordance in case a push-to-talk key-up
+                // event is missed and recording would otherwise stay stuck. (WR-04)
+                Button("Stop Recording") {
+                    appState.stopRecording()
+                }
+            }
+
             KeyboardShortcuts.Recorder("Push-to-Talk:", name: .pushToTalk)
         }
         .padding()

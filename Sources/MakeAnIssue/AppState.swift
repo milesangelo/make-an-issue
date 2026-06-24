@@ -26,6 +26,12 @@ final class AppState: ObservableObject {
     private let onStartRecording: () -> Bool
     private let onStopRecording: () -> Void
 
+    /// Maximum recording duration. If a key-up event is missed (focus change while
+    /// held, dropped system event, menu-mode flapping), this caps the stuck
+    /// "Recording…" state and auto-stops so the feature can recover. (WR-04)
+    private let maxRecordingDuration: Duration
+    private var recordingTimeoutTask: Task<Void, Never>?
+
     /// Convenience init for the running app: wires a real AudioRecorder into the seam.
     convenience init(
         statusText: String = "Ready",
@@ -53,7 +59,8 @@ final class AppState: ObservableObject {
         boundRepoDisplayText: String = "No repository bound",
         onStartRecording: @escaping () -> Bool,
         onStopRecording: @escaping () -> Void,
-        audioRecorder: AudioRecorder = AudioRecorder()
+        audioRecorder: AudioRecorder = AudioRecorder(),
+        maxRecordingDuration: Duration = .seconds(120)
     ) {
         self.statusText = statusText
         self.launchCWD = launchCWD
@@ -62,6 +69,7 @@ final class AppState: ObservableObject {
         self.audioRecorder = audioRecorder
         self.onStartRecording = onStartRecording
         self.onStopRecording = onStopRecording
+        self.maxRecordingDuration = maxRecordingDuration
 
         // Route encode/IO errors that occur after recording starts back into the
         // state machine. The delegate fires on a background audio thread, so hop
@@ -120,18 +128,43 @@ final class AppState: ObservableObject {
             return
         }
         captureState = .recording
+        scheduleRecordingTimeout()
     }
 
     func stopRecording() {
         guard captureState == .recording else { return }
+        recordingTimeoutTask?.cancel()
+        recordingTimeoutTask = nil
         onStopRecording()
         captureState = .finished
+    }
+
+    /// Recovery path for a stuck recording (missed key-up). Auto-stops and returns
+    /// to .finished so a fresh push-to-talk can begin. (WR-04)
+    func recordingDidTimeout() {
+        guard captureState == .recording else { return }
+        recordingTimeoutTask = nil
+        onStopRecording()
+        captureState = .finished
+        statusText = "Recording stopped — maximum duration reached"
+    }
+
+    private func scheduleRecordingTimeout() {
+        recordingTimeoutTask?.cancel()
+        let duration = maxRecordingDuration
+        recordingTimeoutTask = Task { [weak self] in
+            try? await Task.sleep(for: duration)
+            guard !Task.isCancelled else { return }
+            self?.recordingDidTimeout()
+        }
     }
 
     /// Called when the recorder reports an encode/IO failure after recording began.
     /// Resets the state machine and surfaces a message so the UI does not remain
     /// stuck on "Recording…" with a corrupt/empty capture.
     func handleRecordingError(_ error: Error?) {
+        recordingTimeoutTask?.cancel()
+        recordingTimeoutTask = nil
         onStopRecording()
         captureState = .idle
         statusText = "Recording failed — \(error?.localizedDescription ?? "audio error")"

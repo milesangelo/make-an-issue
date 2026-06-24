@@ -162,6 +162,46 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(state.statusText, "Microphone access denied — enable in System Settings")
     }
 
+    func testRecordingDidTimeoutStopsRecorderAndFinishes() {
+        var stopCalled = false
+        let state = AppState(onStartRecording: { true }, onStopRecording: { stopCalled = true })
+        state.micPermissionGranted = true
+        state.startRecording()
+        XCTAssertEqual(state.captureState, .recording)
+
+        state.recordingDidTimeout()
+
+        XCTAssertEqual(state.captureState, .finished)
+        XCTAssertTrue(stopCalled)
+        XCTAssertEqual(state.statusText, "Recording stopped — maximum duration reached")
+    }
+
+    func testRecordingDidTimeoutWhileIdleIsNoOp() {
+        let state = AppState(onStartRecording: { true }, onStopRecording: {})
+        state.micPermissionGranted = true
+
+        state.recordingDidTimeout()
+
+        XCTAssertEqual(state.captureState, .idle)
+    }
+
+    func testRecordingAutoStopsAfterMaxDuration() async {
+        var stopCalled = false
+        let state = AppState(
+            onStartRecording: { true },
+            onStopRecording: { stopCalled = true },
+            maxRecordingDuration: .milliseconds(50)
+        )
+        state.micPermissionGranted = true
+        state.startRecording()
+        XCTAssertEqual(state.captureState, .recording)
+
+        try? await Task.sleep(for: .milliseconds(200))
+
+        XCTAssertEqual(state.captureState, .finished)
+        XCTAssertTrue(stopCalled)
+    }
+
     func testRecordingErrorResetsStateAndStopsRecorder() {
         var stopCalled = false
         let state = AppState(onStartRecording: { true }, onStopRecording: { stopCalled = true })
