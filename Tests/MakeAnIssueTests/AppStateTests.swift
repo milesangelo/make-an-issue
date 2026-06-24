@@ -68,6 +68,59 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(state.statusText, "No git repository found")
     }
 
+    func testInitialCaptureStateIsIdle() {
+        let state = AppState()
+
+        XCTAssertEqual(state.captureState, .idle)
+    }
+
+    func testStartRecordingTransitionsToRecording() {
+        let state = AppState()
+        state.startRecording()
+
+        XCTAssertEqual(state.captureState, .recording)
+    }
+
+    func testSecondStartRecordingWhileRecordingIsIgnored() {
+        let state = AppState()
+        state.startRecording()
+        state.startRecording()
+
+        XCTAssertEqual(state.captureState, .recording)
+    }
+
+    func testStopRecordingTransitionsToFinished() {
+        let state = AppState()
+        state.startRecording()
+        state.stopRecording()
+
+        XCTAssertEqual(state.captureState, .finished)
+    }
+
+    func testStopRecordingWhileIdleIsNoOp() {
+        let state = AppState()
+        state.stopRecording()
+
+        XCTAssertEqual(state.captureState, .idle)
+    }
+
+    func testStartRecordingInvokesStartSeam() {
+        var startCalled = false
+        let state = AppState(onStartRecording: { startCalled = true }, onStopRecording: {})
+        state.startRecording()
+
+        XCTAssertEqual(startCalled, true)
+    }
+
+    func testStopRecordingInvokesStopSeam() {
+        var stopCalled = false
+        let state = AppState(onStartRecording: {}, onStopRecording: { stopCalled = true })
+        state.startRecording()
+        state.stopRecording()
+
+        XCTAssertEqual(stopCalled, true)
+    }
+
     private func makeRepo(named name: String) throws -> URL {
         let repo = temporaryDirectory.appendingPathComponent(name, isDirectory: true)
         try FileManager.default.createDirectory(at: repo.appendingPathComponent(".git", isDirectory: true), withIntermediateDirectories: true)
