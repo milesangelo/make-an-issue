@@ -76,6 +76,7 @@ final class AppStateTests: XCTestCase {
 
     func testStartRecordingTransitionsToRecording() {
         let state = AppState(onStartRecording: { true }, onStopRecording: {})
+        state.micPermissionGranted = true
         state.startRecording()
 
         XCTAssertEqual(state.captureState, .recording)
@@ -83,6 +84,7 @@ final class AppStateTests: XCTestCase {
 
     func testSecondStartRecordingWhileRecordingIsIgnored() {
         let state = AppState(onStartRecording: { true }, onStopRecording: {})
+        state.micPermissionGranted = true
         state.startRecording()
         state.startRecording()
 
@@ -91,6 +93,7 @@ final class AppStateTests: XCTestCase {
 
     func testStopRecordingTransitionsToFinished() {
         let state = AppState(onStartRecording: { true }, onStopRecording: {})
+        state.micPermissionGranted = true
         state.startRecording()
         state.stopRecording()
 
@@ -99,6 +102,7 @@ final class AppStateTests: XCTestCase {
 
     func testStopRecordingWhileIdleIsNoOp() {
         let state = AppState(onStartRecording: { true }, onStopRecording: {})
+        state.micPermissionGranted = true
         state.stopRecording()
 
         XCTAssertEqual(state.captureState, .idle)
@@ -106,6 +110,7 @@ final class AppStateTests: XCTestCase {
 
     func testStartRecordingAfterFinishedStartsNewRecording() {
         let state = AppState(onStartRecording: { true }, onStopRecording: {})
+        state.micPermissionGranted = true
         state.startRecording()
         state.stopRecording()
 
@@ -119,6 +124,7 @@ final class AppStateTests: XCTestCase {
     func testStartRecordingAfterFinishedInvokesStartSeamAgain() {
         var startCount = 0
         let state = AppState(onStartRecording: { startCount += 1; return true }, onStopRecording: {})
+        state.micPermissionGranted = true
         state.startRecording()
         state.stopRecording()
         state.startRecording()
@@ -129,6 +135,7 @@ final class AppStateTests: XCTestCase {
     func testStartRecordingInvokesStartSeam() {
         var startCalled = false
         let state = AppState(onStartRecording: { startCalled = true; return true }, onStopRecording: {})
+        state.micPermissionGranted = true
         state.startRecording()
 
         XCTAssertEqual(startCalled, true)
@@ -137,14 +144,27 @@ final class AppStateTests: XCTestCase {
     func testStopRecordingInvokesStopSeam() {
         var stopCalled = false
         let state = AppState(onStartRecording: { true }, onStopRecording: { stopCalled = true })
+        state.micPermissionGranted = true
         state.startRecording()
         state.stopRecording()
 
         XCTAssertEqual(stopCalled, true)
     }
 
+    func testStartRecordingWithoutMicPermissionStaysIdleAndSurfacesStatus() {
+        var startCalled = false
+        let state = AppState(onStartRecording: { startCalled = true; return true }, onStopRecording: {})
+        state.micPermissionGranted = false
+        state.startRecording()
+
+        XCTAssertEqual(state.captureState, .idle)
+        XCTAssertFalse(startCalled)
+        XCTAssertEqual(state.statusText, "Microphone access denied — enable in System Settings")
+    }
+
     func testFailedStartKeepsStateIdleAndSurfacesStatus() {
         let state = AppState(onStartRecording: { false }, onStopRecording: {})
+        state.micPermissionGranted = true
         state.startRecording()
 
         XCTAssertEqual(state.captureState, .idle)

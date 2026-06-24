@@ -20,6 +20,7 @@ final class AppState: ObservableObject {
     @Published var boundRepo: RepoBinding?
     @Published var boundRepoDisplayText: String
     @Published var captureState: CaptureState = .idle
+    @Published var micPermissionGranted: Bool = false
 
     private let audioRecorder: AudioRecorder
     private let onStartRecording: () -> Bool
@@ -76,17 +77,21 @@ final class AppState: ObservableObject {
         }
 
         // Request microphone permission at startup so TCC dialog appears before first recording
-        Task {
-            await AppState.requestMicrophonePermission()
+        Task { [weak self] in
+            let granted = await AppState.requestMicrophonePermission()
+            self?.micPermissionGranted = granted
+            if !granted {
+                self?.statusText = "Microphone access denied — enable in System Settings"
+            }
         }
     }
 
-    private static func requestMicrophonePermission() async {
+    private static func requestMicrophonePermission() async -> Bool {
         if #available(macOS 14, *) {
-            _ = await AVAudioApplication.requestRecordPermission()
+            return await AVAudioApplication.requestRecordPermission()
         } else {
             // macOS 13: AVAudioSession is unavailable on macOS; use AVCaptureDevice
-            await AVCaptureDevice.requestAccess(for: .audio)
+            return await AVCaptureDevice.requestAccess(for: .audio)
         }
     }
 
@@ -95,6 +100,11 @@ final class AppState: ObservableObject {
         // recording). Only an in-progress recording suppresses a fresh start —
         // this also enforces D-04 (ignore key repeats while already recording).
         guard captureState != .recording else { return }
+        guard micPermissionGranted else {
+            statusText = "Microphone access denied — enable in System Settings"
+            captureState = .idle
+            return
+        }
         guard onStartRecording() else {
             statusText = "Recording failed — check microphone permission"
             captureState = .idle
