@@ -63,6 +63,15 @@ final class AppState: ObservableObject {
         self.onStartRecording = onStartRecording
         self.onStopRecording = onStopRecording
 
+        // Route encode/IO errors that occur after recording starts back into the
+        // state machine. The delegate fires on a background audio thread, so hop
+        // to the main actor before mutating @Published state.
+        audioRecorder.onRecordingError = { [weak self] error in
+            Task { @MainActor in
+                self?.handleRecordingError(error)
+            }
+        }
+
         KeyboardShortcuts.onKeyDown(for: .pushToTalk) { [self] in
             MainActor.assumeIsolated {
                 guard captureState != .recording else { return }
@@ -117,6 +126,15 @@ final class AppState: ObservableObject {
         guard captureState == .recording else { return }
         onStopRecording()
         captureState = .finished
+    }
+
+    /// Called when the recorder reports an encode/IO failure after recording began.
+    /// Resets the state machine and surfaces a message so the UI does not remain
+    /// stuck on "Recording…" with a corrupt/empty capture.
+    func handleRecordingError(_ error: Error?) {
+        onStopRecording()
+        captureState = .idle
+        statusText = "Recording failed — \(error?.localizedDescription ?? "audio error")"
     }
 
     func handleLaunchRequest(_ request: LaunchRequest) {

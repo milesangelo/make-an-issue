@@ -162,6 +162,20 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(state.statusText, "Microphone access denied — enable in System Settings")
     }
 
+    func testRecordingErrorResetsStateAndStopsRecorder() {
+        var stopCalled = false
+        let state = AppState(onStartRecording: { true }, onStopRecording: { stopCalled = true })
+        state.micPermissionGranted = true
+        state.startRecording()
+        XCTAssertEqual(state.captureState, .recording)
+
+        state.handleRecordingError(nil)
+
+        XCTAssertEqual(state.captureState, .idle)
+        XCTAssertTrue(stopCalled)
+        XCTAssertTrue(state.statusText.hasPrefix("Recording failed"))
+    }
+
     func testFailedStartKeepsStateIdleAndSurfacesStatus() {
         let state = AppState(onStartRecording: { false }, onStopRecording: {})
         state.micPermissionGranted = true

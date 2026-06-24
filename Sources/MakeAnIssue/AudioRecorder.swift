@@ -7,6 +7,11 @@ import Foundation
 final class AudioRecorder: NSObject {
     private var recorder: AVAudioRecorder?
 
+    /// Invoked when an encode/IO error occurs after recording has begun (disk full,
+    /// interruption, etc.). Fires on a background audio thread; the consumer is
+    /// responsible for hopping to the main actor. Set by the owner (AppState).
+    var onRecordingError: ((Error?) -> Void)?
+
     // Stable output path: Application Support/MakeAnIssue/latest.wav (D-06, D-09)
     var latestWavURL: URL {
         let support = FileManager.default
@@ -32,6 +37,7 @@ final class AudioRecorder: NSObject {
         let url = latestWavURL
         do {
             let recorder = try AVAudioRecorder(url: url, settings: Self.wavSettings)
+            recorder.delegate = self
             self.recorder = recorder
             return recorder.record()
         } catch {
@@ -44,5 +50,19 @@ final class AudioRecorder: NSObject {
     func stop() {
         recorder?.stop()
         recorder = nil
+    }
+}
+
+extension AudioRecorder: AVAudioRecorderDelegate {
+    func audioRecorderEncodeErrorDidOccur(_ recorder: AVAudioRecorder, error: Error?) {
+        NSLog("AudioRecorder encode error: \(error.map { "\($0)" } ?? "unknown")")
+        onRecordingError?(error)
+    }
+
+    func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
+        if !flag {
+            NSLog("AudioRecorder finished unsuccessfully")
+            onRecordingError?(nil)
+        }
     }
 }
