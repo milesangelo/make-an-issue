@@ -159,6 +159,15 @@ final class AppState: ObservableObject {
         recordingTimeoutTask?.cancel()
         recordingTimeoutTask = nil
         onStopRecording()
+        beginTranscription()
+    }
+
+    /// Shared transition into transcription, used by both the normal key-up stop
+    /// and the max-duration cap. Centralizing it means a missed key-up that hits
+    /// the cap still transcribes the captured audio instead of silently discarding
+    /// it (WR-02). Enters `.transcribing` synchronously (D-10), then runs the ASR
+    /// command off the main actor and routes the result back.
+    private func beginTranscription() {
         captureState = .transcribing   // D-10: show transcribing state immediately
         transcriptError = nil           // clear stale error from prior attempt
 
@@ -211,14 +220,16 @@ final class AppState: ObservableObject {
         }
     }
 
-    /// Recovery path for a stuck recording (missed key-up). Auto-stops and returns
-    /// to .finished so a fresh push-to-talk can begin. (WR-04)
+    /// Recovery path for a stuck recording (missed key-up). Auto-stops at the
+    /// max-duration cap and transcribes whatever was captured, so a dropped key-up
+    /// never silently discards the user's speech (WR-02). The state machine then
+    /// follows the normal transcription path back to .finished or .idle.
     func recordingDidTimeout() {
         guard captureState == .recording else { return }
         recordingTimeoutTask = nil
         onStopRecording()
-        captureState = .finished
-        statusText = "Recording stopped — maximum duration reached"
+        statusText = "Recording stopped — maximum duration reached; transcribing…"
+        beginTranscription()
     }
 
     private func scheduleRecordingTimeout() {

@@ -176,18 +176,27 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(state.statusText, "Microphone access denied — enable in System Settings")
     }
 
-    func testRecordingDidTimeoutStopsRecorderAndFinishes() {
+    func testRecordingDidTimeoutStopsRecorderAndTranscribes() async {
+        // WR-02: hitting the max-duration cap must transcribe the captured audio,
+        // not discard it. Enters .transcribing synchronously, then settles.
         var stopCalled = false
-        let state = AppState(onStartRecording: { true }, onStopRecording: { stopCalled = true })
+        let state = AppState(
+            onStartRecording: { true },
+            onStopRecording: { stopCalled = true },
+            onRunTranscription: { _ in "Capped transcript" }
+        )
         state.micPermissionGranted = true
         state.startRecording()
         XCTAssertEqual(state.captureState, .recording)
 
         state.recordingDidTimeout()
 
-        XCTAssertEqual(state.captureState, .finished)
+        XCTAssertEqual(state.captureState, .transcribing, "Cap must transcribe captured audio, not discard it")
         XCTAssertTrue(stopCalled)
-        XCTAssertEqual(state.statusText, "Recording stopped — maximum duration reached")
+
+        try? await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(state.captureState, .finished)
+        XCTAssertEqual(state.transcript, "Capped transcript")
     }
 
     func testRecordingDidTimeoutWhileIdleIsNoOp() {
@@ -199,21 +208,24 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(state.captureState, .idle)
     }
 
-    func testRecordingAutoStopsAfterMaxDuration() async {
+    func testRecordingAutoStopsAfterMaxDurationAndTranscribes() async {
+        // WR-02: the auto-stop cap routes through transcription like a normal stop.
         var stopCalled = false
         let state = AppState(
             onStartRecording: { true },
             onStopRecording: { stopCalled = true },
-            maxRecordingDuration: .milliseconds(50)
+            maxRecordingDuration: .milliseconds(50),
+            onRunTranscription: { _ in "Auto transcript" }
         )
         state.micPermissionGranted = true
         state.startRecording()
         XCTAssertEqual(state.captureState, .recording)
 
-        try? await Task.sleep(for: .milliseconds(200))
+        try? await Task.sleep(for: .milliseconds(250))
 
-        XCTAssertEqual(state.captureState, .finished)
         XCTAssertTrue(stopCalled)
+        XCTAssertEqual(state.captureState, .finished)
+        XCTAssertEqual(state.transcript, "Auto transcript")
     }
 
     func testRecordingErrorResetsStateAndStopsRecorder() {
