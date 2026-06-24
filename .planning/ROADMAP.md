@@ -30,7 +30,7 @@ happy path: speak a thought → a GitHub issue is filed in the right repo → th
 
 Plans:
 - [x] 01-01-PLAN.md — SwiftUI `MenuBarExtra` app shell (`LSUIElement`, `.window` style, non-sandboxed) showing status
-- [ ] 01-02-PLAN.md — Repo-local launcher command + single-instance activation + cwd hand-off
+- [x] 01-02-PLAN.md — Repo-local launcher command + single-instance activation + cwd hand-off
 - [ ] 01-03-PLAN.md — Resolve git root from cwd and display the bound repo in the menu
 
 ### Phase 2: Push-to-Talk Voice Capture
@@ -94,7 +94,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Menu-Bar App + Repo-Bound Launch | 1/3 | In Progress | - |
+| 1. Menu-Bar App + Repo-Bound Launch | 2/3 | In Progress | - |
 | 2. Push-to-Talk Voice Capture | 0/2 | Not started | - |
 | 3. Local Transcription | 0/2 | Not started | - |
 | 4. Repo Investigation → Issue Draft | 0/2 | Not started | - |

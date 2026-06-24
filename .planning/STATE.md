@@ -5,8 +5,8 @@ progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 11
-  completed_plans: 1
-  percent: 9
+  completed_plans: 2
+  percent: 18
 ---
 
 # Project State
@@ -21,11 +21,11 @@ See: .planning/PROJECT.md (updated 2026-06-23)
 ## Current Position
 
 Phase: 1 of 5 (Menu-Bar App + Repo-Bound Launch)
-Plan: 1 of 3 executed (3 planned)
+Plan: 2 of 3 executed (3 planned)
 Status: Executing Phase 1
-Last activity: 2026-06-23 — Completed Plan 01-01 app shell
+Last activity: 2026-06-23 — Completed Plan 01-02 launcher handoff
 
-Progress: [█░░░░░░░░░] 9%
+Progress: [██░░░░░░░░] 18%
 
 ## Accumulated Context
 
@@ -39,7 +39,7 @@ Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecti
 
 ### Pending Todos
 
-- Execute Phase 1 Plan 01-02: repo-local launcher and single-instance cwd handoff.
+- Execute Phase 1 Plan 01-03: resolve git root from launch cwd and display bound repo.
 
 ### Blockers/Concerns
 
@@ -54,5 +54,5 @@ Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecti
 ## Session Continuity
 
 Last session: 2026-06-23
-Stopped at: Completed 01-01-PLAN.md; ready for 01-02.
+Stopped at: Completed 01-02-PLAN.md; ready for 01-03.
 Resume file: None
