@@ -22,5 +22,7 @@
 	<string>13.0</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Make an Issue records your voice to create GitHub issues.</string>
 </dict>
 </plist>
