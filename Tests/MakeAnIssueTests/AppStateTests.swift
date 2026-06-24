@@ -104,6 +104,28 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(state.captureState, .idle)
     }
 
+    func testStartRecordingAfterFinishedStartsNewRecording() {
+        let state = AppState()
+        state.startRecording()
+        state.stopRecording()
+
+        XCTAssertEqual(state.captureState, .finished)
+
+        state.startRecording()
+
+        XCTAssertEqual(state.captureState, .recording)
+    }
+
+    func testStartRecordingAfterFinishedInvokesStartSeamAgain() {
+        var startCount = 0
+        let state = AppState(onStartRecording: { startCount += 1 }, onStopRecording: {})
+        state.startRecording()
+        state.stopRecording()
+        state.startRecording()
+
+        XCTAssertEqual(startCount, 2)
+    }
+
     func testStartRecordingInvokesStartSeam() {
         var startCalled = false
         let state = AppState(onStartRecording: { startCalled = true }, onStopRecording: {})
