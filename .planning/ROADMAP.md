@@ -107,13 +107,13 @@ Plans:
   4. The app speaks "created issue #NUMBER" via native text-to-speech.
   5. Backend is provider-agnostic via a configurable command seam; `codex` + Jira validated or explicitly documented as deferred.
 
-**Plans**: 4 plans (4 waves)
+**Plans**: 1/4 plans executed
 
 Plans:
 
 **Wave 1**
 
-- [ ] 04-01-PLAN.md — Foundations: `IssueResultParser` (url-not-id, prose fallback, permission_denials gate), `IssueFilingConfig` provider seam (claude+GitHub; codex/Jira deferred), `CLIRunner` `environment:` passthrough param
+- [x] 04-01-PLAN.md — Foundations: `IssueResultParser` (url-not-id, prose fallback, permission_denials gate), `IssueFilingConfig` provider seam (claude+GitHub; codex/Jira deferred), `CLIRunner` `environment:` passthrough param
 
 **Wave 2** *(blocked on 04-01)*
 
@@ -137,4 +137,4 @@ Phases execute in numeric order: 1 → 2 → 3 (rework) → 4
 | 1. Menu-Bar App + Repo-Bound Launch | 3/3 | Complete | 2026-06-24 |
 | 2. Push-to-Talk Voice Capture | 2/2 | Complete    | 2026-06-24 |
 | 3. Local Transcription | 2/4 | Reopened (bundled-whisper rework) | original 2026-06-25 |
-| 4. Voice → AI CLI Drafts & Files Issue (via MCP) + Spoken Confirmation | 0/4 | Planned (spike-validated) | - |
+| 4. Voice → AI CLI Drafts & Files Issue (via MCP) + Spoken Confirmation | 1/4 | In Progress|  |

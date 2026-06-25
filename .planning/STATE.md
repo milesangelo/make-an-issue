@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 03
-current_phase_name: Local Transcription (bundled-whisper rework)
-status: ready
-stopped_at: v1 realigned (bundled whisper + AI-CLI/MCP filing); next = Phase 3 rework, then spike before Phase 4
-last_updated: "2026-06-25T20:30:00.000Z"
+current_phase: 04
+current_phase_name: voice-ai-cli-drafts-files-issue-via-mcp-spoken-confirmation
+status: executing
+stopped_at: "Completed 04-01-PLAN.md — foundation pieces: IssueResultParser, IssueFilingConfig, CLIRunner env param"
+last_updated: "2026-06-25T22:50:35.730Z"
 last_activity: 2026-06-25
-last_activity_desc: Mid-milestone realignment via /gsd-explore (Phases 4+5 merged; gh retired)
+last_activity_desc: Phase 04 execution started
 progress:
   total_phases: 4
-  completed_phases: 2
-  total_plans: 13
-  completed_plans: 7
-  percent: 54
+  completed_phases: 3
+  total_plans: 11
+  completed_plans: 8
+  percent: 73
 ---
 
 # Project State
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-25)
 
 **Core value:** Capture a repo-aware tracker issue (GitHub or Jira) by voice in seconds — spoken word to filed issue, end to end.
-**Current focus:** Phase 3 rework — bundled-whisper transcription (then spike → merged Phase 4)
+**Current focus:** Phase 04 — voice-ai-cli-drafts-files-issue-via-mcp-spoken-confirmation
 
 ## Current Position
 
-Phase: 3 (rework) — Local Transcription via bundled whisper
-Plan: Not started (03-03 / 03-04)
-Status: Ready to plan rework
-Last activity: 2026-06-25 — v1 realigned via /gsd-explore (bundled whisper + AI-CLI/MCP filing)
+Phase: 04 (voice-ai-cli-drafts-files-issue-via-mcp-spoken-confirmation) — EXECUTING
+Plan: 2 of 4
+Status: Ready to execute
+Last activity: 2026-06-25 — Phase 04 execution started
 
 Progress: [██████░░░░] 54% (7/13 plans)
 
@@ -51,6 +51,9 @@ Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecti
 - Phase 03-02: onRunTranscription seam: (URL) async throws -> String — closure injected at AppState.init; default wires Transcriber.run
 - Phase 03-02: captureState after successful transcription: .finished (user can start new recording from .finished)
 - Phase 03-02: asrCommandKey = "asrCommand" — single static constant shared between AppState.UserDefaults and MenuView.@AppStorage
+- [Phase ?]: Phase 04-01: IssueParseError conforms to Equatable (TranscriberError style) for direct XCTest assertion
+- [Phase ?]: Phase 04-01: IssueFilingConfig.mcpServerJSON stored as raw JSON string; no Foundation import needed in config type
+- [Phase ?]: Phase 04-01: CLIRunner environment parameter placed between workingDirectory and timeout per plan interface spec
 
 ### Pending Todos
 
@@ -72,8 +75,8 @@ Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecti
 
 ## Session Continuity
 
-Last session: 2026-06-25
-Stopped at: v1 realigned via /gsd-explore — bundled whisper + AI-CLI-files-via-MCP; Phases 4+5 merged, gh retired. Next = Phase 3 rework, then /gsd-spike before merged Phase 4.
+Last session: 2026-06-25T22:50:35.727Z
+Stopped at: Completed 04-01-PLAN.md — foundation pieces: IssueResultParser, IssueFilingConfig, CLIRunner env param
 Resume file: None
 Decision record: .planning/notes/v1-realign-bundled-whisper-ai-cli-mcp.md
 
@@ -84,3 +87,4 @@ Decision record: .planning/notes/v1-realign-bundled-whisper-ai-cli-mcp.md
 | Phase 02 P01 | 115s | 2 tasks | 3 files |
 | Phase 03 P01 | 101s | 2 tasks | 2 files |
 | Phase 03 P02 | 295s | 3 tasks | 5 files |
+| Phase 04 P01 | 8m | 3 tasks | 6 files |
