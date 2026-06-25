@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 4
-current_phase_name: Repo Investigation → Issue Draft
+current_phase: 03
+current_phase_name: Local Transcription (bundled-whisper rework)
 status: ready
-stopped_at: Phase 3 complete (UAT + security verified), ready to plan Phase 4
-last_updated: "2026-06-25T19:54:03.063Z"
+stopped_at: v1 realigned (bundled whisper + AI-CLI/MCP filing); next = Phase 3 rework, then spike before Phase 4
+last_updated: "2026-06-25T20:30:00.000Z"
 last_activity: 2026-06-25
-last_activity_desc: Phase 03 complete, transitioned to Phase 4
+last_activity_desc: Mid-milestone realignment via /gsd-explore (Phases 4+5 merged; gh retired)
 progress:
-  total_phases: 5
-  completed_phases: 3
-  total_plans: 7
+  total_phases: 4
+  completed_phases: 2
+  total_plans: 13
   completed_plans: 7
-  percent: 60
+  percent: 54
 ---
 
 # Project State
@@ -23,17 +23,17 @@ progress:
 
 See: .planning/PROJECT.md (updated 2026-06-25)
 
-**Core value:** Capture a repo-aware GitHub issue by voice in seconds — spoken word to filed issue, end to end.
-**Current focus:** Phase 4 — Repo Investigation → Issue Draft
+**Core value:** Capture a repo-aware tracker issue (GitHub or Jira) by voice in seconds — spoken word to filed issue, end to end.
+**Current focus:** Phase 3 rework — bundled-whisper transcription (then spike → merged Phase 4)
 
 ## Current Position
 
-Phase: 4 — Repo Investigation → Issue Draft
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-06-25 — Phase 03 complete, transitioned to Phase 4
+Phase: 3 (rework) — Local Transcription via bundled whisper
+Plan: Not started (03-03 / 03-04)
+Status: Ready to plan rework
+Last activity: 2026-06-25 — v1 realigned via /gsd-explore (bundled whisper + AI-CLI/MCP filing)
 
-Progress: [██████████] 100%
+Progress: [██████░░░░] 54% (7/13 plans)
 
 ## Accumulated Context
 
@@ -54,12 +54,15 @@ Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecti
 
 ### Pending Todos
 
-- Plan Phase 4 repo investigation → issue draft.
+- Phase 3 rework (03-03/03-04): bundle + sign/notarize `whisper-cli` + model; rewire `Transcriber`; remove ASR Command field.
+- Run `/gsd-spike` to prove non-interactive AI-CLI issue-filing via MCP (claude+GitHub first; codex + Jira) BEFORE planning the merged Phase 4.
 
 ### Blockers/Concerns
 
 - Tooling: Global GSD CLI (`~/.codex/gsd-core/bin/gsd-tools.cjs`) fails to load — `runtime-artifact-conversion.cjs` requires a missing `../../../package.json`. Bypassed by authoring artifacts directly from GSD templates. Re-run GSD commands only after the global install is fixed/updated.
-- Phase 4: ASR CLI must be on the login-shell PATH by full path — `whisper.cpp` builds the binary as `whisper-cli` (not `whisper`) under `~/local_llm/whisper.cpp/build/bin`; the same PATH/binary-naming gotcha applies to the model CLI Phase 4 will spawn via CLIRunner.
+- ⚠️ Phase 4 spike-gated: `codex exec` non-interactive MCP writes are broken upstream (stdin-EOF auto-cancel); Atlassian/Jira zero-token non-interactive write may be infeasible (interactive OAuth). v1 proven leg = `claude -p` + GitHub remote MCP. Resolve via `/gsd-spike` before committing build.
+- Phase 3 rework: bundled `whisper-cli` must be signed + hardened-runtime notarized or Gatekeeper blocks it on teammates' machines.
+- AI-CLI output parsing is non-deterministic — instruct "issue URL on the last line" + regex extract; budget seconds-to-a-minute latency in the spoken-confirmation UX.
 
 ## Deferred Items
 
@@ -70,8 +73,9 @@ Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecti
 ## Session Continuity
 
 Last session: 2026-06-25
-Stopped at: Phase 3 complete (UAT 3/3 passed, security verified — threats_open: 0), ready to plan Phase 4
+Stopped at: v1 realigned via /gsd-explore — bundled whisper + AI-CLI-files-via-MCP; Phases 4+5 merged, gh retired. Next = Phase 3 rework, then /gsd-spike before merged Phase 4.
 Resume file: None
+Decision record: .planning/notes/v1-realign-bundled-whisper-ai-cli-mcp.md
 
 ## Performance Metrics
 
