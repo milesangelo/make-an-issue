@@ -84,6 +84,38 @@ final class CLIRunnerTests: XCTestCase {
         }
     }
 
+    // MARK: - Environment passthrough
+
+    func testEnvironmentVariablePassedToSubprocess() async throws {
+        // The injected env var must be visible to the subprocess via the inherited env.
+        let result = await CLIRunner().run(
+            command: "printf '%s' \"$MAI_TEST_TOKEN\"",
+            environment: ["MAI_TEST_TOKEN": "sentinel-123"]
+        )
+
+        guard case .success(let stdout, _, _) = result else {
+            XCTFail("Expected success, got \(result)")
+            return
+        }
+        XCTAssertEqual(stdout, "sentinel-123", "Injected env var must be visible to subprocess")
+    }
+
+    func testEnvironmentMergesOverInheritedEnv() async throws {
+        // Custom env key is set alongside inherited keys (e.g. PATH must still resolve).
+        // Confirm success (which requires PATH to work for echo) and that the custom var is set.
+        let result = await CLIRunner().run(
+            command: "echo ok && printf '%s' \"$MAI_MERGE_TEST\"",
+            environment: ["MAI_MERGE_TEST": "merge-value"]
+        )
+
+        guard case .success(let stdout, _, _) = result else {
+            XCTFail("Expected success, got \(result)")
+            return
+        }
+        XCTAssertTrue(stdout.contains("ok"), "Inherited env (PATH) must still resolve in merged env")
+        XCTAssertTrue(stdout.contains("merge-value"), "Custom env var must appear in merged env")
+    }
+
     // MARK: - Working directory respected
 
     func testWorkingDirectoryRespected() async throws {

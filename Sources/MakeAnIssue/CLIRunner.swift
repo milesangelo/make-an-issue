@@ -64,11 +64,18 @@ struct CLIRunner {
     /// - Parameters:
     ///   - command: Shell command string, passed verbatim as the `-lc` argument.
     ///   - workingDirectory: Optional directory to set as the subprocess's cwd.
+    ///   - environment: Optional dictionary of environment variables merged over the
+    ///     inherited process environment. The caller's keys take precedence. Use this
+    ///     to pass secrets (e.g. GitHub tokens) without embedding them in the command
+    ///     string where they would be visible in `ps` output (T-04-01, Pitfall 2).
+    ///     `nil` (default) leaves the inherited environment unchanged — all existing
+    ///     call sites remain source-compatible and behaviorally unchanged.
     ///   - timeout: Hard wall-clock limit; the process is terminated and `.timeout`
     ///              is returned if this elapses. Default: 120 s (D-12).
     func run(
         command: String,
         workingDirectory: URL? = nil,
+        environment: [String: String]? = nil,
         timeout: Duration = .seconds(120)
     ) async -> CLIResult {
 
@@ -77,6 +84,11 @@ struct CLIRunner {
         process.arguments = ["-lc", command]
         if let wd = workingDirectory {
             process.currentDirectoryURL = wd
+        }
+        if let extra = environment {
+            var env = ProcessInfo.processInfo.environment
+            for (key, value) in extra { env[key] = value }
+            process.environment = env
         }
 
         let stdoutPipe = Pipe()
