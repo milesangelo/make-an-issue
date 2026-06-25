@@ -21,12 +21,12 @@ opening a browser — the full path from spoken word to filed issue must work en
 
 - ✓ Repo-local command launches/activates the menu-bar app and binds it to the repo — Phase 1
 - ✓ Global push-to-talk shortcut captures microphone audio while held — Phase 2
+- ✓ Recording is transcribed by a user-configured local ASR CLI — Phase 3
 
 ### Active
 
 <!-- Current scope. Building toward these (v1 happy path). See REQUIREMENTS.md for detail. -->
 
-- [ ] Recording is transcribed by a user-configured local ASR CLI
 - [ ] Bound repo is investigated by a user-configured local model CLI to draft the issue
 - [ ] Issue is created automatically via `gh issue create` and the number is spoken aloud
 
@@ -66,7 +66,7 @@ opening a browser — the full path from spoken word to filed issue must work en
 |----------|-----------|---------|
 | Native Swift menu-bar app (`MenuBarExtra` + `LSUIElement`) | First-class menu-bar, hotkey, audio, TTS on macOS | — Pending |
 | Global shortcut push-to-talk, not wake phrase | Simpler, private, no false triggers | Validated in Phase 2 (KeyboardShortcuts global Carbon hotkey) |
-| Local models invoked via configured CLI commands | Avoids embedded runtimes; reuses user's setup | — Pending |
+| Local models invoked via configured CLI commands | Avoids embedded runtimes; reuses user's setup | ASR CLI pattern validated in Phase 3 (CLIRunner spawns `/bin/zsh -lc`, separate stdout/stderr, 120s timeout); reused for model/`gh` in Phases 4–5 |
 | Repo binding from launching command's working directory | No multi-repo UI needed in v1 | Validated in Phase 1 |
 | Filesystem-only git-root resolver for Phase 1 | Avoids shelling out before the CLI pipeline exists; enough for visible repo binding | Validated in Phase 1 |
 | Launcher open-command test override must be absolute-path only | Keeps automated smoke tests possible without permitting PATH-based command ambiguity | Added during Phase 1 security gate |
@@ -75,4 +75,4 @@ opening a browser — the full path from spoken word to filed issue must work en
 | v1 build runs non-sandboxed | App Sandbox blocks external CLI execution | — Pending |
 
 ---
-*Last updated: 2026-06-24 after Phase 2 verification*
+*Last updated: 2026-06-25 after Phase 3 verification*

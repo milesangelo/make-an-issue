@@ -21,7 +21,7 @@ Happy-path only. Each requirement maps to exactly one roadmap phase.
 
 ### Transcription
 
-- [ ] **TRANSCRIBE-01**: The app invokes the user-configured local ASR CLI on the recorded WAV.
+- [x] **TRANSCRIBE-01**: The app invokes the user-configured local ASR CLI on the recorded WAV.
 - [x] **TRANSCRIBE-02**: The ASR CLI output is captured as transcript text for the request.
 
 ### Repo Investigation
@@ -77,7 +77,7 @@ Each v1 requirement maps to exactly one phase.
 | CAPTURE-01 | Phase 2 | Complete |
 | CAPTURE-02 | Phase 2 | Complete |
 | CAPTURE-03 | Phase 2 | Complete |
-| TRANSCRIBE-01 | Phase 3 | Pending |
+| TRANSCRIBE-01 | Phase 3 | Complete |
 | TRANSCRIBE-02 | Phase 3 | Complete |
 | ANALYZE-01 | Phase 4 | Pending |
 | ANALYZE-02 | Phase 4 | Pending |

@@ -12,7 +12,7 @@ happy path: speak a thought → a GitHub issue is filed in the right repo → th
 
 - [x] **Phase 1: Menu-Bar App + Repo-Bound Launch** - A no-Dock menu-bar agent a repo-local command launches/activates, bound to that repo
 - [x] **Phase 2: Push-to-Talk Voice Capture** - Global shortcut records mic audio to an ASR-ready WAV while held (completed 2026-06-24)
-- [ ] **Phase 3: Local Transcription** - Configured ASR CLI turns the recording into transcript text (awaiting human verification)
+- [x] **Phase 3: Local Transcription** - Configured ASR CLI turns the recording into transcript text (awaiting human verification) (completed 2026-06-25)
 - [ ] **Phase 4: Repo Investigation → Issue Draft** - Configured model CLI turns transcript + repo context into a title and body
 - [ ] **Phase 5: Automatic Issue Creation + Spoken Confirmation** - `gh issue create` files the issue and the number is spoken aloud
 
@@ -125,6 +125,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 |-------|----------------|--------|-----------|
 | 1. Menu-Bar App + Repo-Bound Launch | 3/3 | Complete | 2026-06-24 |
 | 2. Push-to-Talk Voice Capture | 2/2 | Complete    | 2026-06-24 |
-| 3. Local Transcription | 2/2 | Verifying | - |
+| 3. Local Transcription | 2/2 | Complete    | 2026-06-25 |
 | 4. Repo Investigation → Issue Draft | 0/2 | Not started | - |
 | 5. Automatic Issue Creation + Spoken Confirmation | 0/2 | Not started | - |
