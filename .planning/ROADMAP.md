@@ -107,7 +107,7 @@ Plans:
   4. The app speaks "created issue #NUMBER" via native text-to-speech.
   5. Backend is provider-agnostic via a configurable command seam; `codex` + Jira validated or explicitly documented as deferred.
 
-**Plans**: 1/4 plans executed
+**Plans**: 2/4 plans executed
 
 Plans:
 
@@ -117,7 +117,7 @@ Plans:
 
 **Wave 2** *(blocked on 04-01)*
 
-- [ ] 04-02-PLAN.md — `IssueFilingRunner`: scoped `claude -p` invocation (cwd = bound repo, structured `stream-json --verbose`, token via env, MCP tempfile, 300s timeout) → parse + error mapping
+- [x] 04-02-PLAN.md — `IssueFilingRunner`: scoped `claude -p` invocation (cwd = bound repo, structured `stream-json --verbose`, token via env, MCP tempfile, 300s timeout) → parse + error mapping
 
 **Wave 3** *(blocked on 04-02)*
 
@@ -137,4 +137,4 @@ Phases execute in numeric order: 1 → 2 → 3 (rework) → 4
 | 1. Menu-Bar App + Repo-Bound Launch | 3/3 | Complete | 2026-06-24 |
 | 2. Push-to-Talk Voice Capture | 2/2 | Complete    | 2026-06-24 |
 | 3. Local Transcription | 2/4 | Reopened (bundled-whisper rework) | original 2026-06-25 |
-| 4. Voice → AI CLI Drafts & Files Issue (via MCP) + Spoken Confirmation | 1/4 | In Progress|  |
+| 4. Voice → AI CLI Drafts & Files Issue (via MCP) + Spoken Confirmation | 2/4 | In Progress|  |

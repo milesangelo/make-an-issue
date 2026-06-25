@@ -26,16 +26,16 @@ Happy-path only. Each requirement maps to exactly one roadmap phase.
 
 ### Issue Drafting & Filing (via the user's AI CLI + MCP)
 
-- [ ] **ANALYZE-01**: The app invokes the user's AI coding CLI (e.g. `claude -p`, `codex exec`) with the transcript and the working directory set to the bound repo, so the CLI can investigate the repo for context.
-- [ ] **ANALYZE-02**: The AI CLI drafts the issue (title + body) from the transcript and repo context.
-- [ ] **ISSUE-01**: The AI CLI **files the issue through its own configured MCP server** (GitHub or Atlassian/Jira). The app uses **no `gh` and no API token** — it never handles credentials.
+- [x] **ANALYZE-01**: The app invokes the user's AI coding CLI (e.g. `claude -p`, `codex exec`) with the transcript and the working directory set to the bound repo, so the CLI can investigate the repo for context.
+- [x] **ANALYZE-02**: The AI CLI drafts the issue (title + body) from the transcript and repo context.
+- [x] **ISSUE-01**: The AI CLI **files the issue through its own configured MCP server** (GitHub or Atlassian/Jira). The app uses **no `gh` and no API token** — it never handles credentials.
 - [x] **ISSUE-02**: The app parses the created issue's number/URL from the AI CLI's stdout (instruct "issue URL on the last line" + regex extract).
 - [ ] **FEEDBACK-01**: The app speaks "created issue #NUMBER" using native macOS text-to-speech.
 
 ### Backend Flexibility & Auth
 
 - [x] **PROVIDER-01**: The AI backend is provider-agnostic via a configurable command seam. `claude` + GitHub remote MCP is the proven v1 leg; `codex` and Atlassian/Jira are v1 targets **gated by a feasibility spike** (codex non-interactive MCP write is unreliable upstream; Jira zero-token write may be infeasible).
-- [ ] **AUTH-01**: The app never stores or transmits credentials/tokens. It relies on the user's pre-authenticated MCP session; a **one-time interactive OAuth grant per provider** (persisted in the CLI's own credential store) is acceptable, after which filing runs unattended.
+- [x] **AUTH-01**: The app never stores or transmits credentials/tokens. It relies on the user's pre-authenticated MCP session; a **one-time interactive OAuth grant per provider** (persisted in the CLI's own credential store) is acceptable, after which filing runs unattended.
 
 ## v2 Requirements
 
@@ -82,13 +82,13 @@ Each v1 requirement maps to exactly one phase.
 | CAPTURE-03 | Phase 2 | Complete |
 | TRANSCRIBE-01 | Phase 3 (rework) | Needs rework |
 | TRANSCRIBE-02 | Phase 3 | Complete |
-| ANALYZE-01 | Phase 4 (merged) | Pending |
-| ANALYZE-02 | Phase 4 (merged) | Pending |
-| ISSUE-01 | Phase 4 (merged) | Pending |
+| ANALYZE-01 | Phase 4 (merged) | Complete |
+| ANALYZE-02 | Phase 4 (merged) | Complete |
+| ISSUE-01 | Phase 4 (merged) | Complete |
 | ISSUE-02 | Phase 4 (merged) | Complete |
 | FEEDBACK-01 | Phase 4 (merged) | Pending |
 | PROVIDER-01 | Phase 4 (merged) | Complete |
-| AUTH-01 | Phase 4 (merged) | Pending |
+| AUTH-01 | Phase 4 (merged) | Complete |
 
 **Coverage:**
 

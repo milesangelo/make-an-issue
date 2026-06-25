@@ -6,15 +6,15 @@ current_phase: 04
 current_phase_name: voice-ai-cli-drafts-files-issue-via-mcp-spoken-confirmation
 status: executing
 stopped_at: "Completed 04-01-PLAN.md — foundation pieces: IssueResultParser, IssueFilingConfig, CLIRunner env param"
-last_updated: "2026-06-25T22:50:35.730Z"
+last_updated: "2026-06-25T22:56:39.583Z"
 last_activity: 2026-06-25
 last_activity_desc: Phase 04 execution started
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 11
-  completed_plans: 8
-  percent: 73
+  completed_plans: 9
+  percent: 75
 ---
 
 # Project State
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-06-25)
 ## Current Position
 
 Phase: 04 (voice-ai-cli-drafts-files-issue-via-mcp-spoken-confirmation) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-06-25 — Phase 04 execution started
 
@@ -54,6 +54,8 @@ Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecti
 - [Phase ?]: Phase 04-01: IssueParseError conforms to Equatable (TranscriberError style) for direct XCTest assertion
 - [Phase ?]: Phase 04-01: IssueFilingConfig.mcpServerJSON stored as raw JSON string; no Foundation import needed in config type
 - [Phase ?]: Phase 04-01: CLIRunner environment parameter placed between workingDirectory and timeout per plan interface spec
+- [Phase ?]: Phase 04-02: ownerRepo optional in buildPrompt
+- [Phase ?]: Phase 04-02: IssueParseError caught and rethrown as IssueFilingError in file() — callers see one error type
 
 ### Pending Todos
 
@@ -75,7 +77,7 @@ Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecti
 
 ## Session Continuity
 
-Last session: 2026-06-25T22:50:35.727Z
+Last session: 2026-06-25T22:56:13.066Z
 Stopped at: Completed 04-01-PLAN.md — foundation pieces: IssueResultParser, IssueFilingConfig, CLIRunner env param
 Resume file: None
 Decision record: .planning/notes/v1-realign-bundled-whisper-ai-cli-mcp.md
@@ -88,3 +90,4 @@ Decision record: .planning/notes/v1-realign-bundled-whisper-ai-cli-mcp.md
 | Phase 03 P01 | 101s | 2 tasks | 2 files |
 | Phase 03 P02 | 295s | 3 tasks | 5 files |
 | Phase 04 P01 | 8m | 3 tasks | 6 files |
+| Phase 04 P02 | 137s | 2 tasks | 2 files |
