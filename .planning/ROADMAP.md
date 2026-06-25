@@ -107,14 +107,25 @@ Plans:
   4. The app speaks "created issue #NUMBER" via native text-to-speech.
   5. Backend is provider-agnostic via a configurable command seam; `codex` + Jira validated or explicitly documented as deferred.
 
-**Plans**: TBD (decompose after the spike)
+**Plans**: 4 plans (4 waves)
 
 Plans:
 
-- [ ] 04-01: AI-CLI seam — configurable command template + invoke via `CLIRunner` with `workingDirectory` = bound repo; structured-output + tool-allowlist flags
-- [ ] 04-02: Parse issue number/URL from stdout; map failure/exit codes to clear errors
-- [ ] 04-03: Spoken confirmation (native TTS) + wire the end-to-end happy path
-- [ ] 04-04: Provider-agnostic config (claude/codex × GitHub/Jira); codex + Jira per spike outcome
+**Wave 1**
+
+- [ ] 04-01-PLAN.md — Foundations: `IssueResultParser` (url-not-id, prose fallback, permission_denials gate), `IssueFilingConfig` provider seam (claude+GitHub; codex/Jira deferred), `CLIRunner` `environment:` passthrough param
+
+**Wave 2** *(blocked on 04-01)*
+
+- [ ] 04-02-PLAN.md — `IssueFilingRunner`: scoped `claude -p` invocation (cwd = bound repo, structured `stream-json --verbose`, token via env, MCP tempfile, 300s timeout) → parse + error mapping
+
+**Wave 3** *(blocked on 04-02)*
+
+- [ ] 04-03-PLAN.md — `AppState` `.filing` state + `onRunIssueFiling` seam + `AVSpeechSynthesizer` TTS ("created issue #N") + `MenuView` `.filing` label and CLI Command field
+
+**Wave 4** *(blocked on 04-03)*
+
+- [ ] 04-04-PLAN.md — Human-verify checkpoint: real end-to-end issue filed via MCP + spoken confirmation, plus failure negative-check
 
 ## Progress
 
@@ -126,4 +137,4 @@ Phases execute in numeric order: 1 → 2 → 3 (rework) → 4
 | 1. Menu-Bar App + Repo-Bound Launch | 3/3 | Complete | 2026-06-24 |
 | 2. Push-to-Talk Voice Capture | 2/2 | Complete    | 2026-06-24 |
 | 3. Local Transcription | 2/4 | Reopened (bundled-whisper rework) | original 2026-06-25 |
-| 4. Voice → AI CLI Drafts & Files Issue (via MCP) + Spoken Confirmation | 0/4 | Not started (spike-gated) | - |
+| 4. Voice → AI CLI Drafts & Files Issue (via MCP) + Spoken Confirmation | 0/4 | Planned (spike-validated) | - |
