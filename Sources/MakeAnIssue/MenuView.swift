@@ -8,6 +8,7 @@ struct MenuView: View {
     // Persisted via the shared key so MenuView's @AppStorage and AppState's
     // UserDefaults.standard.string(forKey:) read and write the same value (Pitfall 5).
     @AppStorage(AppState.asrCommandKey) private var asrCommand: String = ""
+    @AppStorage(AppState.cliCommandKey) private var cliCommand: String = "claude"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -53,6 +54,13 @@ struct MenuView: View {
             LabeledContent("ASR Command") {
                 TextField("e.g. whisper {wav} --model base", text: $asrCommand)
             }
+
+            // CLI Command field — persisted via @AppStorage using the shared key (PROVIDER-01).
+            // Defaults to "claude" (the only validated v1 leg); the user can point this at a
+            // different AI CLI without rebuilding the app.
+            LabeledContent("CLI Command") {
+                TextField("e.g. claude", text: $cliCommand)
+            }
         }
         .padding()
         .frame(width: 320, alignment: .leading)
@@ -74,6 +82,7 @@ struct MenuView: View {
         case .recording:     return "Recording…"
         case .transcribing:  return "Transcribing…"
         case .finished:      return "Done"
+        case .filing:        return "Filing issue…"
         }
     }
 }
