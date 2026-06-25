@@ -110,36 +110,39 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(state.captureState, .idle)
     }
 
-    func testStartRecordingAfterFinishedStartsNewRecording() async {
-        // Use a stub that returns a transcript so state reaches .finished.
+    func testStartRecordingAfterFilingReturnsToIdleStartsNewRecording() async {
+        // Use a stub that returns a transcript and completes filing so state reaches .idle.
+        // (.finished is now transient — it flows into .filing then .idle)
         let state = AppState(
             onStartRecording: { true },
             onStopRecording: {},
             onRunTranscription: { _ in "Hello world" }
+            // No boundRepo → beginFiling() skips to .idle immediately
         )
         state.micPermissionGranted = true
         state.startRecording()
         state.stopRecording()
 
-        // Wait for the transcription Task to settle.
+        // Wait for the transcription Task and filing fast-path to settle.
         try? await Task.sleep(for: .milliseconds(100))
-        XCTAssertEqual(state.captureState, .finished)
+        XCTAssertEqual(state.captureState, .idle)
 
         state.startRecording()
         XCTAssertEqual(state.captureState, .recording)
     }
 
-    func testStartRecordingAfterFinishedInvokesStartSeamAgain() async {
+    func testStartRecordingAfterIdleInvokesStartSeamAgain() async {
         var startCount = 0
         let state = AppState(
             onStartRecording: { startCount += 1; return true },
             onStopRecording: {},
             onRunTranscription: { _ in "Hello" }
+            // No boundRepo → filing fast-path returns to .idle; startRecording allowed from .idle
         )
         state.micPermissionGranted = true
         state.startRecording()
         state.stopRecording()
-        // Wait for transcription to settle to .finished before the second startRecording.
+        // Wait for transcription + filing fast-path to settle to .idle before the second startRecording.
         try? await Task.sleep(for: .milliseconds(100))
         state.startRecording()
 
@@ -184,6 +187,7 @@ final class AppStateTests: XCTestCase {
             onStartRecording: { true },
             onStopRecording: { stopCalled = true },
             onRunTranscription: { _ in "Capped transcript" }
+            // No boundRepo → filing fast-path returns to .idle immediately after transcription
         )
         state.micPermissionGranted = true
         state.startRecording()
@@ -195,7 +199,8 @@ final class AppStateTests: XCTestCase {
         XCTAssertTrue(stopCalled)
 
         try? await Task.sleep(for: .milliseconds(100))
-        XCTAssertEqual(state.captureState, .finished)
+        // .finished is transient; no repo bound → filing fast-path → .idle
+        XCTAssertEqual(state.captureState, .idle)
         XCTAssertEqual(state.transcript, "Capped transcript")
     }
 
@@ -216,6 +221,7 @@ final class AppStateTests: XCTestCase {
             onStopRecording: { stopCalled = true },
             maxRecordingDuration: .milliseconds(50),
             onRunTranscription: { _ in "Auto transcript" }
+            // No boundRepo → filing fast-path returns to .idle immediately after transcription
         )
         state.micPermissionGranted = true
         state.startRecording()
@@ -224,7 +230,8 @@ final class AppStateTests: XCTestCase {
         try? await Task.sleep(for: .milliseconds(250))
 
         XCTAssertTrue(stopCalled)
-        XCTAssertEqual(state.captureState, .finished)
+        // .finished is transient; no repo bound → filing fast-path → .idle
+        XCTAssertEqual(state.captureState, .idle)
         XCTAssertEqual(state.transcript, "Auto transcript")
     }
 
@@ -297,19 +304,29 @@ final class AppStateTests: XCTestCase {
     }
 
     func testSuccessfulTranscriptionStoresText() async {
+        // Provide an onRunIssueFiling stub so .finished → .filing → .idle cycle completes cleanly.
         let state = AppState(
             onStartRecording: { true },
             onStopRecording: {},
-            onRunTranscription: { _ in "Hello world" }
+            onRunTranscription: { _ in "Hello world" },
+            onRunIssueFiling: { _, _ in
+                IssueFilingResult(number: 1, url: "https://github.com/o/r/issues/1")
+            }
+        )
+        state.boundRepo = RepoBinding(
+            rootURL: URL(fileURLWithPath: "/tmp/test-repo"),
+            displayName: "test-repo",
+            displayPath: "/tmp/test-repo"
         )
         state.micPermissionGranted = true
         state.startRecording()
         state.stopRecording()
 
-        try? await Task.sleep(for: .milliseconds(100))
+        try? await Task.sleep(for: .milliseconds(200))
 
         XCTAssertEqual(state.transcript, "Hello world")
-        XCTAssertEqual(state.captureState, .finished)
+        // .finished is transient; after filing completes state returns to .idle
+        XCTAssertEqual(state.captureState, .idle)
         XCTAssertNil(state.transcriptError)
     }
 
@@ -367,6 +384,216 @@ final class AppStateTests: XCTestCase {
 
         XCTAssertEqual(state.captureState, .idle, "ASR failure must reset state to .idle (D-11)")
         XCTAssertNotNil(state.transcriptError)
+    }
+
+    // MARK: - Issue filing (Phase 04 Wave 3)
+
+    func testFilingSeamCalledWithTranscriptAndRepo() async throws {
+        let repoURL = try makeRepo(named: "filing-repo")
+        let binding = RepoBinding(rootURL: repoURL, displayName: "filing-repo", displayPath: repoURL.path)
+        var capturedTranscript: String?
+        var capturedRepo: RepoBinding?
+        let state = AppState(
+            boundRepo: binding,
+            boundRepoDisplayText: "filing-repo",
+            onStartRecording: { true },
+            onStopRecording: {},
+            onRunTranscription: { _ in "file this bug" },
+            onRunIssueFiling: { transcript, repo in
+                capturedTranscript = transcript
+                capturedRepo = repo
+                return IssueFilingResult(number: 42, url: "https://github.com/owner/repo/issues/42")
+            }
+        )
+        state.micPermissionGranted = true
+        state.startRecording()
+        state.stopRecording()
+
+        try? await Task.sleep(for: .milliseconds(200))
+
+        XCTAssertEqual(capturedTranscript, "file this bug", "Filing seam must be called with the captured transcript")
+        XCTAssertEqual(capturedRepo?.displayName, "filing-repo", "Filing seam must be called with the bound repo")
+    }
+
+    func testSuccessfulFilingSpeaksIssueNumber() async throws {
+        let repoURL = try makeRepo(named: "speak-repo")
+        let binding = RepoBinding(rootURL: repoURL, displayName: "speak-repo", displayPath: repoURL.path)
+        var spokenText: String?
+        let state = AppState(
+            boundRepo: binding,
+            boundRepoDisplayText: "speak-repo",
+            onStartRecording: { true },
+            onStopRecording: {},
+            onRunTranscription: { _ in "create issue" },
+            onRunIssueFiling: { _, _ in
+                IssueFilingResult(number: 42, url: "https://github.com/owner/repo/issues/42")
+            },
+            onSpeak: { text in spokenText = text }
+        )
+        state.micPermissionGranted = true
+        state.startRecording()
+        state.stopRecording()
+
+        try? await Task.sleep(for: .milliseconds(200))
+
+        XCTAssertNotNil(spokenText, "speak seam must be called on successful filing")
+        XCTAssertTrue(
+            spokenText?.contains("42") == true,
+            "Spoken text must contain the issue number, got: \(spokenText ?? "nil")"
+        )
+    }
+
+    func testSuccessfulFilingReturnsToIdle() async throws {
+        let repoURL = try makeRepo(named: "idle-repo")
+        let binding = RepoBinding(rootURL: repoURL, displayName: "idle-repo", displayPath: repoURL.path)
+        let state = AppState(
+            boundRepo: binding,
+            boundRepoDisplayText: "idle-repo",
+            onStartRecording: { true },
+            onStopRecording: {},
+            onRunTranscription: { _ in "create issue" },
+            onRunIssueFiling: { _, _ in
+                IssueFilingResult(number: 7, url: "https://github.com/owner/repo/issues/7")
+            }
+        )
+        state.micPermissionGranted = true
+        state.startRecording()
+        state.stopRecording()
+
+        try? await Task.sleep(for: .milliseconds(200))
+
+        XCTAssertEqual(state.captureState, .idle, "After successful filing state must return to .idle")
+    }
+
+    func testFilingErrorSetsStatusTextAndReturnsToIdle() async throws {
+        let repoURL = try makeRepo(named: "error-repo")
+        let binding = RepoBinding(rootURL: repoURL, displayName: "error-repo", displayPath: repoURL.path)
+        let state = AppState(
+            boundRepo: binding,
+            boundRepoDisplayText: "error-repo",
+            onStartRecording: { true },
+            onStopRecording: {},
+            onRunTranscription: { _ in "create issue" },
+            onRunIssueFiling: { _, _ in throw IssueFilingError.timeout }
+        )
+        state.micPermissionGranted = true
+        state.startRecording()
+        state.stopRecording()
+
+        try? await Task.sleep(for: .milliseconds(200))
+
+        XCTAssertEqual(state.captureState, .idle, "Filing error must reset to .idle so next PTT works")
+        XCTAssertFalse(state.statusText.isEmpty, "Filing error must surface a non-empty status message")
+    }
+
+    func testFilingErrorTokenAcquisitionSetsStatus() async throws {
+        let repoURL = try makeRepo(named: "token-error-repo")
+        let binding = RepoBinding(rootURL: repoURL, displayName: "token-error-repo", displayPath: repoURL.path)
+        let state = AppState(
+            boundRepo: binding,
+            boundRepoDisplayText: "token-error-repo",
+            onStartRecording: { true },
+            onStopRecording: {},
+            onRunTranscription: { _ in "create issue" },
+            onRunIssueFiling: { _, _ in throw IssueFilingError.tokenAcquisitionFailed }
+        )
+        state.micPermissionGranted = true
+        state.startRecording()
+        state.stopRecording()
+
+        try? await Task.sleep(for: .milliseconds(200))
+
+        XCTAssertEqual(state.captureState, .idle)
+        XCTAssertTrue(
+            state.statusText.lowercased().contains("github") || state.statusText.lowercased().contains("sign in") || state.statusText.lowercased().contains("gh"),
+            "Token error must mention GitHub auth, got: '\(state.statusText)'"
+        )
+    }
+
+    func testNoRepoBoundSkipsFilingAndReturnsToIdle() async throws {
+        var filingCalled = false
+        let state = AppState(
+            onStartRecording: { true },
+            onStopRecording: {},
+            onRunTranscription: { _ in "create issue" },
+            onRunIssueFiling: { _, _ in
+                filingCalled = true
+                return IssueFilingResult(number: 1, url: "https://github.com/o/r/issues/1")
+            }
+        )
+        // No boundRepo set — default nil
+        state.micPermissionGranted = true
+        state.startRecording()
+        state.stopRecording()
+
+        try? await Task.sleep(for: .milliseconds(200))
+
+        XCTAssertFalse(filingCalled, "Filing seam must NOT be called when no repo is bound")
+        XCTAssertEqual(state.captureState, .idle, "Must return to .idle when no repo is bound")
+        XCTAssertFalse(
+            state.statusText.isEmpty,
+            "Status must surface a 'no repo' message when no repo is bound"
+        )
+    }
+
+    func testTranscriptRemainsSetAfterFilingReturnsToIdle() async throws {
+        let repoURL = try makeRepo(named: "transcript-persist-repo")
+        let binding = RepoBinding(rootURL: repoURL, displayName: "transcript-persist-repo", displayPath: repoURL.path)
+        let state = AppState(
+            boundRepo: binding,
+            boundRepoDisplayText: "transcript-persist-repo",
+            onStartRecording: { true },
+            onStopRecording: {},
+            onRunTranscription: { _ in "persistent transcript" },
+            onRunIssueFiling: { _, _ in
+                IssueFilingResult(number: 5, url: "https://github.com/owner/repo/issues/5")
+            }
+        )
+        state.micPermissionGranted = true
+        state.startRecording()
+        state.stopRecording()
+
+        try? await Task.sleep(for: .milliseconds(200))
+
+        XCTAssertEqual(state.captureState, .idle)
+        XCTAssertEqual(state.transcript, "persistent transcript", "Transcript must remain readable after filing returns to .idle")
+    }
+
+    func testFilingEntersFilingState() async throws {
+        // Verify that AppState enters .filing synchronously when filing begins.
+        let repoURL = try makeRepo(named: "filing-state-repo")
+        let binding = RepoBinding(rootURL: repoURL, displayName: "filing-state-repo", displayPath: repoURL.path)
+        var filingStateObserved = false
+        let filingStarted = CheckedContinuation<Void, Never>.self
+        _ = filingStarted  // silence unused warning
+
+        // Use a slow filing seam to ensure we can observe .filing before it completes.
+        let sem = DispatchSemaphore(value: 0)
+        let state = AppState(
+            boundRepo: binding,
+            boundRepoDisplayText: "filing-state-repo",
+            onStartRecording: { true },
+            onStopRecording: {},
+            onRunTranscription: { _ in "file me" },
+            onRunIssueFiling: { _, _ in
+                try? await Task.sleep(for: .milliseconds(300))
+                return IssueFilingResult(number: 99, url: "https://github.com/owner/repo/issues/99")
+            }
+        )
+        state.micPermissionGranted = true
+        state.startRecording()
+        state.stopRecording()
+
+        // Wait for transcription to finish and filing to begin
+        try? await Task.sleep(for: .milliseconds(150))
+        filingStateObserved = state.captureState == .filing
+
+        // Wait for filing to complete
+        try? await Task.sleep(for: .milliseconds(300))
+
+        XCTAssertTrue(filingStateObserved, "AppState must enter .filing state while the filing seam is in-flight")
+        XCTAssertEqual(state.captureState, .idle, "After filing completes state must be .idle")
+        sem.signal()
     }
 
     private func makeRepo(named name: String) throws -> URL {

@@ -9,6 +9,8 @@ enum CaptureState: Equatable {
     /// ASR command is executing; results are in-flight (D-10).
     case transcribing
     case finished
+    /// AI CLI is filing the issue; result is in-flight.
+    case filing
 }
 
 extension KeyboardShortcuts.Name {
@@ -19,6 +21,8 @@ extension KeyboardShortcuts.Name {
 final class AppState: ObservableObject {
     /// Shared UserDefaults key for the ASR command — must match @AppStorage in MenuView (Pitfall 5).
     static let asrCommandKey = "asrCommand"
+    /// Shared UserDefaults key for the CLI command — must match @AppStorage in MenuView (Pitfall 5).
+    static let cliCommandKey = "cliCommand"
 
     @Published var statusText: String
     @Published var launchCWD: String?
@@ -39,6 +43,14 @@ final class AppState: ObservableObject {
     private let onStopRecording: () -> Void
     /// Seam for transcription — the default wires the real Transcriber; tests inject a stub.
     private let onRunTranscription: (URL) async throws -> String
+    /// Seam for issue filing — the default wires the real IssueFilingRunner; tests inject a stub.
+    private let onRunIssueFiling: (String, RepoBinding) async throws -> IssueFilingResult
+    /// Stored AVSpeechSynthesizer — MUST be a stored property; a local variable is deallocated
+    /// before speaking completes and produces no audio (Pitfall 1 in 04-RESEARCH.md).
+    private let speechSynthesizer = AVSpeechSynthesizer()
+    /// Seam for spoken confirmation — when nil the default `speak(_:)` method is used;
+    /// tests inject a closure to capture the spoken string without producing audio.
+    private let onSpeak: ((String) -> Void)?
 
     /// Maximum recording duration. If a key-up event is missed (focus change while
     /// held, dropped system event, menu-mode flapping), this caps the stuck
@@ -70,6 +82,10 @@ final class AppState: ObservableObject {
     /// - Parameters:
     ///   - onRunTranscription: Closure injected for testing — default wires the real Transcriber.
     ///     Signature: `(URL) async throws -> String` (wavURL → trimmed transcript or throws TranscriberError).
+    ///   - onRunIssueFiling: Closure injected for testing — default wires the real IssueFilingRunner.
+    ///     Signature: `(String, RepoBinding) async throws -> IssueFilingResult`.
+    ///   - onSpeak: Closure injected for testing — default calls AVSpeechSynthesizer.speak().
+    ///     Allows tests to capture the spoken string without producing audio.
     init(
         statusText: String = "Ready",
         launchCWD: String? = nil,
@@ -82,7 +98,11 @@ final class AppState: ObservableObject {
         onRunTranscription: @escaping (URL) async throws -> String = { url in
             let cmd = UserDefaults.standard.string(forKey: AppState.asrCommandKey) ?? ""
             return try await Transcriber.run(command: cmd, wavURL: url)
-        }
+        },
+        onRunIssueFiling: @escaping (String, RepoBinding) async throws -> IssueFilingResult = { transcript, repo in
+            try await IssueFilingRunner.file(transcript: transcript, repo: repo, config: .claudeGitHub, ownerRepo: nil)
+        },
+        onSpeak: ((String) -> Void)? = nil
     ) {
         self.statusText = statusText
         self.launchCWD = launchCWD
@@ -93,6 +113,8 @@ final class AppState: ObservableObject {
         self.onStopRecording = onStopRecording
         self.maxRecordingDuration = maxRecordingDuration
         self.onRunTranscription = onRunTranscription
+        self.onRunIssueFiling = onRunIssueFiling
+        self.onSpeak = onSpeak
 
         // Route encode/IO errors that occur after recording starts back into the
         // state machine. The delegate fires on a background audio thread, so hop
@@ -139,9 +161,9 @@ final class AppState: ObservableObject {
     }
 
     func startRecording() {
-        // Allow starting from .idle or .finished (a new press after a completed
-        // recording). Only an in-progress recording suppresses a fresh start —
-        // this also enforces D-04 (ignore key repeats while already recording).
+        // Allow starting from .idle (normal case). Only an in-progress recording
+        // suppresses a fresh start — this also enforces D-04 (ignore key repeats
+        // while already recording). (.finished is transient; it flows to .filing → .idle.)
         guard captureState != .recording else { return }
         guard micPermissionGranted else {
             statusText = "Microphone access denied — enable in System Settings"
@@ -185,8 +207,10 @@ final class AppState: ObservableObject {
                 let text = try await onRunTranscription(wavURL)
                 await MainActor.run {
                     self.transcript = text
-                    self.captureState = .finished
                     NSLog("MakeAnIssue transcript: \(text)")   // D-09
+                    // .finished is transient — immediately flow into filing (Open Q2 / accepted_v1_behavior).
+                    self.captureState = .finished
+                    self.beginFiling()
                 }
             } catch let error as TranscriberError {
                 let message = Self.message(for: error)
@@ -206,6 +230,62 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// Transition into issue filing, mirroring the `beginTranscription` Task structure.
+    ///
+    /// Called on the MainActor immediately after `transcript` is set. Requires a bound repo —
+    /// if none is bound, surfaces a status message and returns to `.idle` so the next
+    /// push-to-talk works. On success, speaks "created issue #N" and returns to `.idle`.
+    /// On failure, sets `statusText` and returns to `.idle`.
+    private func beginFiling() {
+        guard let repo = boundRepo else {
+            statusText = "No repository bound — cannot file"
+            captureState = .idle
+            return
+        }
+        guard let transcript = transcript else {
+            statusText = "No transcript available — cannot file"
+            captureState = .idle
+            return
+        }
+        captureState = .filing   // synchronous transition visible to callers
+
+        Task {
+            do {
+                let result = try await onRunIssueFiling(transcript, repo)
+                await MainActor.run {
+                    let text = "created issue #\(result.number)"
+                    if let onSpeak = self.onSpeak {
+                        onSpeak(text)
+                    } else {
+                        self.speak(text)
+                    }
+                    self.captureState = .idle
+                }
+            } catch let error as IssueFilingError {
+                let message = Self.message(for: error)
+                await MainActor.run {
+                    self.statusText = message
+                    self.captureState = .idle
+                }
+            } catch {
+                let message = "Filing failed — \(error.localizedDescription)"
+                await MainActor.run {
+                    self.statusText = message
+                    self.captureState = .idle
+                }
+            }
+        }
+    }
+
+    /// Speak a confirmation string via native macOS TTS (FEEDBACK-01).
+    ///
+    /// Uses the stored `speechSynthesizer` — must be a stored property, not a local variable,
+    /// so it remains alive until speaking completes (Pitfall 1 in 04-RESEARCH.md).
+    func speak(_ text: String) {
+        let utterance = AVSpeechUtterance(string: text)
+        speechSynthesizer.speak(utterance)
+    }
+
     /// Map a `TranscriberError` to a short user-facing message (D-11).
     private static func message(for error: TranscriberError) -> String {
         switch error {
@@ -220,6 +300,24 @@ final class AppState: ObservableObject {
             return "ASR timed out after 120s"
         case .emptyTranscript:
             return "ASR produced no output — check your command"
+        }
+    }
+
+    /// Map an `IssueFilingError` to a short user-facing message.
+    ///
+    /// Only the success path speaks (v1 contract); failures surface as status text only.
+    private static func message(for error: IssueFilingError) -> String {
+        switch error {
+        case .tokenAcquisitionFailed:
+            return "Sign in to GitHub first: gh auth login"
+        case .timeout:
+            return "AI CLI timed out — check your internet connection"
+        case .cliFailed(let exitCode, _):
+            return "AI CLI failed (exit \(exitCode)) — see log"
+        case .permissionDenied:
+            return "Issue tool not granted — check CLI Command config"
+        case .parseFailed:
+            return "Issue filed but couldn't parse number — check GitHub"
         }
     }
 
