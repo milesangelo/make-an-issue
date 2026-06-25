@@ -30,7 +30,7 @@ Happy-path only. Each requirement maps to exactly one roadmap phase.
 - [x] **ANALYZE-02**: The AI CLI drafts the issue (title + body) from the transcript and repo context.
 - [x] **ISSUE-01**: The AI CLI **files the issue through its own configured MCP server** (GitHub or Atlassian/Jira). The app uses **no `gh` and no API token** — it never handles credentials.
 - [x] **ISSUE-02**: The app parses the created issue's number/URL from the AI CLI's stdout (instruct "issue URL on the last line" + regex extract).
-- [ ] **FEEDBACK-01**: The app speaks "created issue #NUMBER" using native macOS text-to-speech.
+- [x] **FEEDBACK-01**: The app speaks "created issue #NUMBER" using native macOS text-to-speech.
 
 ### Backend Flexibility & Auth
 
@@ -86,7 +86,7 @@ Each v1 requirement maps to exactly one phase.
 | ANALYZE-02 | Phase 4 (merged) | Complete |
 | ISSUE-01 | Phase 4 (merged) | Complete |
 | ISSUE-02 | Phase 4 (merged) | Complete |
-| FEEDBACK-01 | Phase 4 (merged) | Pending |
+| FEEDBACK-01 | Phase 4 (merged) | Complete |
 | PROVIDER-01 | Phase 4 (merged) | Complete |
 | AUTH-01 | Phase 4 (merged) | Complete |
 
