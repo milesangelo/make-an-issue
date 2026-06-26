@@ -92,6 +92,10 @@ Plans:
 - [x] 03-03-PLAN.md — Vendor `whisper-cli` + the `small.en` model into the app bundle (new `fetch-whisper.sh` builds from source at pinned tag v1.9.1 + SHA256-verified model download into gitignored `vendor/`; `build-app.sh` copies into Resources + **ad-hoc signs** the binary `codesign -s -`) *(full notarization deferred — see 03-CONTEXT.md D-04)*
 - [x] 03-04-PLAN.md — Rewire `Transcriber.run(wavURL:resourceBase:)` to invoke the bundled binary + model via the generic CLIRunner (`-l en -nt -t 4`, injectable test seam); **remove the ASR Command field**, `asrCommand`/`asrCommandKey`, and the `onRunTranscription` user-config read from MenuView/AppState; rework `TranscriberError` + tests
 
+**Wave 4 — gap closure (UAT self-containment + SHA pin, 2026-06-25)**
+
+- [ ] 03-05-PLAN.md — Make the assembled `.app` self-contained: `fetch-whisper.sh` pins `MODEL_SHA256` + vendors the six `@rpath` dylibs; `build-app.sh` bundles them into Resources, rewrites whisper-cli's absolute `LC_RPATH` to `@loader_path`, and ad-hoc signs dylibs then whisper-cli (bottom-up). Closes 03-UAT GAP 1 (major) + GAP 2 (minor).
+
 ### Phase 4: Voice → AI CLI Drafts & Files Issue (via MCP) + Spoken Confirmation
 
 *(Merges old Phase 4 "Repo Investigation → Issue Draft" + old Phase 5 "Automatic Issue Creation + Spoken Confirmation".)*
