@@ -19,7 +19,7 @@ its own MCP, retiring `gh issue create` and all app-held tokens. See
 - [x] **Phase 1: Menu-Bar App + Repo-Bound Launch** - A no-Dock menu-bar agent a repo-local command launches/activates, bound to that repo (completed 2026-06-24)
 - [x] **Phase 2: Push-to-Talk Voice Capture** - Global shortcut records mic audio to an ASR-ready WAV while held (completed 2026-06-24)
 - [ ] **Phase 3: Local Transcription** - ⟳ *Reopened for rework 2026-06-25* — replace the user ASR CLI with a **bundled** whisper model (zero-config). Original capture→ASR→transcript pipeline shipped & passed UAT 2026-06-25.
-- [ ] **Phase 4: Voice → AI CLI Drafts & Files Issue (via MCP) + Spoken Confirmation** - *(merges old Phases 4+5)* The user's AI CLI, run in the bound repo, drafts and files the issue via its own MCP; the app parses the issue number/URL and speaks it. **Spike-gated.**
+- [x] **Phase 4: Voice → AI CLI Drafts & Files Issue (via MCP) + Spoken Confirmation** - *(merges old Phases 4+5)* The user's AI CLI, run in the bound repo, drafts and files the issue via its own MCP; the app parses the issue number/URL and speaks it. **Spike-gated.** (completed 2026-06-26)
 
 ## Phase Details
 
@@ -107,7 +107,7 @@ Plans:
   4. The app speaks "created issue #NUMBER" via native text-to-speech.
   5. Backend is provider-agnostic via a configurable command seam; `codex` + Jira validated or explicitly documented as deferred.
 
-**Plans**: 3/4 plans executed
+**Plans**: 4/4 plans complete
 
 Plans:
 
@@ -125,7 +125,7 @@ Plans:
 
 **Wave 4** *(blocked on 04-03)*
 
-- [ ] 04-04-PLAN.md — Human-verify checkpoint: real end-to-end issue filed via MCP + spoken confirmation, plus failure negative-check
+- [x] 04-04-PLAN.md — Human-verify checkpoint: real end-to-end issue filed via MCP + spoken confirmation, plus failure negative-check
 
 ## Progress
 
@@ -137,4 +137,4 @@ Phases execute in numeric order: 1 → 2 → 3 (rework) → 4
 | 1. Menu-Bar App + Repo-Bound Launch | 3/3 | Complete | 2026-06-24 |
 | 2. Push-to-Talk Voice Capture | 2/2 | Complete    | 2026-06-24 |
 | 3. Local Transcription | 2/4 | Reopened (bundled-whisper rework) | original 2026-06-25 |
-| 4. Voice → AI CLI Drafts & Files Issue (via MCP) + Spoken Confirmation | 3/4 | In Progress|  |
+| 4. Voice → AI CLI Drafts & Files Issue (via MCP) + Spoken Confirmation | 4/4 | Complete   | 2026-06-26 |

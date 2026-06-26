@@ -4,17 +4,17 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 04
 current_phase_name: voice-ai-cli-drafts-files-issue-via-mcp-spoken-confirmation
-status: executing
+status: verifying
 stopped_at: Completed 04-03-PLAN.md — AppState .filing, onRunIssueFiling seam, TTS, MenuView CLI Command field
-last_updated: "2026-06-25T23:07:00.584Z"
+last_updated: "2026-06-26T01:08:24.369Z"
 last_activity: 2026-06-25
 last_activity_desc: Phase 04 execution started
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 11
-  completed_plans: 10
-  percent: 75
+  completed_plans: 11
+  percent: 100
 ---
 
 # Project State
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-06-25)
 
 Phase: 04 (voice-ai-cli-drafts-files-issue-via-mcp-spoken-confirmation) — EXECUTING
 Plan: 4 of 4
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-06-25 — Phase 04 execution started
 
 Progress: [██████░░░░] 54% (7/13 plans)
@@ -58,6 +58,8 @@ Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecti
 - [Phase ?]: Phase 04-02: IssueParseError caught and rethrown as IssueFilingError in file() — callers see one error type
 - [Phase ?]: Phase 04-03: onSpeak uses optional closure (nil=real TTS) — avoids self-reference in default param
 - [Phase ?]: Phase 04-03: .finished is transient — beginTranscription success immediately calls beginFiling()
+- [Phase ?]: Phase 04-04: parseFailed always means no issue URL found in CLI output (nothing filed) — old message implied false success
+- [Phase ?]: Phase 04-04: IssueParseError.malformedOutput is declared but never thrown — dead enum case, left as-is for v1
 
 ### Pending Todos
 
@@ -79,7 +81,7 @@ Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecti
 
 ## Session Continuity
 
-Last session: 2026-06-25T23:07:00.581Z
+Last session: 2026-06-26T01:08:09.890Z
 Stopped at: Completed 04-03-PLAN.md — AppState .filing, onRunIssueFiling seam, TTS, MenuView CLI Command field
 Resume file: None
 Decision record: .planning/notes/v1-realign-bundled-whisper-ai-cli-mcp.md
@@ -94,3 +96,4 @@ Decision record: .planning/notes/v1-realign-bundled-whisper-ai-cli-mcp.md
 | Phase 04 P01 | 8m | 3 tasks | 6 files |
 | Phase 04 P02 | 137s | 2 tasks | 2 files |
 | Phase 04 P03 | 9m | 2 tasks | 3 files |
+| Phase 04 P04 | 20min | 2 tasks | 2 files |
