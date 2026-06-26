@@ -1,13 +1,14 @@
 ---
-status: diagnosed
+status: resolved
 phase: 04-voice-ai-cli-drafts-files-issue-via-mcp-spoken-confirmation
 source:
   - 04-01-SUMMARY.md
   - 04-02-SUMMARY.md
   - 04-03-SUMMARY.md
   - 04-04-SUMMARY.md
+  - 04-05-SUMMARY.md
 started: 2026-06-26T05:50:37Z
-updated: 2026-06-26T06:05:00Z
+updated: 2026-06-26T06:45:00Z
 ---
 
 ## Current Test
@@ -57,7 +58,9 @@ blocked: 0
 ## Gaps
 
 - truth: "After the AI CLI successfully files an issue, the app shows an accurate success confirmation — it never displays 'Issue tool not granted' when the issue was in fact created on GitHub."
-  status: failed
+  status: resolved
+  resolved_by: 04-05
+  resolution: "IssueResultParser.parse reordered so a successfully-extracted issue URL (fromToolResult or prose fallback) is returned BEFORE the permission-denial gate; the gate now fires only when no URL was found. Verified in 04-VERIFICATION.md (5/5 must-haves) and pinned by testPermissionDenialWithSuccessfulUrlReturnsResult; the inverse safety case (denial + no URL → .permissionDenied) still passes."
   reason: "User reported: works once, then shows 'Issue tool not granted - check CLI Command config' on the view even though the issues ARE created in GitHub. False-failure status — permission/tool-not-granted error reported despite successful issue creation."
   severity: major
   test: 4
