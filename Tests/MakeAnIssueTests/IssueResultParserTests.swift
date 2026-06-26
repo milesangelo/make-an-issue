@@ -82,21 +82,36 @@ final class IssueResultParserTests: XCTestCase {
         }
     }
 
-    func testPermissionDeniedBeatsSuccessfulToolResult() throws {
-        // Even if there is a tool_result block that looks successful, a non-empty
-        // permission_denials must cause the parser to throw (belt-and-suspenders).
+    func testSuccessfulUrlBeatsPermissionDenial() throws {
+        // A parsed `/issues/N` url is proof the issue was filed and wins over any
+        // permission denial; a denial only fails the parse when no url was found.
+        // This test encodes the corrected semantic: even when permission_denials is
+        // non-empty, if a tool_result url was parsed, the parse returns success.
         let stdout = """
         {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_result","tool_use_id":"toolu_abc","content":"{\\"id\\":\\"node-id\\",\\"url\\":\\"https://github.com/owner/repo/issues/89\\"}"}]}}
         {"type":"result","subtype":"success","is_error":false,"result":"Filed.","session_id":"s6","total_cost_usd":0.01,"num_turns":1,"permission_denials":[{"tool_name":"mcp__github__issue_write","tool_use_id":"toolu_abc","tool_input":{}}]}
         """
 
-        XCTAssertThrowsError(try IssueResultParser.parse(stdout: stdout)) { error in
-            if case IssueParseError.permissionDenied(_) = error {
-                // Expected
-            } else {
-                XCTFail("Expected .permissionDenied, got \(error)")
-            }
-        }
+        let result = try IssueResultParser.parse(stdout: stdout)
+
+        XCTAssertEqual(result.number, 89)
+        XCTAssertEqual(result.url, "https://github.com/owner/repo/issues/89")
+    }
+
+    func testPermissionDenialWithSuccessfulUrlReturnsResult() throws {
+        // UAT T-04 regression: when `claude` touches a non-allowlisted tool (e.g. Bash)
+        // during repo investigation but issue_write succeeds, the parser must return the
+        // IssueFilingResult — not throw. A parsed /issues/N url is proof the issue was
+        // filed; an unrelated denial must not mask it.
+        let stdout = """
+        {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_result","tool_use_id":"toolu_abc","content":"{\\"id\\":\\"node-id\\",\\"url\\":\\"https://github.com/acme/widget/issues/42\\"}"}]}}
+        {"type":"result","subtype":"success","is_error":false,"result":"Filed.","session_id":"s9","total_cost_usd":0.01,"num_turns":1,"permission_denials":[{"tool_name":"Bash","tool_use_id":"toolu_xyz","tool_input":{}}]}
+        """
+
+        let result = try IssueResultParser.parse(stdout: stdout)
+
+        XCTAssertEqual(result.number, 42)
+        XCTAssertEqual(result.url, "https://github.com/acme/widget/issues/42")
     }
 
     // MARK: - noIssueFound
