@@ -170,7 +170,13 @@ final class AppStateTests: XCTestCase {
 
     func testStartRecordingWithoutMicPermissionStaysIdleAndSurfacesStatus() {
         var startCalled = false
-        let state = AppState(onStartRecording: { startCalled = true; return true }, onStopRecording: {})
+        // Inject a denied authorization re-check so the result is deterministic and
+        // does not depend on the test host's TCC microphone grant (WR-03).
+        let state = AppState(
+            onStartRecording: { startCalled = true; return true },
+            onStopRecording: {},
+            onCheckMicAuthorization: { false }
+        )
         state.micPermissionGranted = false
         state.startRecording()
 

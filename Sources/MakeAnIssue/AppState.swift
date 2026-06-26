@@ -49,6 +49,10 @@ final class AppState: ObservableObject {
     /// Seam for spoken confirmation — when nil the default `speak(_:)` method is used;
     /// tests inject a closure to capture the spoken string without producing audio.
     private let onSpeak: ((String) -> Void)?
+    /// Seam for the live microphone-authorization re-check performed in
+    /// `startRecording()`. The default reads the real TCC status; tests inject a
+    /// deterministic value so the result does not depend on the host's TCC state. (WR-03)
+    private let onCheckMicAuthorization: () -> Bool
 
     /// Maximum recording duration. If a key-up event is missed (focus change while
     /// held, dropped system event, menu-mode flapping), this caps the stuck
@@ -99,7 +103,10 @@ final class AppState: ObservableObject {
         onRunIssueFiling: @escaping (String, RepoBinding) async throws -> IssueFilingResult = { transcript, repo in
             try await IssueFilingRunner.file(transcript: transcript, repo: repo, config: .claudeGitHub, ownerRepo: nil)
         },
-        onSpeak: ((String) -> Void)? = nil
+        onSpeak: ((String) -> Void)? = nil,
+        onCheckMicAuthorization: @escaping () -> Bool = {
+            AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+        }
     ) {
         self.statusText = statusText
         self.launchCWD = launchCWD
@@ -112,6 +119,7 @@ final class AppState: ObservableObject {
         self.onRunTranscription = onRunTranscription
         self.onRunIssueFiling = onRunIssueFiling
         self.onSpeak = onSpeak
+        self.onCheckMicAuthorization = onCheckMicAuthorization
 
         // Route encode/IO errors that occur after recording starts back into the
         // state machine. The delegate fires on a background audio thread, so hop
@@ -138,11 +146,16 @@ final class AppState: ObservableObject {
             }
         }
 
-        // Request microphone permission at startup so TCC dialog appears before first recording
+        // Request microphone permission at startup so TCC dialog appears before first recording.
+        // Only ever PROMOTE to granted: a late-resolving denied result must not clobber a grant
+        // that startRecording() re-discovered (or that a test set synchronously). The authoritative
+        // re-check happens in startRecording() so a grant made in System Settings after launch is
+        // honored without relaunch (WR-03).
         Task { [weak self] in
             let granted = await AppState.requestMicrophonePermission()
-            self?.micPermissionGranted = granted
-            if !granted {
+            if granted {
+                self?.micPermissionGranted = true
+            } else {
                 self?.statusText = "Microphone access denied — enable in System Settings"
             }
         }
@@ -164,6 +177,12 @@ final class AppState: ObservableObject {
         // and corrupt the in-flight state machine). .finished is transient and
         // flows straight into .filing, so it is also correctly excluded here.
         guard captureState == .idle else { return }
+        // Re-query the live authorization status instead of trusting the one-shot
+        // startup result, so a grant made in System Settings after launch takes
+        // effect without relaunch. Only promote — never revoke a flag a test set. (WR-03)
+        if !micPermissionGranted, onCheckMicAuthorization() {
+            micPermissionGranted = true
+        }
         guard micPermissionGranted else {
             statusText = "Microphone access denied — enable in System Settings"
             captureState = .idle
