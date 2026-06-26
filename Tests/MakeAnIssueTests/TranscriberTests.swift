@@ -1,108 +1,80 @@
 import XCTest
 @testable import MakeAnIssue
 
-/// Tests for `Transcriber.prepare()` — pure function, no process spawn.
-/// Covers command validation (D-03, D-05) and POSIX single-quote path substitution (T-03-05).
+/// Tests for `Transcriber` bundled-binary path resolution and command construction.
+/// All tests use an injectable `resourceBase` temp directory — the real ~466 MB
+/// whisper-cli binary and model are never spawned (RESEARCH §Pitfall 6).
 final class TranscriberTests: XCTestCase {
 
-    // MARK: - emptyCommand
+    // MARK: - bundledBinaryURL
 
-    func testEmptyCommandThrowsEmptyCommandError() {
+    func testBundledBinaryURLThrowsWhenResourcesNil() throws {
+        // Temp dir exists but does NOT contain whisper-cli.
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        XCTAssertThrowsError(try Transcriber.bundledBinaryURL(resourceBase: tempDir)) { error in
+            guard case .bundledResourcesMissing = error as? TranscriberError else {
+                XCTFail("Expected .bundledResourcesMissing, got \(error)")
+                return
+            }
+        }
+    }
+
+    // MARK: - bundledModelURL
+
+    func testBundledModelURLThrowsWhenModelAbsent() throws {
+        // Temp dir contains whisper-cli but NOT ggml-small.en.bin.
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        // Write whisper-cli so bundledBinaryURL would succeed.
+        try Data().write(to: tempDir.appendingPathComponent("whisper-cli"))
+
+        XCTAssertThrowsError(try Transcriber.bundledModelURL(resourceBase: tempDir)) { error in
+            guard case .bundledResourcesMissing = error as? TranscriberError else {
+                XCTFail("Expected .bundledResourcesMissing, got \(error)")
+                return
+            }
+        }
+    }
+
+    // MARK: - run
+
+    func testRunConstructsCorrectCommand() async throws {
+        // Create a temp dir with a fake echo whisper-cli and a stub model.
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        // Fake whisper-cli: a shell script that echoes all its arguments.
+        let binaryURL = tempDir.appendingPathComponent("whisper-cli")
+        try "#!/bin/sh\necho \"$@\"\n".write(to: binaryURL, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o755],
+            ofItemAtPath: binaryURL.path
+        )
+
+        // Stub model file — content unused since the fake binary ignores it.
+        try Data().write(to: tempDir.appendingPathComponent("ggml-small.en.bin"))
+
         let wavURL = URL(fileURLWithPath: "/tmp/test.wav")
-        XCTAssertThrowsError(try Transcriber.prepare(command: "", wavURL: wavURL)) { error in
-            XCTAssertEqual(error as? TranscriberError, .emptyCommand)
-        }
-    }
 
-    func testWhitespaceOnlyCommandThrowsEmptyCommandError() {
-        let wavURL = URL(fileURLWithPath: "/tmp/test.wav")
-        XCTAssertThrowsError(try Transcriber.prepare(command: "   \t\n  ", wavURL: wavURL)) { error in
-            XCTAssertEqual(error as? TranscriberError, .emptyCommand)
-        }
-    }
+        let result = try await Transcriber.run(wavURL: wavURL, resourceBase: tempDir)
 
-    // MARK: - missingWavToken
-
-    func testMissingWavTokenError() {
-        let wavURL = URL(fileURLWithPath: "/tmp/latest.wav")
-        // Command is non-empty but has no {wav} token (D-05)
-        XCTAssertThrowsError(try Transcriber.prepare(command: "whisper --model base", wavURL: wavURL)) { error in
-            XCTAssertEqual(error as? TranscriberError, .missingWavToken)
-        }
-    }
-
-    func testNonEmptyCommandWithoutWavTokenThrowsMissingWavToken() {
-        let wavURL = URL(fileURLWithPath: "/tmp/latest.wav")
-        XCTAssertThrowsError(try Transcriber.prepare(command: "echo hello", wavURL: wavURL)) { error in
-            XCTAssertEqual(error as? TranscriberError, .missingWavToken)
-        }
-    }
-
-    // MARK: - {wav} substitution
-
-    func testWavSubstitutionQuoting() throws {
-        let wavURL = URL(fileURLWithPath: "/Users/me/Library/Application Support/MakeAnIssue/latest.wav")
-        let result = try Transcriber.prepare(command: "whisper {wav} --model base", wavURL: wavURL)
-
-        // The path must be wrapped in single quotes so it survives as a single shell word (T-03-05)
-        XCTAssertTrue(
-            result.contains("'"),
-            "Result must contain single quotes wrapping the WAV path"
-        )
-        // The quoted path must appear in the substituted command
-        let expectedQuoted = "'/Users/me/Library/Application Support/MakeAnIssue/latest.wav'"
-        XCTAssertTrue(
-            result.contains(expectedQuoted),
-            "Result '\(result)' should contain single-quoted path '\(expectedQuoted)'"
-        )
-        // The {wav} token must not remain in the output
-        XCTAssertFalse(result.contains("{wav}"), "Token {wav} must be replaced")
-    }
-
-    func testSubstitutionPreservesCommandParts() throws {
-        let wavURL = URL(fileURLWithPath: "/tmp/latest.wav")
-        let result = try Transcriber.prepare(command: "whisper {wav} --model base --language en", wavURL: wavURL)
-
-        XCTAssertTrue(result.hasPrefix("whisper "))
-        XCTAssertTrue(result.contains("--model base --language en"))
-        XCTAssertFalse(result.contains("{wav}"))
-    }
-
-    func testPathWithSpaceIsWrappedInSingleQuotes() throws {
-        // A path containing a space must be wrapped in single quotes so the shell treats it as one word.
-        let wavURL = URL(fileURLWithPath: "/Users/test user/Library/latest.wav")
-        let result = try Transcriber.prepare(command: "asr {wav}", wavURL: wavURL)
-
-        // Entire path (with space) must be inside single quotes
-        XCTAssertTrue(
-            result.contains("'/Users/test user/Library/latest.wav'"),
-            "Space-containing path must be wrapped in single quotes in '\(result)'"
-        )
-    }
-
-    func testPathWithSingleQuoteIsEscaped() throws {
-        // A path containing a single-quote must use the POSIX close/literal/reopen sequence:
-        // path: /Users/o'brien/latest.wav
-        // expected substitution: '/Users/o'\''brien/latest.wav'
-        let wavURL = URL(fileURLWithPath: "/Users/o'brien/latest.wav")
-        let result = try Transcriber.prepare(command: "asr {wav}", wavURL: wavURL)
-
-        // The embedded single-quote must be escaped via the POSIX sequence: '\''
-        XCTAssertTrue(
-            result.contains("'\\''"),
-            "Embedded single-quote must use POSIX escape sequence in '\(result)'"
-        )
-        // The path content must appear with the escape sequence applied
-        XCTAssertTrue(
-            result.contains("/Users/o'\\''" + "brien/latest.wav"),
-            "Escaped path must appear in result '\(result)'"
-        )
-    }
-
-    func testSimplePathSubstitution() throws {
-        let wavURL = URL(fileURLWithPath: "/tmp/latest.wav")
-        let result = try Transcriber.prepare(command: "echo {wav}", wavURL: wavURL)
-
-        XCTAssertEqual(result, "echo '/tmp/latest.wav'")
+        // The fake whisper-cli echoes its args; verify all required flags are present.
+        XCTAssertTrue(result.contains("-m"), "Command must contain -m flag, got: '\(result)'")
+        XCTAssertTrue(result.contains("-f"), "Command must contain -f flag, got: '\(result)'")
+        XCTAssertTrue(result.contains("-l en"), "Command must contain -l en flag, got: '\(result)'")
+        XCTAssertTrue(result.contains("-nt"), "Command must contain -nt flag, got: '\(result)'")
+        XCTAssertTrue(result.contains("-t 4"), "Command must contain -t 4 flag, got: '\(result)'")
+        // The WAV path must appear in the output (single-quoting by the caller
+        // ensures it survived as a single shell word before echo received it).
+        XCTAssertTrue(result.contains("/tmp/test.wav"), "WAV path must appear in output, got: '\(result)'")
     }
 }

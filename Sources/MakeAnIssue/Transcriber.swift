@@ -1,64 +1,82 @@
 import Foundation
 
-/// Errors that the Transcriber can throw at prepare() or run() time.
+/// Errors that the Transcriber can throw.
 enum TranscriberError: Error, Equatable {
-    /// The configured ASR command is empty or whitespace-only (D-03).
-    case emptyCommand
-    /// The command does not contain the required `{wav}` token (D-05).
-    case missingWavToken
+    /// The bundled whisper-cli binary or ggml model was not found in Contents/Resources (D-09).
+    case bundledResourcesMissing(detail: String)
     /// The ASR process exited with a non-zero status.
     case asrFailed(exitCode: Int32, stderr: String)
-    /// The ASR process did not finish within the 120s timeout (D-12).
+    /// The ASR process did not finish within the 120s timeout.
     case asrTimedOut
     /// The ASR process exited 0 but produced no output after trimming (D-07).
     case emptyTranscript
 }
 
-/// Validates the configured ASR command, substitutes the shell-safe `{wav}` path,
-/// runs the command via `CLIRunner`, and trims the resulting stdout into a transcript.
+/// Resolves the bundled whisper-cli binary and model, builds the invocation command,
+/// and runs it via the generic CLIRunner, returning the trimmed transcript.
 struct Transcriber {
 
-    // MARK: - prepare
+    // MARK: - Resource Resolution
 
-    /// Validate `command` and substitute `{wav}` with a POSIX single-quoted absolute path.
+    /// Resolve the bundled whisper-cli binary URL.
     ///
-    /// This is a pure function with no I/O — fully unit-testable without spawning a process.
+    /// - Parameter resourceBase: Override the resource base directory.
+    ///   Defaults to `nil`, which resolves via `Bundle.main.resourceURL` (the production path).
+    ///   Pass a temporary directory in unit tests to avoid needing the real bundle.
+    /// - Throws: `TranscriberError.bundledResourcesMissing` when the base is nil or the file is absent.
+    static func bundledBinaryURL(resourceBase: URL? = nil) throws -> URL {
+        guard let base = resourceBase ?? Bundle.main.resourceURL else {
+            throw TranscriberError.bundledResourcesMissing(detail: "Bundle.main.resourceURL is nil")
+        }
+        let url = base.appendingPathComponent("whisper-cli")
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            throw TranscriberError.bundledResourcesMissing(detail: "whisper-cli not found in bundle Resources")
+        }
+        return url
+    }
+
+    /// Resolve the bundled ggml-small.en.bin model URL.
     ///
-    /// - Parameters:
-    ///   - command: The user-configured ASR command string (e.g. `whisper {wav} --model base`).
-    ///   - wavURL: Absolute URL to the WAV file (e.g. `…/Application Support/MakeAnIssue/latest.wav`).
-    /// - Returns: The substituted command string ready to pass to `/bin/zsh -lc`.
-    /// - Throws:
-    ///   - `TranscriberError.emptyCommand` when `command` is empty or whitespace-only (D-03).
-    ///   - `TranscriberError.missingWavToken` when `command` has no `{wav}` literal (D-05).
-    static func prepare(command: String, wavURL: URL) throws -> String {
-        guard !command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw TranscriberError.emptyCommand
+    /// - Parameter resourceBase: Override the resource base directory.
+    ///   Defaults to `nil`, which resolves via `Bundle.main.resourceURL`.
+    /// - Throws: `TranscriberError.bundledResourcesMissing` when the base is nil or the file is absent.
+    static func bundledModelURL(resourceBase: URL? = nil) throws -> URL {
+        guard let base = resourceBase ?? Bundle.main.resourceURL else {
+            throw TranscriberError.bundledResourcesMissing(detail: "Bundle.main.resourceURL is nil")
         }
-        guard command.contains("{wav}") else {
-            throw TranscriberError.missingWavToken
+        let url = base.appendingPathComponent("ggml-small.en.bin")
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            throw TranscriberError.bundledResourcesMissing(detail: "ggml-small.en.bin not found in bundle Resources")
         }
-        // POSIX single-quote escaping: end quote, insert literal single-quote, reopen quote.
-        // Result: path with spaces or quotes survives as a single shell word (Pattern 3, T-03-05).
-        let escapedPath = wavURL.path.replacingOccurrences(of: "'", with: "'\\''")
-        let quoted = "'\(escapedPath)'"
-        return command.replacingOccurrences(of: "{wav}", with: quoted)
+        return url
     }
 
     // MARK: - run
 
-    /// Prepare the command, run it via `CLIRunner`, and return the trimmed transcript.
+    /// Resolve the bundled binary and model, build the whisper-cli argv, run via CLIRunner,
+    /// and return the trimmed transcript.
     ///
     /// - Parameters:
-    ///   - command: The user-configured ASR command string.
     ///   - wavURL: Absolute URL to the WAV file to transcribe.
-    /// - Returns: The trimmed stdout of the ASR process.
-    /// - Throws: `TranscriberError` for every failure mode (emptyCommand, missingWavToken,
-    ///   asrTimedOut, asrFailed, emptyTranscript).
-    static func run(command: String, wavURL: URL) async throws -> String {
-        let substituted = try prepare(command: command, wavURL: wavURL)
+    ///   - resourceBase: Override the resource directory (nil → Bundle.main.resourceURL).
+    ///     Pass a temporary directory in tests to avoid the real ~466 MB bundle resources.
+    /// - Returns: The trimmed stdout of the whisper-cli process.
+    /// - Throws: `TranscriberError` for every failure mode.
+    static func run(wavURL: URL, resourceBase: URL? = nil) async throws -> String {
+        let binaryURL = try bundledBinaryURL(resourceBase: resourceBase)
+        let modelURL  = try bundledModelURL(resourceBase: resourceBase)
 
-        let result = await CLIRunner().run(command: substituted)
+        // POSIX single-quote escape all three paths so spaces and shell metacharacters
+        // cannot break out of their argument (T-03-13, ASVS V5).
+        let escapedBin   = binaryURL.path.replacingOccurrences(of: "'", with: "'\\''")
+        let escapedModel = modelURL.path.replacingOccurrences(of: "'", with: "'\\''")
+        let escapedWav   = wavURL.path.replacingOccurrences(of: "'", with: "'\\''")
+
+        // D-07: -nt suppresses timestamps so stdout is the clean transcript.
+        // -l en: English (matches the .en model, D-02). -t 4: explicit thread count.
+        let command = "'\(escapedBin)' -m '\(escapedModel)' -f '\(escapedWav)' -l en -nt -t 4"
+
+        let result = await CLIRunner().run(command: command)
 
         switch result {
         case .timeout:
