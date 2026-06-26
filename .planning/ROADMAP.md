@@ -79,7 +79,7 @@ Plans:
 
 Plans:
 
-**Wave 1 — original pipeline (done)**
+3/4 plans executed
 
 - [x] 03-01-PLAN.md — Shared `CLIRunner` (`Process` wrapper: `/bin/zsh -lc`, separate stdout/stderr+exit capture via concurrent readabilityHandlers, single-resume 120s timeout; reusable by Phase 4)
 
@@ -89,7 +89,7 @@ Plans:
 
 **Wave 3 — bundled-whisper rework (2026-06-25)**
 
-- [ ] 03-03-PLAN.md — Vendor `whisper-cli` + the `small.en` model into the app bundle (new `fetch-whisper.sh` builds from source at pinned tag v1.9.1 + SHA256-verified model download into gitignored `vendor/`; `build-app.sh` copies into Resources + **ad-hoc signs** the binary `codesign -s -`) *(full notarization deferred — see 03-CONTEXT.md D-04)*
+- [x] 03-03-PLAN.md — Vendor `whisper-cli` + the `small.en` model into the app bundle (new `fetch-whisper.sh` builds from source at pinned tag v1.9.1 + SHA256-verified model download into gitignored `vendor/`; `build-app.sh` copies into Resources + **ad-hoc signs** the binary `codesign -s -`) *(full notarization deferred — see 03-CONTEXT.md D-04)*
 - [ ] 03-04-PLAN.md — Rewire `Transcriber.run(wavURL:resourceBase:)` to invoke the bundled binary + model via the generic CLIRunner (`-l en -nt -t 4`, injectable test seam); **remove the ASR Command field**, `asrCommand`/`asrCommandKey`, and the `onRunTranscription` user-config read from MenuView/AppState; rework `TranscriberError` + tests
 
 ### Phase 4: Voice → AI CLI Drafts & Files Issue (via MCP) + Spoken Confirmation
@@ -136,5 +136,5 @@ Phases execute in numeric order: 1 → 2 → 3 (rework) → 4
 |-------|----------------|--------|-----------|
 | 1. Menu-Bar App + Repo-Bound Launch | 3/3 | Complete | 2026-06-24 |
 | 2. Push-to-Talk Voice Capture | 2/2 | Complete    | 2026-06-24 |
-| 3. Local Transcription | 2/4 | Reopened (bundled-whisper rework) | original 2026-06-25 |
+| 3. Local Transcription | 3/4 | In Progress|  |
 | 4. Voice → AI CLI Drafts & Files Issue (via MCP) + Spoken Confirmation | 4/4 | Complete    | 2026-06-26 |

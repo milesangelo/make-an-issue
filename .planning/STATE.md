@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 04
+current_phase: 03
+current_phase_name: local-transcription
 status: executing
 stopped_at: Phase 3 context reworked (bundled whisper)
-last_updated: "2026-06-26T03:08:12.057Z"
+last_updated: "2026-06-26T03:20:21.516Z"
 last_activity: 2026-06-26
-last_activity_desc: Phase 04 complete
+last_activity_desc: Phase 03 execution started
 progress:
   total_phases: 4
-  completed_phases: 4
-  total_plans: 11
-  completed_plans: 11
-  percent: 100
-current_phase_name: voice-ai-cli-drafts-files-issue-via-mcp-spoken-confirmation
+  completed_phases: 3
+  total_plans: 13
+  completed_plans: 12
+  percent: 75
 ---
 
 # Project State
@@ -24,14 +24,14 @@ current_phase_name: voice-ai-cli-drafts-files-issue-via-mcp-spoken-confirmation
 See: .planning/PROJECT.md (updated 2026-06-25)
 
 **Core value:** Capture a repo-aware tracker issue (GitHub or Jira) by voice in seconds — spoken word to filed issue, end to end.
-**Current focus:** Phase 04 — voice-ai-cli-drafts-files-issue-via-mcp-spoken-confirmation
+**Current focus:** Phase 03 — local-transcription
 
 ## Current Position
 
-Phase: 04
-Plan: Not started
+Phase: 03 (local-transcription) — EXECUTING
+Plan: 2 of 4
 Status: Ready to execute
-Last activity: 2026-06-26 — Phase 04 complete
+Last activity: 2026-06-26 — Phase 03 execution started
 
 Progress: [██████░░░░] 54% (7/13 plans)
 
@@ -60,6 +60,8 @@ Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecti
 - [Phase ?]: Phase 04-03: .finished is transient — beginTranscription success immediately calls beginFiling()
 - [Phase ?]: Phase 04-04: parseFailed always means no issue URL found in CLI output (nothing filed) — old message implied false success
 - [Phase ?]: Phase 04-04: IssueParseError.malformedOutput is declared but never thrown — dead enum case, left as-is for v1
+- [Phase ?]: Phase 03-03: MODEL_SHA256 initialized to unpinned sentinel — script computes and exits 1 on first download, forcing developer to pin the value before the model is usable
+- [Phase ?]: Phase 03-03: vendor/ added to .gitignore so ~466 MB binary + model never enter git history (D-03)
 
 ### Pending Todos
 
@@ -81,7 +83,7 @@ Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecti
 
 ## Session Continuity
 
-Last session: 2026-06-26T02:20:48.529Z
+Last session: 2026-06-26T03:19:57.293Z
 Stopped at: Phase 3 context reworked (bundled whisper)
 Resume file: .planning/phases/03-local-transcription/03-CONTEXT.md
 Decision record: .planning/notes/v1-realign-bundled-whisper-ai-cli-mcp.md
@@ -97,3 +99,5 @@ Decision record: .planning/notes/v1-realign-bundled-whisper-ai-cli-mcp.md
 | Phase 04 P02 | 137s | 2 tasks | 2 files |
 | Phase 04 P03 | 9m | 2 tasks | 3 files |
 | Phase 04 P04 | 20min | 2 tasks | 2 files |
+| Phase 03 P03 | 221 | - tasks | - files |
+| Phase 03 P03 | 221 | 2 tasks | 3 files |
