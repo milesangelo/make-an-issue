@@ -1,9 +1,9 @@
 ---
-status: diagnosed
+status: resolved
 phase: 03-local-transcription
 source: [03-VERIFICATION.md]
 started: "2026-06-26T03:49:20Z"
-updated: "2026-06-25T00:00:00Z"
+updated: "2026-06-26T05:25:00Z"
 ---
 
 ## Current Test
@@ -49,7 +49,8 @@ blocked: 0
 ## Gaps
 
 - truth: "Assembled .app is self-contained: bundled whisper-cli resolves its libraries from inside the .app, so it runs on a clean machine without the build tree present"
-  status: failed
+  status: resolved
+  resolved_by: 03-05
   reason: "Orchestrator verification during Test 2: no .dylib files exist inside MakeAnIssue.app; whisper-cli's only LC_RPATH is the absolute build-tree path /Users/milesangelo/source/make-an-issue/vendor/whisper.cpp-src/build/bin. It runs now only because that build dir still exists on disk. Moving the .app to another Mac or deleting vendor/whisper.cpp-src/build/ would cause a dyld 'Library not loaded' failure."
   severity: major
   test: 2
@@ -67,7 +68,8 @@ blocked: 0
     - "Verify: with vendor/whisper.cpp-src/build/ removed, the assembled .app still transcribes (otool -L shows @loader_path/@rpath only, no absolute build path)."
 
 - truth: "scripts/fetch-whisper.sh verifies the model checksum on a clean checkout: re-run after pinning MODEL_SHA256 exits 0"
-  status: failed
+  status: resolved
+  resolved_by: 03-05
   reason: "Orchestrator verification during Test 3: committed scripts/fetch-whisper.sh:9 still has MODEL_SHA256=\"<sha256-to-fill-in-on-first-download>\" (placeholder). Gating logic is correct (lines 40-47), but the real digest was never pinned back into the script, so a clean checkout cannot pass the checksum-verify path. otool/version/model checks all passed."
   severity: minor
   test: 3
