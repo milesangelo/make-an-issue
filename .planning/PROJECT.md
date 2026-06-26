@@ -26,15 +26,15 @@ opening a browser — the full path from spoken word to filed issue must work en
 - ✓ Global push-to-talk shortcut captures microphone audio while held — Phase 2
 - ✓ Speech-to-transcript pipeline (capture → ASR → transcript display) works end to end — Phase 3
   <sub>(shipped via a user-configured ASR CLI; mechanism being **replaced by a bundled whisper model** — see Active)</sub>
+- ✓ The user's AI CLI, run in the bound repo, **drafts and files** the issue via its own MCP — no `gh`, no API token — Phase 4 (GitHub via `claude -p` proven end-to-end + UAT)
+- ✓ The created issue number/URL is parsed from the CLI output and spoken aloud ("created issue #N") — Phase 4
+- ✓ Backend is provider-agnostic via a configurable command seam (`IssueFilingConfig`) — Phase 4 (claude + GitHub proven; `codex` + Jira explicitly deferred — see Out of Scope / REQUIREMENTS.md)
 
 ### Active
 
 <!-- Current scope. Building toward these (v1 happy path). Realigned 2026-06-25 — see REQUIREMENTS.md + notes/v1-realign-bundled-whisper-ai-cli-mcp.md -->
 
 - [ ] Transcription uses a **bundled** whisper model — zero config, no user ASR command (Phase 3 rework)
-- [ ] The user's AI CLI (`claude`/`codex`), run in the bound repo, **drafts and files** the issue via its own MCP (GitHub or Atlassian/Jira) — no `gh`, no API token (Phase 4, merged)
-- [ ] The created issue number/URL is parsed from the CLI output and spoken aloud (Phase 4, merged)
-- [ ] Backend is provider-agnostic; `codex` + Jira are spike-gated v1 targets (Phase 4, merged)
 
 ### Out of Scope
 
@@ -75,8 +75,8 @@ opening a browser — the full path from spoken word to filed issue must work en
 | Global shortcut push-to-talk, not wake phrase | Simpler, private, no false triggers | Validated in Phase 2 (KeyboardShortcuts global Carbon hotkey) |
 | Local models invoked via configured CLI commands | Avoids embedded runtimes; reuses user's setup | CLIRunner pattern validated in Phase 3; **scope narrowed 2026-06-25** — STT is now a bundled whisper model (not a user CLI); the LLM is the user's AI coding CLI (`claude`/`codex`) |
 | **Bundle whisper.cpp + model; drop user ASR config** (2026-06-25) | Zero-config + best accuracy on technical vocab for enterprise teammates | — Pending (Phase 3 rework; requires signing/notarizing the bundled binary) |
-| **AI CLI drafts AND files the issue via its own MCP** (2026-06-25) | Enterprise users have GitHub/Atlassian MCP on their cloud subscription and forbid API tokens; collapses Phases 4+5 and removes `gh` | — Pending (Phase 4 merged; `codex` + Jira spike-gated) |
-| **No app-held tokens; one-time OAuth per provider OK** (2026-06-25) | App never handles credentials; rides the AI CLI's existing MCP OAuth session | — Pending |
+| **AI CLI drafts AND files the issue via its own MCP** (2026-06-25) | Enterprise users have GitHub/Atlassian MCP on their cloud subscription and forbid API tokens; collapses Phases 4+5 and removes `gh` | Validated in Phase 4 (claude + GitHub proven end-to-end; `codex` + Jira deferred) |
+| **No app-held tokens; one-time OAuth per provider OK** (2026-06-25) | App never handles credentials; rides the AI CLI's existing MCP OAuth session | Validated in Phase 4 (app holds no tokens; rides claude's MCP OAuth session) |
 | Repo binding from launching command's working directory | No multi-repo UI needed in v1 | Validated in Phase 1 |
 | Filesystem-only git-root resolver for Phase 1 | Avoids shelling out before the CLI pipeline exists; enough for visible repo binding | Validated in Phase 1 |
 | Launcher open-command test override must be absolute-path only | Keeps automated smoke tests possible without permitting PATH-based command ambiguity | Added during Phase 1 security gate |
@@ -85,4 +85,4 @@ opening a browser — the full path from spoken word to filed issue must work en
 | v1 build runs non-sandboxed | App Sandbox blocks external CLI execution | — Pending |
 
 ---
-*Last updated: 2026-06-25 after mid-milestone realignment (bundled whisper + AI-CLI/MCP filing)*
+*Last updated: 2026-06-26 — Phase 4 complete (voice → AI CLI files issue via MCP + spoken confirmation; gap 04-05 closed). v1 milestone's final phase verified. Pre-existing drift: the Phase 3 bundled-whisper rework item remains in Active pending its own completion update.*
