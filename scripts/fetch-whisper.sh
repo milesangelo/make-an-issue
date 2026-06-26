@@ -4,9 +4,9 @@ set -eu
 # Source: github.com/ggml-org/whisper.cpp build instructions
 WHISPER_TAG="v1.9.1"
 MODEL_URL="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en.bin"
-# UNPINNED: Replace with the 64-char SHA256 computed on first download (instructions below).
+# Pinned 64-char content SHA256 of ggml-small.en.bin.
 # Do NOT use the 40-char HuggingFace LFS hash — it is a git LFS pointer, not a file-content SHA256.
-MODEL_SHA256="<sha256-to-fill-in-on-first-download>"
+MODEL_SHA256="c6138d6d58ecc8322097e0f987c32f1be8bb0a18532a3f88f734d1bbf9c41e5d"
 
 REPO_ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)"
 VENDOR="$REPO_ROOT/vendor"
@@ -26,6 +26,28 @@ if [ ! -f "$VENDOR/whisper-cli" ]; then
     cp "$SRC/build/bin/whisper-cli" "$VENDOR/whisper-cli"
     xattr -cr "$VENDOR/whisper-cli"
     echo "whisper-cli built at $WHISPER_TAG"
+fi
+
+# --- vendor dylibs (guarded: skip if all six already present) ---
+# These are the exact @rpath basenames whisper-cli links. Copying from build/bin dereferences
+# the symlinks, producing flat real Mach-O files named as the @rpath basenames.
+DYLIBS="libwhisper.1.dylib libggml.0.dylib libggml-base.0.dylib libggml-cpu.0.dylib libggml-blas.0.dylib libggml-metal.0.dylib"
+_need_dylibs=0
+for _lib in $DYLIBS; do
+    [ -f "$VENDOR/$_lib" ] || _need_dylibs=1
+done
+if [ "$_need_dylibs" -eq 1 ]; then
+    if [ ! -d "$SRC/build/bin" ]; then
+        echo "ERROR: $SRC/build/bin not found but dylibs are missing from vendor/." >&2
+        echo "Remove vendor/whisper-cli and the source tree, then re-run:" >&2
+        echo "  rm -rf \"$VENDOR/whisper-cli\" \"$SRC\"" >&2
+        exit 1
+    fi
+    for _lib in $DYLIBS; do
+        cp "$SRC/build/bin/$_lib" "$VENDOR/$_lib"
+        xattr -cr "$VENDOR/$_lib"
+    done
+    echo "Vendored dylibs: $DYLIBS"
 fi
 
 # --- download model (guarded: skip if already downloaded) ---
