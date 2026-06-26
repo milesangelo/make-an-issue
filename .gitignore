@@ -11,3 +11,6 @@ xcuserdata/
 
 # Local config / secrets
 *.local
+
+# Vendored whisper-cli + model (fetched at build time, never committed)
+vendor/
