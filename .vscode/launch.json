@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:make-an-issue}",
+            "name": "Debug MakeAnIssue",
+            "target": "MakeAnIssue",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug MakeAnIssue"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:make-an-issue}",
+            "name": "Release MakeAnIssue",
+            "target": "MakeAnIssue",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release MakeAnIssue"
+        }
+    ]
+}

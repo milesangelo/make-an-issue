@@ -2,7 +2,7 @@ import AppKit
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    static weak var sharedAppState: AppState?
+    let appState = AppState()
 
     private let launchRequestStore = LaunchRequestStore()
 
@@ -17,10 +17,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func consumeLatestLaunchRequest() {
-        guard let request = try? launchRequestStore.consumeLatest() else {
-            return
+        NSLog("MakeAnIssue: consumeLatestLaunchRequest called!")
+        do {
+            if let request = try launchRequestStore.consumeLatest() {
+                NSLog("MakeAnIssue: consumed request: CWD=\(request.cwd), time=\(request.createdAtUnixSeconds)")
+                appState.handleLaunchRequest(request)
+            } else {
+                NSLog("MakeAnIssue: no launch request file found or it was empty.")
+            }
+        } catch {
+            NSLog("MakeAnIssue: failed to consume launch request: \(error.localizedDescription)")
         }
-
-        Self.sharedAppState?.handleLaunchRequest(request)
     }
 }

@@ -7,6 +7,14 @@ app_dir="$repo_root/.build/MakeAnIssue.app"
 request_dir="${MAKE_AN_ISSUE_REQUEST_DIR:-$HOME/Library/Application Support/make-an-issue}"
 open_command="${MAKE_AN_ISSUE_OPEN_COMMAND:-/usr/bin/open}"
 
+case "$open_command" in
+    /*) ;;
+    *)
+        printf 'MAKE_AN_ISSUE_OPEN_COMMAND must be an absolute path\n' >&2
+        exit 1
+        ;;
+esac
+
 if [ ! -d "$app_dir" ]; then
     printf 'MakeAnIssue app bundle not found. Run: %s/scripts/build-app.sh\n' "$repo_root" >&2
     exit 1
