@@ -510,6 +510,39 @@ final class AppStateTests: XCTestCase {
         )
     }
 
+    func testParseFailedStatusMessageIsNotMisleading() async throws {
+        // Regression: parseFailed must NOT say "Issue filed" — nothing was filed.
+        // The message must accurately reflect that confirmation failed (not that an issue was created).
+        let repoURL = try makeRepo(named: "parse-failed-repo")
+        let binding = RepoBinding(rootURL: repoURL, displayName: "parse-failed-repo", displayPath: repoURL.path)
+        var speakCalled = false
+        let state = AppState(
+            boundRepo: binding,
+            boundRepoDisplayText: "parse-failed-repo",
+            onStartRecording: { true },
+            onStopRecording: {},
+            onRunTranscription: { _ in "create issue" },
+            onRunIssueFiling: { _, _ in throw IssueFilingError.parseFailed },
+            onSpeak: { _ in speakCalled = true }
+        )
+        state.micPermissionGranted = true
+        state.startRecording()
+        state.stopRecording()
+
+        try? await Task.sleep(for: .milliseconds(200))
+
+        // Status must show the corrected wording — not the old misleading "Issue filed" text.
+        XCTAssertEqual(
+            state.statusText,
+            "Couldn't confirm an issue was filed — check GitHub (is Docker running?)",
+            "parseFailed message must not imply an issue was filed; got: '\(state.statusText)'"
+        )
+        // Speak seam must NOT be called — no false success announcement.
+        XCTAssertFalse(speakCalled, "speak seam must NOT be called on parseFailed (no false success)")
+        // State machine must return to .idle so PTT is usable again.
+        XCTAssertEqual(state.captureState, .idle, "parseFailed must reset captureState to .idle")
+    }
+
     func testNoRepoBoundSkipsFilingAndReturnsToIdle() async throws {
         var filingCalled = false
         let state = AppState(

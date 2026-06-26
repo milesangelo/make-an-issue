@@ -317,7 +317,7 @@ final class AppState: ObservableObject {
         case .permissionDenied:
             return "Issue tool not granted — check CLI Command config"
         case .parseFailed:
-            return "Issue filed but couldn't parse number — check GitHub"
+            return "Couldn't confirm an issue was filed — check GitHub (is Docker running?)"
         }
     }
 
