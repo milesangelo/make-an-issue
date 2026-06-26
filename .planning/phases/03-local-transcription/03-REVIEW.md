@@ -1,130 +1,212 @@
 ---
 phase: 03-local-transcription
-reviewed: 2026-06-26T05:18:00Z
+reviewed: 2026-06-26T05:32:37Z
 depth: standard
 files_reviewed: 9
 files_reviewed_list:
-  - scripts/fetch-whisper.sh
   - scripts/build-app.sh
-  - Sources/MakeAnIssue/CLIRunner.swift
-  - Sources/MakeAnIssue/Transcriber.swift
+  - scripts/fetch-whisper.sh
   - Sources/MakeAnIssue/AppState.swift
+  - Sources/MakeAnIssue/CLIRunner.swift
   - Sources/MakeAnIssue/MenuView.swift
+  - Sources/MakeAnIssue/Transcriber.swift
+  - Tests/MakeAnIssueTests/AppStateTests.swift
   - Tests/MakeAnIssueTests/CLIRunnerTests.swift
   - Tests/MakeAnIssueTests/TranscriberTests.swift
-  - Tests/MakeAnIssueTests/AppStateTests.swift
 findings:
-  critical: 1
-  warning: 6
-  info: 3
-  total: 10
+  critical: 0
+  warning: 5
+  info: 6
+  total: 11
 status: issues_found
 ---
 
 # Phase 03: Code Review Report
 
-**Reviewed:** 2026-06-26T05:18:00Z
+**Reviewed:** 2026-06-26T05:32:37Z
 **Depth:** standard
 **Files Reviewed:** 9
 **Status:** issues_found
 
 ## Summary
 
-Reviewed the two newly-reworked shell scripts (`fetch-whisper.sh`, `build-app.sh`) and the Swift transcription path (`CLIRunner`, `Transcriber`, `AppState`, `MenuView`) plus their tests. The shell-injection mitigation in `Transcriber` (POSIX single-quote escaping) is correct, the model SHA256 verification is sound, and the `AppState` state machine is well-guarded and well-tested.
+Reviewed the local-transcription slice: two vendor/build shell scripts, the
+transcription state machine (`AppState`), the generic process runner
+(`CLIRunner`), the `Transcriber` wrapper, the `MenuView` UI, and three test
+files. Overall the code is careful and well-commented — the single-resume
+continuation guard in `CLIRunner`, the POSIX single-quote escaping in
+`Transcriber`, the SHA-256 model pin in `fetch-whisper.sh`, and the
+`[weak self]` discipline in `AppState` are all correct and defend against real
+hazards.
 
-However, the core data path has a genuine correctness defect: `CLIRunner` nils its pipe `readabilityHandler`s inside the `terminationHandler` without a final drain, which can silently truncate the captured stdout — the transcript that gets filed as a GitHub issue. Two further concerns affect transcript integrity (login-shell profile output contaminating stdout) and script robustness/idempotency (non-atomic model download with no `-f`/cleanup, and a non-idempotent `git clone`). One UI setting (CLI Command) is wired to nothing.
+No Critical/BLOCKER defects were found (the package builds cleanly against the
+macOS 13 target; the `MainActor.assumeIsolated` calls are back-deployed and
+compile). The findings below are correctness/robustness risks worth fixing:
+the most material is a potential loss of the transcript's final bytes when the
+ASR process exits (`CLIRunner` detaches pipe handlers without a final drain),
+and a `curl` invocation in `fetch-whisper.sh` that can poison the vendor cache
+on an HTTP error and then block every subsequent run.
 
-## Critical Issues
-
-### CR-01: stdout can be silently truncated by terminationHandler/readabilityHandler race
-
-**File:** `Sources/MakeAnIssue/CLIRunner.swift:120-134` (with `:102-110`)
-**Issue:** When the process exits, two callbacks race on independent queues: the final data-bearing `readabilityHandler` invocation (delivering the last chunk still buffered in the pipe) and the `terminationHandler`. The `terminationHandler` immediately sets both `readabilityHandler`s to `nil` (lines 122-123) and then snapshots the accumulated data via `state.claim()` (line 125). If the terminationHandler wins the race, any bytes still buffered in the pipe that were not yet delivered to a handler call are never read and are lost from the snapshot.
-
-For short outputs this usually does not manifest, but `whisper-cli`'s entire transcript is delivered on stdout. A truncated transcript is not an error — it passes the non-empty guard in `Transcriber` (`:92`) and is filed verbatim as a GitHub issue. This is silent data corruption on the primary data path.
-
-**Fix:** Drain remaining buffered data before nilling the handlers — read to EOF in the terminationHandler before claiming (safe because the writer end has closed by then):
-```swift
-process.terminationHandler = { p in
-    let restOut = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-    let restErr = stderrPipe.fileHandleForReading.readDataToEndOfFile()
-    if !restOut.isEmpty { state.appendStdout(restOut) }
-    if !restErr.isEmpty { state.appendStderr(restErr) }
-    stdoutPipe.fileHandleForReading.readabilityHandler = nil
-    stderrPipe.fileHandleForReading.readabilityHandler = nil
-    guard let (out, err) = state.claim() else { return }
-    // ...
-}
-```
+## Narrative Findings (AI reviewer)
 
 ## Warnings
 
-### WR-01: Login-shell profile output can contaminate the transcript
+### WR-01: CLIRunner may drop the final stdout/stderr chunk on process exit
 
-**File:** `Sources/MakeAnIssue/Transcriber.swift:77,79` (via `CLIRunner.swift:83-84`)
-**Issue:** The whisper invocation runs through `/bin/zsh -lc`. The `-l` (login) flag causes zsh to source `.zshenv`, `.zprofile`, and `.zlogin`. Any of those that write to stdout (a banner, `echo`, `fortune`, version-manager chatter) prepends that output to whisper-cli's stdout. Because the transcript is taken as the raw stdout, that contamination becomes part of the transcript and is filed as a GitHub issue. The login shell is unnecessary for transcription since all paths are absolute.
-**Fix:** For the transcription path, invoke the binary directly (set `process.executableURL` to the whisper-cli URL with an argv array) rather than through a login shell, or drop `-l` for this call. If `CLIRunner` must stay shell-based, add an argv-based execution mode for transcription so profile output cannot leak into stdout.
+**File:** `Sources/MakeAnIssue/CLIRunner.swift:120-134`
+**Issue:** The `terminationHandler` immediately sets both
+`readabilityHandler`s to `nil` ("Detach handlers first so no stale chunk
+arrives after exit") and then decodes whatever has accumulated so far. GCD does
+not guarantee that every `readabilityHandler` callback for buffered pipe data
+has run before `terminationHandler` fires. Any bytes still sitting in the pipe
+buffer at exit are discarded when the handler is niled, so the captured output
+can be truncated. For this app the discarded bytes are the **tail of the
+transcript** — the primary product of the feature — making this a data-loss /
+incorrect-output risk that grows with transcript length.
+**Fix:** After the process exits, synchronously read any residual data before
+decoding, e.g.:
+```swift
+process.terminationHandler = { p in
+    stdoutPipe.fileHandleForReading.readabilityHandler = nil
+    stderrPipe.fileHandleForReading.readabilityHandler = nil
+    // Drain whatever remained buffered at exit.
+    let restOut = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+    if !restOut.isEmpty { state.appendStdout(restOut) }
+    let restErr = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+    if !restErr.isEmpty { state.appendStderr(restErr) }
+    guard let (out, err) = state.claim() else { return }
+    ...
+}
+```
 
-### WR-02: Model download is non-atomic, omits `-f`, and never cleans up on failure
+### WR-02: `curl` without `--fail` can poison the vendor cache and block all future runs
 
-**File:** `scripts/fetch-whisper.sh:54-56`
-**Issue:** `curl -L -o "$VENDOR/ggml-small.en.bin" "$MODEL_URL"` writes directly to the final path. Without `-f`, an HTTP 404/5xx returns exit 0 and writes the error page into the model file. The SHA256 check (`:69`) then fails — good — but the corrupt file remains on disk. On re-run the `[ ! -f ... ]` guard (`:54`) sees the file present, skips the download, and re-fails the SHA check forever. The same permanent-stuck state results from a Ctrl-C mid-download. Recovery requires the user to manually `rm` the file, which is never suggested.
-**Fix:** Use `curl -fL` to a temp path, verify, then move into place; remove the temp on failure:
+**File:** `scripts/fetch-whisper.sh:54-55`
+**Issue:** `curl -L -o "$VENDOR/ggml-small.en.bin" "$MODEL_URL"` omits `--fail`.
+On an HTTP error (404, rate limit, redirect-to-login HTML) `curl` exits `0` and
+writes the error body into `ggml-small.en.bin`. `set -e` does not catch it. The
+SHA-256 check on line 69 then fails loudly (good), but the download guard on
+line 54 (`[ ! -f "$VENDOR/ggml-small.en.bin" ]`) sees the poisoned file already
+present on every subsequent run, skips re-download, and the SHA check fails
+**forever** until the file is manually deleted.
+**Fix:** Use `--fail` and download to a temp path that is only moved into place
+after verification:
 ```sh
-tmp="$VENDOR/ggml-small.en.bin.part"
-curl -fL -o "$tmp" "$MODEL_URL" || { rm -f "$tmp"; echo "download failed" >&2; exit 1; }
+tmp="$VENDOR/ggml-small.en.bin.partial"
+curl -fL -o "$tmp" "$MODEL_URL"
+printf '%s  %s\n' "$MODEL_SHA256" "$tmp" | shasum -a 256 -c -
 mv "$tmp" "$VENDOR/ggml-small.en.bin"
 ```
 
-### WR-03: `git clone` step is not idempotent after a partial failure
+### WR-03: Startup mic-permission Task can overwrite an already-resolved grant; never re-checked
 
-**File:** `scripts/fetch-whisper.sh:18-29`
-**Issue:** The build block is guarded only on `vendor/whisper-cli` existence. If a prior run cloned into `$SRC` but failed before `cp` (build error, interrupt), `whisper-cli` is absent so the block re-enters, but `git clone ... "$SRC"` aborts with "destination path already exists" and `set -e` exits. The user gets no guidance for this case (the helpful `rm -rf` hint at `:42-44` exists only in the dylib branch).
-**Fix:** Clean or guard the clone target, e.g. `rm -rf "$SRC"` before cloning, or `if [ ! -d "$SRC/.git" ]; then git clone ...; fi`, so a re-run self-heals.
+**File:** `Sources/MakeAnIssue/AppState.swift:142-148`
+**Issue:** The designated `init` fires an async Task that awaits
+`requestMicrophonePermission()` and then unconditionally assigns
+`self?.micPermissionGranted = granted`. Two problems:
+(1) In tests, code sets `state.micPermissionGranted = true` synchronously right
+after construction; the still-suspended init Task later resumes and can write
+back `false` (in a headless/CI environment where the request resolves denied),
+flipping the flag mid-test — a latent flakiness source. (2) In the app, the
+permission is requested exactly once at launch; if the user grants access in
+System Settings afterward, `micPermissionGranted` is never re-read, so
+push-to-talk keeps reporting "access denied" until relaunch.
+**Fix:** Guard the assignment so it only ever promotes to granted
+(`if granted { self?.micPermissionGranted = true }`), and re-query
+authorization status at `startRecording()` time (or on app activation) instead
+of caching a one-shot result.
 
-### WR-04: rpath rewrite handles only the first LC_RPATH and breaks on paths with spaces
+### WR-04: Async state-machine tests depend on fixed `Task.sleep` delays
 
-**File:** `scripts/build-app.sh:49-53`
-**Issue:** The awk extractor `found && /path /{print $2; exit}` captures only the first `LC_RPATH` and exits. If `whisper-cli` carries multiple absolute rpaths (e.g. a Homebrew path plus the build dir), the others survive as stale build-machine paths in the shipped binary. Also, `print $2` takes only the first whitespace-delimited token, so any rpath containing a space (which happens when `repo_root` contains a space, since the build rpath derives from `$SRC/build`) is truncated — `install_name_tool -delete_rpath` (`:51`) then fails on the truncated value and `set -e` aborts the build.
-**Fix:** Iterate over all rpaths, deleting each non-`@loader_path` entry, and capture the full path rather than `$2`:
-```sh
-otool -l "$bin" | awk '/cmd LC_RPATH/{f=1} f && /^ *path /{sub(/^ *path /,""); sub(/ \(offset.*/,""); print; f=0}'
-```
+**File:** `Tests/MakeAnIssueTests/AppStateTests.swift:127,201,230,296,414,623,658`
+**Issue:** Many tests advance the async transcription/filing pipeline by
+sleeping a fixed wall-clock interval (e.g. `Task.sleep(for: .milliseconds(100))`)
+and then asserting terminal state. These pass on an idle machine but are
+inherently timing-dependent; under CI load the awaited Task may not have settled,
+producing intermittent failures (and `testFilingEntersFilingState` /
+`testPushToTalkDuringFilingIsIgnored` rely on observing the *transient* `.filing`
+state inside a 150 ms window). Flaky tests erode trust in the suite.
+**Fix:** Drive completion deterministically — e.g. have the injected
+`onRunTranscription`/`onRunIssueFiling` seams signal a continuation/expectation
+the test awaits, rather than sleeping a guessed duration.
 
-### WR-05: "CLI Command" setting is wired to nothing
+### WR-05: `process.terminate()` (SIGTERM) is assumed sufficient on timeout
 
-**File:** `Sources/MakeAnIssue/MenuView.swift:78` / `Sources/MakeAnIssue/AppState.swift:99-101`
-**Issue:** The Settings TextField writes the UserDefaults key `cliCommand` (`AppState.cliCommandKey`), but the filing path calls `IssueFilingRunner.file(... config: .claudeGitHub ...)`, and `IssueFilingConfig.claudeGitHub` hardcodes `cliCommand: "claude"` (`IssueFilingConfig.swift:81`). Nothing reads the `cliCommand` UserDefaults value back into the config, so editing the field has no effect — a user who sets a different command is silently ignored and still runs `claude`.
-**Fix:** Read the `cliCommand` default into the config before filing (build `IssueFilingConfig` from `UserDefaults.standard.string(forKey: AppState.cliCommandKey)`), or remove the non-functional TextField until it is wired.
-
-### WR-06: Full transcript written to the unified system log
-
-**File:** `Sources/MakeAnIssue/AppState.swift:209`
-**Issue:** `NSLog("MakeAnIssue transcript: \(text)")` writes the complete transcribed speech to the macOS unified log, which is persisted and readable via Console/`log show` by admin processes. Voice transcripts can contain sensitive content; this is a privacy exposure even though marked intentional (D-09).
-**Fix:** Drop the transcript text from the log (log length or a redacted marker), gate it behind `#if DEBUG`, or use `os.Logger` with `privacy: .private` instead of `NSLog`.
+**File:** `Sources/MakeAnIssue/CLIRunner.swift:157`
+**Issue:** On timeout the runner claims the resume slot, calls
+`process.terminate()` (SIGTERM), and resumes `.timeout`. If the child ignores
+SIGTERM (or is mid-`exec` of a wrapper that re-spawns), the process is never
+reaped and lingers after `run` returns `.timeout`. The continuation is already
+resolved, so there is no later opportunity to escalate to SIGKILL. For the
+bundled whisper-cli this is unlikely, but the runner is generic (also used for
+the AI-CLI filing path with much longer-running children).
+**Fix:** Consider escalating to `process.interrupt()`/SIGKILL if the process is
+still running shortly after `terminate()`, or document that callers must only
+pass signal-respecting children.
 
 ## Info
 
-### IN-01: Dead SHA-pinning bootstrap block
+### IN-01: KeyboardShortcuts handlers are appended per instance and never removed
+
+**File:** `Sources/MakeAnIssue/AppState.swift:128-139`
+**Issue:** `KeyboardShortcuts.onKeyDown`/`onKeyUp` append to a global handler
+list (confirmed in the dependency source) and `AppState` has no `deinit` that
+removes them. The single-instance app is unaffected (and `[weak self]` makes
+stale handlers no-ops), but every `AppState` constructed in the test suite
+leaves a permanent handler registered for the process lifetime.
+**Fix:** Not required for the single-instance app; if multiple instances ever
+exist, remove handlers in `deinit` via `KeyboardShortcuts.removeHandler` /
+`disable(_:)`.
+
+### IN-02: Unreachable placeholder branch in SHA-pin check
 
 **File:** `scripts/fetch-whisper.sh:62-68`
-**Issue:** `MODEL_SHA256` is now a real 64-char digest (`:9`), so `[ "$MODEL_SHA256" = "<sha256-to-fill-in-on-first-download>" ]` is always false and the bootstrap-print branch is unreachable. The comment at `:59-61` describes a workflow that can no longer run, which can mislead a maintainer trying to re-pin a new model.
-**Fix:** Remove the dead branch, or convert the "how to compute a new SHA" guidance into a plain comment so it stays useful without being dead code.
+**Issue:** `MODEL_SHA256` is already pinned to a real 64-char digest (line 9),
+so the `if [ "$MODEL_SHA256" = "<sha256-to-fill-in-on-first-download>" ]`
+branch can never execute. It is dead bootstrap scaffolding.
+**Fix:** Remove the placeholder branch now that the digest is pinned, or keep it
+intentionally as documented re-pin tooling (state the intent in a comment).
 
-### IN-02: `WaveformView.randomHeight` is not random
+### IN-03: `DYLIBS` list duplicated across two scripts
+
+**File:** `scripts/build-app.sh:21` and `scripts/fetch-whisper.sh:34`
+**Issue:** The six-entry `DYLIBS` list is hand-maintained in two places. If
+whisper.cpp changes its linked dylib set on a future bump, the lists can drift
+and produce a partially-bundled `.app` that fails to load at runtime.
+**Fix:** Derive the bundled set from `otool -L vendor/whisper-cli`, or factor
+the list into a single sourced file shared by both scripts.
+
+### IN-04: Neither shell script sets `pipefail`
+
+**File:** `scripts/build-app.sh:2`, `scripts/fetch-whisper.sh:2`
+**Issue:** Both use `set -eu` but not `pipefail`, so a failure in the left side
+of a pipe (e.g. `otool -l ... | awk ...` at build-app.sh:49, or
+`shasum ... | awk ...` at fetch-whisper.sh:64) is masked by a succeeding tail
+command. These are `/bin/sh` scripts, so `pipefail` is only portable under a
+POSIX shell that supports it; gate accordingly.
+**Fix:** Add `set -o pipefail` where the interpreter supports it, or check
+intermediate results explicitly.
+
+### IN-05: `WaveformView.randomHeight(for:)` is misnamed — it returns fixed heights
 
 **File:** `Sources/MakeAnIssue/MenuView.swift:395-398`
-**Issue:** `randomHeight(for:)` indexes a fixed array by `index % count`, returning a deterministic value. The name implies randomness that does not exist.
-**Fix:** Rename to `barHeight(for:)` (or similar) to reflect the deterministic lookup.
+**Issue:** The method name promises randomness but indexes into a fixed array,
+so every "waveform" render is identical. Purely cosmetic/naming.
+**Fix:** Rename to e.g. `barHeight(for:)`, or actually randomize if variation is
+desired.
 
-### IN-03: Transcription uses a login shell unnecessarily
+### IN-06: Dead scaffolding in `testFilingEntersFilingState`
 
-**File:** `Sources/MakeAnIssue/Transcriber.swift:77` (via `CLIRunner`)
-**Issue:** All three paths passed to whisper-cli are absolute, so the `-l` login shell (needed by the filing path to resolve PATH) adds nothing here but startup cost and the stdout-contamination risk in WR-01. Noted separately as a design observation; the actionable part is WR-01.
-**Fix:** Prefer argv-based direct execution for the transcription call. See WR-01.
+**File:** `Tests/MakeAnIssueTests/AppStateTests.swift:602-603,606,631`
+**Issue:** `let filingStarted = CheckedContinuation<Void, Never>.self` assigns a
+*type* and is immediately silenced with `_ = filingStarted`; a `DispatchSemaphore`
+is created and only `signal()`-ed at the end (never waited on). This is leftover
+scaffolding that adds noise and implies synchronization that does not occur.
+**Fix:** Delete the unused `filingStarted` and `sem` declarations; the test's
+real synchronization is the `Task.sleep` windows.
 
 ---
 
-_Reviewed: 2026-06-26T05:18:00Z_
+_Reviewed: 2026-06-26T05:32:37Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
