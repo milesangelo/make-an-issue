@@ -79,7 +79,7 @@ Plans:
 
 Plans:
 
-4/4 plans complete
+5/5 plans complete
 
 - [x] 03-01-PLAN.md — Shared `CLIRunner` (`Process` wrapper: `/bin/zsh -lc`, separate stdout/stderr+exit capture via concurrent readabilityHandlers, single-resume 120s timeout; reusable by Phase 4)
 
@@ -94,7 +94,7 @@ Plans:
 
 **Wave 4 — gap closure (UAT self-containment + SHA pin, 2026-06-25)**
 
-- [ ] 03-05-PLAN.md — Make the assembled `.app` self-contained: `fetch-whisper.sh` pins `MODEL_SHA256` + vendors the six `@rpath` dylibs; `build-app.sh` bundles them into Resources, rewrites whisper-cli's absolute `LC_RPATH` to `@loader_path`, and ad-hoc signs dylibs then whisper-cli (bottom-up). Closes 03-UAT GAP 1 (major) + GAP 2 (minor).
+- [x] 03-05-PLAN.md — Make the assembled `.app` self-contained: `fetch-whisper.sh` pins `MODEL_SHA256` + vendors the six `@rpath` dylibs; `build-app.sh` bundles them into Resources, rewrites whisper-cli's absolute `LC_RPATH` to `@loader_path`, and ad-hoc signs dylibs then whisper-cli (bottom-up). Closes 03-UAT GAP 1 (major) + GAP 2 (minor).
 
 ### Phase 4: Voice → AI CLI Drafts & Files Issue (via MCP) + Spoken Confirmation
 
@@ -140,5 +140,5 @@ Phases execute in numeric order: 1 → 2 → 3 (rework) → 4
 |-------|----------------|--------|-----------|
 | 1. Menu-Bar App + Repo-Bound Launch | 3/3 | Complete | 2026-06-24 |
 | 2. Push-to-Talk Voice Capture | 2/2 | Complete    | 2026-06-24 |
-| 3. Local Transcription | 4/4 | Complete   | 2026-06-26 |
+| 3. Local Transcription | 5/5 | Complete   | 2026-06-26 |
 | 4. Voice → AI CLI Drafts & Files Issue (via MCP) + Spoken Confirmation | 4/4 | Complete    | 2026-06-26 |

@@ -6,14 +6,14 @@ current_phase: 03
 current_phase_name: local-transcription
 status: executing
 stopped_at: Phase 3 context reworked (bundled whisper)
-last_updated: "2026-06-26T03:29:54.455Z"
+last_updated: "2026-06-26T05:12:39.871Z"
 last_activity: 2026-06-26
 last_activity_desc: Phase 03 execution started
 progress:
   total_phases: 4
   completed_phases: 4
-  total_plans: 13
-  completed_plans: 13
+  total_plans: 14
+  completed_plans: 14
   percent: 100
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-06-25)
 ## Current Position
 
 Phase: 03 (local-transcription) — EXECUTING
-Plan: 3 of 4
+Plan: 2 of 5
 Status: Ready to execute
 Last activity: 2026-06-26 — Phase 03 execution started
 
@@ -62,6 +62,8 @@ Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecti
 - [Phase ?]: Phase 04-04: IssueParseError.malformedOutput is declared but never thrown — dead enum case, left as-is for v1
 - [Phase ?]: Phase 03-03: MODEL_SHA256 initialized to unpinned sentinel — script computes and exits 1 on first download, forcing developer to pin the value before the model is usable
 - [Phase ?]: Phase 03-03: vendor/ added to .gitignore so ~466 MB binary + model never enter git history (D-03)
+- [Phase ?]: Phase 03-05: MODEL_SHA256 pinned to content digest c6138d6d...1e5d
+- [Phase ?]: Phase 03-05: install_name_tool reads LC_RPATH dynamically via otool/awk (no hardcoded home path)
 
 ### Pending Todos
 
@@ -83,7 +85,7 @@ Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecti
 
 ## Session Continuity
 
-Last session: 2026-06-26T03:29:54.452Z
+Last session: 2026-06-26T05:12:31.964Z
 Stopped at: Phase 3 context reworked (bundled whisper)
 Resume file: .planning/phases/03-local-transcription/03-CONTEXT.md
 Decision record: .planning/notes/v1-realign-bundled-whisper-ai-cli-mcp.md
@@ -102,3 +104,4 @@ Decision record: .planning/notes/v1-realign-bundled-whisper-ai-cli-mcp.md
 | Phase 03 P03 | 221 | - tasks | - files |
 | Phase 03 P03 | 221 | 2 tasks | 3 files |
 | Phase 03 P04 | 15m | 3 tasks | 5 files |
+| Phase 03 P05 | 99s | 2 tasks | 2 files |
