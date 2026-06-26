@@ -164,10 +164,25 @@ struct CLIRunner {
                 // fire. If the process already exited, claim() returns nil and we
                 // leave the already-delivered result untouched.
                 guard state.claim() != nil else { return }
-                process.terminate()
+                process.terminate()   // SIGTERM — ask the child to exit cleanly first.
                 stdoutPipe.fileHandleForReading.readabilityHandler = nil
                 stderrPipe.fileHandleForReading.readabilityHandler = nil
                 continuation.resume(returning: .timeout)
+
+                // Escalate to SIGKILL if the child ignores SIGTERM (or is
+                // mid-exec of a wrapper that re-spawns) and is still running
+                // after a short grace period, so it is reaped rather than
+                // lingering after `run` returns. The continuation is already
+                // resolved with .timeout; this only force-reaps the process.
+                // The bundled whisper-cli respects SIGTERM, but `run` is generic
+                // and also drives longer-running children (the AI-CLI filing
+                // path). (WR-05)
+                Task {
+                    try? await Task.sleep(for: .seconds(2))
+                    if process.isRunning {
+                        kill(process.processIdentifier, SIGKILL)
+                    }
+                }
             }
         }
 
