@@ -124,7 +124,7 @@ final class AppStateTests: XCTestCase {
         state.stopRecording()
 
         // Wait for the transcription Task and filing fast-path to settle.
-        try? await Task.sleep(for: .milliseconds(100))
+        await waitUntil { state.captureState == .idle }
         XCTAssertEqual(state.captureState, .idle)
 
         state.startRecording()
@@ -143,7 +143,7 @@ final class AppStateTests: XCTestCase {
         state.startRecording()
         state.stopRecording()
         // Wait for transcription + filing fast-path to settle to .idle before the second startRecording.
-        try? await Task.sleep(for: .milliseconds(100))
+        await waitUntil { state.captureState == .idle }
         state.startRecording()
 
         XCTAssertEqual(startCount, 2)
@@ -204,7 +204,7 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(state.captureState, .transcribing, "Cap must transcribe captured audio, not discard it")
         XCTAssertTrue(stopCalled)
 
-        try? await Task.sleep(for: .milliseconds(100))
+        await waitUntil { state.captureState == .idle && state.transcript == "Capped transcript" }
         // .finished is transient; no repo bound → filing fast-path → .idle
         XCTAssertEqual(state.captureState, .idle)
         XCTAssertEqual(state.transcript, "Capped transcript")
@@ -233,7 +233,7 @@ final class AppStateTests: XCTestCase {
         state.startRecording()
         XCTAssertEqual(state.captureState, .recording)
 
-        try? await Task.sleep(for: .milliseconds(250))
+        await waitUntil { state.captureState == .idle && state.transcript == "Auto transcript" }
 
         XCTAssertTrue(stopCalled)
         // .finished is transient; no repo bound → filing fast-path → .idle
@@ -299,7 +299,7 @@ final class AppStateTests: XCTestCase {
         state.startRecording()
         state.stopRecording()
 
-        try? await Task.sleep(for: .milliseconds(100))
+        await waitUntil { receivedURL != nil }
 
         // The seam must be called with the recorder's latestWavURL.
         XCTAssertNotNil(receivedURL, "onRunTranscription must be invoked with the WAV URL")
@@ -328,7 +328,7 @@ final class AppStateTests: XCTestCase {
         state.startRecording()
         state.stopRecording()
 
-        try? await Task.sleep(for: .milliseconds(200))
+        await waitUntil { state.captureState == .idle && state.transcript == "Hello world" }
 
         XCTAssertEqual(state.transcript, "Hello world")
         // .finished is transient; after filing completes state returns to .idle
@@ -346,7 +346,7 @@ final class AppStateTests: XCTestCase {
         state.startRecording()
         state.stopRecording()
 
-        try? await Task.sleep(for: .milliseconds(100))
+        await waitUntil { state.captureState == .idle }
 
         XCTAssertEqual(state.captureState, .idle, "Timeout must reset state to .idle so next PTT works")
         XCTAssertTrue(
@@ -368,7 +368,7 @@ final class AppStateTests: XCTestCase {
         state.startRecording()
         state.stopRecording()
 
-        try? await Task.sleep(for: .milliseconds(100))
+        await waitUntil { state.captureState == .idle }
 
         XCTAssertEqual(state.captureState, .idle, "bundledResourcesMissing must reset state to .idle")
         XCTAssertTrue(
@@ -388,7 +388,7 @@ final class AppStateTests: XCTestCase {
         state.startRecording()
         state.stopRecording()
 
-        try? await Task.sleep(for: .milliseconds(100))
+        await waitUntil { state.captureState == .idle }
 
         XCTAssertEqual(state.captureState, .idle, "ASR failure must reset state to .idle (D-11)")
         XCTAssertNotNil(state.transcriptError)
@@ -417,7 +417,7 @@ final class AppStateTests: XCTestCase {
         state.startRecording()
         state.stopRecording()
 
-        try? await Task.sleep(for: .milliseconds(200))
+        await waitUntil { capturedTranscript != nil }
 
         XCTAssertEqual(capturedTranscript, "file this bug", "Filing seam must be called with the captured transcript")
         XCTAssertEqual(capturedRepo?.displayName, "filing-repo", "Filing seam must be called with the bound repo")
@@ -442,7 +442,7 @@ final class AppStateTests: XCTestCase {
         state.startRecording()
         state.stopRecording()
 
-        try? await Task.sleep(for: .milliseconds(200))
+        await waitUntil { spokenText != nil }
 
         XCTAssertNotNil(spokenText, "speak seam must be called on successful filing")
         XCTAssertTrue(
@@ -468,7 +468,7 @@ final class AppStateTests: XCTestCase {
         state.startRecording()
         state.stopRecording()
 
-        try? await Task.sleep(for: .milliseconds(200))
+        await waitUntil { state.captureState == .idle }
 
         XCTAssertEqual(state.captureState, .idle, "After successful filing state must return to .idle")
     }
@@ -488,7 +488,7 @@ final class AppStateTests: XCTestCase {
         state.startRecording()
         state.stopRecording()
 
-        try? await Task.sleep(for: .milliseconds(200))
+        await waitUntil { state.captureState == .idle }
 
         XCTAssertEqual(state.captureState, .idle, "Filing error must reset to .idle so next PTT works")
         XCTAssertFalse(state.statusText.isEmpty, "Filing error must surface a non-empty status message")
@@ -509,7 +509,7 @@ final class AppStateTests: XCTestCase {
         state.startRecording()
         state.stopRecording()
 
-        try? await Task.sleep(for: .milliseconds(200))
+        await waitUntil { state.captureState == .idle }
 
         XCTAssertEqual(state.captureState, .idle)
         XCTAssertTrue(
@@ -537,7 +537,7 @@ final class AppStateTests: XCTestCase {
         state.startRecording()
         state.stopRecording()
 
-        try? await Task.sleep(for: .milliseconds(200))
+        await waitUntil { state.captureState == .idle }
 
         // Status must show the corrected wording — not the old misleading "Issue filed" text.
         XCTAssertEqual(
@@ -567,7 +567,7 @@ final class AppStateTests: XCTestCase {
         state.startRecording()
         state.stopRecording()
 
-        try? await Task.sleep(for: .milliseconds(200))
+        await waitUntil { state.captureState == .idle }
 
         XCTAssertFalse(filingCalled, "Filing seam must NOT be called when no repo is bound")
         XCTAssertEqual(state.captureState, .idle, "Must return to .idle when no repo is bound")
@@ -594,7 +594,7 @@ final class AppStateTests: XCTestCase {
         state.startRecording()
         state.stopRecording()
 
-        try? await Task.sleep(for: .milliseconds(200))
+        await waitUntil { state.captureState == .idle && state.transcript == "persistent transcript" }
 
         XCTAssertEqual(state.captureState, .idle)
         XCTAssertEqual(state.transcript, "persistent transcript", "Transcript must remain readable after filing returns to .idle")
@@ -625,12 +625,13 @@ final class AppStateTests: XCTestCase {
         state.startRecording()
         state.stopRecording()
 
-        // Wait for transcription to finish and filing to begin
-        try? await Task.sleep(for: .milliseconds(150))
+        // Wait for transcription to finish and filing to begin. The filing seam
+        // holds .filing for ~300 ms, so polling reliably catches the transient state.
+        await waitUntil { state.captureState == .filing }
         filingStateObserved = state.captureState == .filing
 
         // Wait for filing to complete
-        try? await Task.sleep(for: .milliseconds(300))
+        await waitUntil { state.captureState == .idle }
 
         XCTAssertTrue(filingStateObserved, "AppState must enter .filing state while the filing seam is in-flight")
         XCTAssertEqual(state.captureState, .idle, "After filing completes state must be .idle")
@@ -661,7 +662,7 @@ final class AppStateTests: XCTestCase {
         state.stopRecording()
 
         // Wait for transcription to complete and filing to begin (.filing is entered synchronously).
-        try? await Task.sleep(for: .milliseconds(150))
+        await waitUntil { state.captureState == .filing }
         XCTAssertEqual(state.captureState, .filing, "Must be in .filing before testing re-entry")
 
         // Simulate a PTT re-press during filing — must be a no-op (CR-01).
@@ -669,8 +670,26 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(state.captureState, .filing, "PTT re-entry during .filing must leave captureState unchanged")
 
         // Wait for the in-flight filing to complete normally.
-        try? await Task.sleep(for: .milliseconds(300))
+        await waitUntil { state.captureState == .idle }
         XCTAssertEqual(state.captureState, .idle, "State must return to .idle after filing completes normally")
+    }
+
+    /// Polls `condition` on the main actor until it returns true or the deadline
+    /// elapses, instead of sleeping a fixed guessed wall-clock interval (WR-04).
+    /// This removes timing assumptions from the async state-machine tests: under
+    /// CI load the helper simply waits longer, and it returns as soon as the
+    /// pipeline settles. Returns the final value of `condition`.
+    @discardableResult
+    private func waitUntil(
+        timeout: Duration = .seconds(5),
+        _ condition: () -> Bool
+    ) async -> Bool {
+        let deadline = ContinuousClock.now.advanced(by: timeout)
+        while ContinuousClock.now < deadline {
+            if condition() { return true }
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+        return condition()
     }
 
     private func makeRepo(named name: String) throws -> URL {
