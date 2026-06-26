@@ -3,171 +3,81 @@
 > **Audit trail only.** Do not use as input to planning, research, or execution agents.
 > Decisions are captured in CONTEXT.md — this log preserves the alternatives considered.
 
-**Date:** 2026-06-24
+**Date:** 2026-06-25 (bundled-whisper rework)
 **Phase:** 03-local-transcription
-**Areas discussed:** ASR command config, WAV path passing, Transcript capture, Output & failure UX, CLIRunner timeout
+**Areas discussed:** Model choice, Notarization scope, Binary + model delivery, Language handling
+
+> Context: Phase 3 was reopened 2026-06-25 to replace the user-configured ASR CLI with a
+> bundled `whisper.cpp` model. This log covers the rework discussion; the original-pipeline
+> discussion is in git history / the superseded section of CONTEXT.md.
 
 ---
 
-## ASR Command Config
-
-### Config store
+## Model Choice
 
 | Option | Description | Selected |
 |--------|-------------|----------|
-| Text field in the menu | Add an ASR-command text field to MenuView, persisted via UserDefaults — mirrors the existing KeyboardShortcuts.Recorder field | ✓ |
-| JSON config file | Read a config file at launch; user hand-edits | |
-| Env var at launch | Launcher passes the command via an environment variable | |
+| large-v3-turbo-q5_0 | ~574MB, multilingual, near-large-v3 accuracy at ~8x speed; best technical-vocab accuracy (Claude's recommendation) | |
+| small.en | ~466MB, English-only; solid accuracy/speed balance | ✓ |
+| base.en | ~142MB, English-only, fast, smallest; weaker on library/API names | |
 
-**User's choice:** Text field in the menu
-
-### PATH / exec
-
-| Option | Description | Selected |
-|--------|-------------|----------|
-| Run via login shell | `/bin/zsh -lc "<command>"` — inherits the user's full PATH/env; paste what works in the terminal | ✓ |
-| Absolute path only | Require an absolute path to the binary; run directly via Process, no shell | |
-| Augment PATH | Run via Process but prepend common locations (/opt/homebrew/bin, etc.) | |
-
-**User's choice:** Run via login shell
-**Notes:** User paused to clarify why PATH was a concern. Explained the GUI-app stripped-PATH gotcha (Process inherits `/usr/bin:/bin:/usr/sbin:/sbin`, missing Homebrew/venv), which would make a bare `whisper` command fail on first use even though it works in the terminal. User then chose login shell: "paste what works in the terminal."
-
-### First run
-
-| Option | Description | Selected |
-|--------|-------------|----------|
-| Empty + clear prompt | No default command; empty field on finish → clear "set your ASR command" message, no run | ✓ |
-| Ship a default command | Pre-fill a guessed default (e.g. 'whisper') | |
-| Placeholder example only | Empty field with greyed-out example hint, never auto-run | |
-
-**User's choice:** Empty + clear prompt
+**User's choice:** small.en
+**Notes:** User chose the English-only model over the recommended multilingual turbo. This
+locks transcription to English-only and resolves the Language area below.
 
 ---
 
-## WAV Path Passing
-
-### WAV inject
+## Notarization Scope
 
 | Option | Description | Selected |
 |--------|-------------|----------|
-| {wav} placeholder | User writes {wav} where the file goes; app substitutes the quoted absolute path | ✓ |
-| Append as last arg | App always appends the quoted WAV path at the end | |
-| Placeholder, fallback to append | Use {wav} if present, else append | |
+| Defer notarization; ad-hoc sign now | `codesign -s -` for local solo dogfooding; full Developer-ID + hardened-runtime + notarytool deferred to a distribution phase; amend success criterion #3 (Claude's recommendation) | ✓ |
+| Full notarization now | Developer-ID signing + hardened-runtime + notarytool this phase; requires Apple Developer Program membership | |
 
-**User's choice:** {wav} placeholder
-
-### No token
-
-| Option | Description | Selected |
-|--------|-------------|----------|
-| Clear error, don't run | Missing {wav} → "Add {wav} to your ASR command…" and don't spawn | ✓ |
-| Append path anyway | Silently append the WAV path as a fallback | |
-| Run as-is | Run verbatim with no file | |
-
-**User's choice:** Clear error, don't run
+**User's choice:** Defer notarization; ad-hoc sign now
+**Notes:** Solo dogfooding, no distribution yet. ROADMAP success criterion #3 (signed +
+notarized) is to be amended — notarization moves to a future distribution phase.
 
 ---
 
-## Transcript Capture
-
-### Read from
+## Binary + Model Delivery
 
 | Option | Description | Selected |
 |--------|-------------|----------|
-| stdout | Whatever the command prints to stdout is the transcript | ✓ |
-| Sidecar file | Command writes a file the app reads back | |
-| stdout, with stderr fallback | Prefer stdout; if empty, read stderr | |
+| Fetch-at-build into the bundle | `scripts/fetch-whisper.sh` → gitignored `vendor/` (pinned URLs + checksums); `build-app.sh` copies into `Contents/Resources` + ad-hoc signs; slim repo, model still bundled (Claude's recommendation) | ✓ |
+| Commit artifacts via Git LFS | Check binary + model into the repo through Git LFS; offline, no fetch step, but bloats clones/CI | |
+| Download model on first launch | Bundle only the binary; download model to Application Support on first run; slimmest, but adds first-launch download UX (out of v1 scope) | |
 
-**User's choice:** stdout
-
-### Cleanup
-
-| Option | Description | Selected |
-|--------|-------------|----------|
-| Trim whitespace only | Strip leading/trailing whitespace, otherwise verbatim | ✓ |
-| Strip timestamps too | Also regex out timestamp markers | |
-| No processing | Pass stdout through exactly as captured | |
-
-**User's choice:** Trim whitespace only
-
-### stderr
-
-| Option | Description | Selected |
-|--------|-------------|----------|
-| Diagnostics only | Capture stderr separately, use only for error messages/logging | ✓ |
-| Ignore entirely | Discard stderr | |
-| Merge into transcript | Combine stderr into the captured text | |
-
-**User's choice:** Diagnostics only
+**User's choice:** Fetch-at-build into the bundle
+**Notes:** Keeps the ~466MB artifacts out of git history while still bundling the model in the
+`.app` (no first-run network).
 
 ---
 
-## Output & Failure UX
-
-### Show where
+## Language Handling
 
 | Option | Description | Selected |
 |--------|-------------|----------|
-| Menu text + NSLog | Show transcript in MenuView (selectable) AND NSLog it | ✓ |
-| Menu only | Display in MenuView only | |
-| NSLog only | Log to Console/stderr only | |
+| English-only (forced by `.en` model) | No language config; faster/more accurate for English | ✓ (resolved by model choice) |
+| Multilingual + auto-detect | Requires a multilingual model (e.g. large-v3-turbo) | |
 
-**User's choice:** Menu text + NSLog
-
-### Run state
-
-| Option | Description | Selected |
-|--------|-------------|----------|
-| Add 'transcribing' state | Extend CaptureState with a .transcribing case, run async | ✓ |
-| Reuse 'finished' | Stay on .finished/'Done' until transcript replaces it | |
-| Just a status string | Flip statusText to 'Transcribing…', leave CaptureState alone | |
-
-**User's choice:** Add 'transcribing' state
-
-### Failure UX
-
-| Option | Description | Selected |
-|--------|-------------|----------|
-| Clear message + stderr tail | Short reason (e.g. 'ASR failed (exit 1)') + last stderr line(s), reset state | ✓ |
-| Generic message only | Fixed 'Transcription failed', no detail | |
-| Reason + full stderr in menu | Dump the entire stderr into the menu | |
-
-**User's choice:** Clear message + stderr tail
-
----
-
-## CLIRunner Timeout
-
-### More? (surfaced candidate)
-
-| Option | Description | Selected |
-|--------|-------------|----------|
-| Add a CLIRunner timeout | Decide a timeout now to guard the shared runner against hangs | ✓ |
-| Leave timeout to the planner | Note as a concern, let planner decide | |
-| I'm ready for context | Nothing more to discuss | |
-
-**User's choice:** Add a CLIRunner timeout
-**Notes:** Raised as a candidate because a hung ASR command would leave the app stuck in "Transcribing…", the same stuck-state failure Phase 2 guarded against with a recording timeout.
-
-### Timeout value
-
-| Option | Description | Selected |
-|--------|-------------|----------|
-| 120s, kill + clear error | Match Phase 2's 120s ceiling; terminate, show timeout error, reset | ✓ |
-| 60s, kill + clear error | Tighter 60s ceiling | |
-| Configurable, default 120s | Expose timeout as a setting, default 120s | |
-
-**User's choice:** 120s, kill + clear error
+**User's choice:** English-only — resolved automatically by selecting `small.en`.
+**Notes:** Not separately deliberated; the `.en` model makes this English-only by construction.
+Non-English dictation would require switching to a multilingual model (deferred).
 
 ---
 
 ## Claude's Discretion
 
-- Internal API shape of `CLIRunner` (stdout/stderr/exit-code return type, async mechanism).
-- Placeholder-substitution and shell-quoting implementation details.
-- Working directory for the ASR run (the `{wav}` path is absolute, so cwd is not significant for Phase 3; design `CLIRunner` so Phase 4 can run in the bound repo).
-- Exact wording of user-facing status/error strings.
+- Exact `whisper-cli` flags (`--no-timestamps`, `-l en`, output target, threads) so stdout is a
+  clean trimmable transcript.
+- Runtime path resolution for the bundled binary + model, with a test seam (dev/`swift run` builds
+  have no `.app` bundle).
+- Whether `fetch-whisper.sh` builds whisper.cpp from source or downloads a prebuilt binary.
+- Wording of user-facing status/error strings.
 
 ## Deferred Ideas
 
-None — discussion stayed within phase scope. A user-configurable timeout was considered for the CLIRunner timeout and deliberately declined in favor of a fixed 120s to stay within happy-path scope.
+- Full distribution-grade signing + hardened-runtime notarization (future distribution phase).
+- Multilingual transcription (would require a multilingual model).
+- Download-model-on-first-launch delivery (considered, declined for v1 scope).
