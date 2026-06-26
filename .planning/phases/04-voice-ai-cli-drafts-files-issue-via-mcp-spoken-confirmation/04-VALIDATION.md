@@ -1,10 +1,11 @@
 ---
 phase: 4
 slug: voice-ai-cli-drafts-files-issue-via-mcp-spoken-confirmation
-status: planned
+status: validated
 nyquist_compliant: true
-wave_0_complete: false
+wave_0_complete: true
 created: 2026-06-25
+validated: 2026-06-25
 ---
 
 # Phase 4 — Validation Strategy
@@ -39,15 +40,15 @@ created: 2026-06-25
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 04-01-01 | 01 | 1 | ISSUE-02 | T-04-02 / T-04-03 | Number parsed from url path (not id); permission_denials → failure | unit | `swift test --filter IssueResultParserTests` | ❌ W0 | ⬜ pending |
-| 04-01-02 | 01 | 1 | PROVIDER-01 | T-04-06 | Scoped `--allowedTools` derived from config; codex/Jira deferred | unit | `swift test --filter IssueFilingConfigTests` | ❌ W0 | ⬜ pending |
-| 04-01-03 | 01 | 1 | AUTH-01 | T-04-01 | Token passes via env, not the command string | unit | `swift test --filter CLIRunnerTests` | ✅ (extend) | ⬜ pending |
-| 04-02-01 | 02 | 2 | ANALYZE-01 / ANALYZE-02 | T-04-04 / T-04-06 | Transcript shell-escaped; scoped grant; structured `stream-json --verbose`; no bypass flags | unit | `swift test --filter IssueFilingRunnerTests/testCommandAssembly` | ❌ W0 | ⬜ pending |
-| 04-02-02 | 02 | 2 | ISSUE-01 / AUTH-01 | T-04-05 / T-04-07 / T-04-08 | cwd=repo; token via env; MCP tempfile deleted on every path; 300s timeout; one error type | unit | `swift test --filter IssueFilingRunnerTests` | ❌ W0 | ⬜ pending |
-| 04-03-01 | 03 | 3 | FEEDBACK-01 | T-04-10 | Auto-enters .filing; success speaks human-facing number; failures status-only, reset to .idle | unit | `swift test --filter AppStateTests` | ✅ (extend) | ⬜ pending |
-| 04-03-02 | 03 | 3 | PROVIDER-01 | — | `.filing` label exhausted; persisted CLI Command field | build | `swift build` | ✅ (extend) | ⬜ pending |
-| 04-04-01 | 04 | 4 | (gate) | T-04-13 | Full suite green; runtime prerequisites present | integration | `swift test` | ✅ | ⬜ pending |
-| 04-04-02 | 04 | 4 | ANALYZE-01/02, ISSUE-01/02, FEEDBACK-01 | T-04-12 / T-04-13 | Real issue filed via MCP; correct number spoken; no false success on failure | human-verify | (manual — see plan) | n/a | ⬜ pending |
+| 04-01-01 | 01 | 1 | ISSUE-02 | T-04-02 / T-04-03 | Number parsed from url path (not id); permission_denials → failure | unit | `swift test --filter IssueResultParserTests` | ✅ | ✅ green |
+| 04-01-02 | 01 | 1 | PROVIDER-01 | T-04-06 | Scoped `--allowedTools` derived from config; codex/Jira deferred | unit | `swift test --filter IssueFilingConfigTests` | ✅ | ✅ green |
+| 04-01-03 | 01 | 1 | AUTH-01 | T-04-01 | Token passes via env, not the command string | unit | `swift test --filter CLIRunnerTests` | ✅ | ✅ green |
+| 04-02-01 | 02 | 2 | ANALYZE-01 / ANALYZE-02 | T-04-04 / T-04-06 | Transcript shell-escaped; scoped grant; structured `stream-json --verbose`; no bypass flags | unit | `swift test --filter IssueFilingRunnerTests/testCommandAssembly` | ✅ | ✅ green |
+| 04-02-02 | 02 | 2 | ISSUE-01 / AUTH-01 | T-04-05 / T-04-07 / T-04-08 | cwd=repo; token via env; MCP tempfile deleted on every path; 300s timeout; one error type | unit | `swift test --filter IssueFilingRunnerTests` | ✅ | ✅ green |
+| 04-03-01 | 03 | 3 | FEEDBACK-01 | T-04-10 | Auto-enters .filing; success speaks human-facing number; failures status-only, reset to .idle | unit | `swift test --filter AppStateTests` | ✅ | ✅ green |
+| 04-03-02 | 03 | 3 | PROVIDER-01 | — | `.filing` label exhausted; persisted CLI Command field | build | `swift build` | ✅ | ✅ green |
+| 04-04-01 | 04 | 4 | (gate) | T-04-13 | Full suite green; runtime prerequisites present | integration | `swift test` | ✅ | ✅ green (112 tests) |
+| 04-04-02 | 04 | 4 | ANALYZE-01/02, ISSUE-01/02, FEEDBACK-01 | T-04-12 / T-04-13 | Real issue filed via MCP; correct number spoken; no false success on failure | human-verify | (manual — see plan) | n/a | ✅ verified |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -55,10 +56,10 @@ created: 2026-06-25
 
 ## Wave 0 Requirements
 
-- [ ] `Tests/MakeAnIssueTests/IssueResultParserTests.swift` — JSONL tool_result extraction, prose fallback, permission_denials gate (ISSUE-02)
-- [ ] `Tests/MakeAnIssueTests/IssueFilingConfigTests.swift` — scoped allowedTools + issues-scoped MCP JSON (PROVIDER-01)
-- [ ] `Tests/MakeAnIssueTests/IssueFilingRunnerTests.swift` — command assembly, prompt, escaping, token-failure path (ANALYZE-01/02, ISSUE-01)
-- [ ] Inline JSONL fixtures modeled on spike 002 output (no file I/O) inside the parser tests
+- [x] `Tests/MakeAnIssueTests/IssueResultParserTests.swift` — JSONL tool_result extraction, prose fallback, permission_denials gate (ISSUE-02) — 9 tests
+- [x] `Tests/MakeAnIssueTests/IssueFilingConfigTests.swift` — scoped allowedTools + issues-scoped MCP JSON (PROVIDER-01) — 13 tests
+- [x] `Tests/MakeAnIssueTests/IssueFilingRunnerTests.swift` — command assembly, prompt, escaping, token-failure path (ANALYZE-01/02, ISSUE-01) — 19 tests
+- [x] Inline JSONL fixtures modeled on spike 002 output (no file I/O) inside the parser tests
 - Framework: XCTest already configured in Package.swift — no install needed.
 
 ---
@@ -83,3 +84,22 @@ created: 2026-06-25
 - [x] `nyquist_compliant: true` set in frontmatter
 
 **Approval:** approved 2026-06-25
+
+---
+
+## Validation Audit 2026-06-25
+
+Post-execution audit (State A) of the plan-time validation contract against the executed codebase.
+
+| Metric | Count |
+|--------|-------|
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated | 0 |
+
+- All three Wave 0 test files were created during execution (04-01) and are green.
+- Full suite: `swift test` → **112 tests, 0 failures** (6.5s).
+- All 8 automated/build rows in the Per-Task Map are ✅ green; the single human-verify row (04-04-02) was completed manually — two real GitHub issues filed via voice→whisper→claude+GitHub MCP (see 04-04-SUMMARY.md) — and a regression test (`testParseFailedStatusMessageIsNotMisleading`) was added pinning the corrected status message.
+- No MISSING or PARTIAL gaps. No auditor spawn or test generation required.
+
+**Result: NYQUIST-COMPLIANT** — every requirement has automated verification (04-04-02 is the one intentional human-verify gate, completed).
