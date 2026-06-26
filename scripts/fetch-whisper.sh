@@ -51,8 +51,15 @@ if [ "$_need_dylibs" -eq 1 ]; then
 fi
 
 # --- download model (guarded: skip if already downloaded) ---
+# Download to a temp path with --fail so an HTTP error (404, rate limit,
+# redirect-to-login HTML) aborts instead of writing the error body into the
+# model file. Verify the SHA-256 before moving into place so a poisoned partial
+# never lands at the cached path and blocks every subsequent run (WR-02).
 if [ ! -f "$VENDOR/ggml-small.en.bin" ]; then
-    curl -L -o "$VENDOR/ggml-small.en.bin" "$MODEL_URL"
+    tmp="$VENDOR/ggml-small.en.bin.partial"
+    curl -fL -o "$tmp" "$MODEL_URL"
+    printf '%s  %s\n' "$MODEL_SHA256" "$tmp" | shasum -a 256 -c -
+    mv "$tmp" "$VENDOR/ggml-small.en.bin"
 fi
 
 # --- verify model integrity (always enforced) ---
