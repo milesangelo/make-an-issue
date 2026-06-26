@@ -5,9 +5,6 @@ import SwiftUI
 struct MenuView: View {
     @EnvironmentObject private var appState: AppState
 
-    // Persisted via the shared key so MenuView's @AppStorage and AppState's
-    // UserDefaults.standard.string(forKey:) read and write the same value (Pitfall 5).
-    @AppStorage(AppState.asrCommandKey) private var asrCommand: String = ""
     @AppStorage(AppState.cliCommandKey) private var cliCommand: String = "claude"
 
     @State private var isSettingsExpanded = false
@@ -72,15 +69,6 @@ struct MenuView: View {
                             .labelsHidden()
                     }
                     .padding(.top, 4)
-                    
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("ASR Command")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.secondary)
-                        
-                        TextField("e.g. whisper {wav} --model base", text: $asrCommand)
-                            .textFieldStyle(.roundedBorder)
-                    }
                     
                     VStack(alignment: .leading, spacing: 4) {
                         Text("CLI Command")
