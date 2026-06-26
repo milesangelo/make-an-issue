@@ -89,8 +89,8 @@ Plans:
 
 **Wave 3 — bundled-whisper rework (2026-06-25)**
 
-- [ ] 03-03: Vendor `whisper-cli` + the `small.en` model into the app bundle (fetch-at-build into gitignored `vendor/`, copied into Resources by `build-app.sh`); **ad-hoc sign** the binary (`codesign -s -`); resolve the bundle path at runtime *(full notarization deferred — see 03-CONTEXT.md D-04)*
-- [ ] 03-04: Rewire `Transcriber` to invoke the bundled binary + bundled model (drop the user ASR command + `{wav}`-from-user path); **remove the ASR Command field** and `asrCommand`/`onRunTranscription` user-config surface from MenuView/AppState; update tests
+- [ ] 03-03-PLAN.md — Vendor `whisper-cli` + the `small.en` model into the app bundle (new `fetch-whisper.sh` builds from source at pinned tag v1.9.1 + SHA256-verified model download into gitignored `vendor/`; `build-app.sh` copies into Resources + **ad-hoc signs** the binary `codesign -s -`) *(full notarization deferred — see 03-CONTEXT.md D-04)*
+- [ ] 03-04-PLAN.md — Rewire `Transcriber.run(wavURL:resourceBase:)` to invoke the bundled binary + model via the generic CLIRunner (`-l en -nt -t 4`, injectable test seam); **remove the ASR Command field**, `asrCommand`/`asrCommandKey`, and the `onRunTranscription` user-config read from MenuView/AppState; rework `TranscriberError` + tests
 
 ### Phase 4: Voice → AI CLI Drafts & Files Issue (via MCP) + Spoken Confirmation
 
