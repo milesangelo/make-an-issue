@@ -1,5 +1,5 @@
 ---
-status: complete
+status: diagnosed
 phase: 04-voice-ai-cli-drafts-files-issue-via-mcp-spoken-confirmation
 source:
   - 04-01-SUMMARY.md
@@ -61,7 +61,16 @@ blocked: 0
   reason: "User reported: works once, then shows 'Issue tool not granted - check CLI Command config' on the view even though the issues ARE created in GitHub. False-failure status — permission/tool-not-granted error reported despite successful issue creation."
   severity: major
   test: 4
-  root_cause: ""     # Filled by diagnosis
-  artifacts: []      # Filled by diagnosis
-  missing: []        # Filled by diagnosis
-  debug_session: ""  # Filled by diagnosis
+  root_cause: "IssueResultParser.parse gates on `permission_denials` non-empty and throws .permissionDenied BEFORE returning the successfully-extracted issue URL (fromToolResult). When claude reaches for ANY tool outside the allowlist (mcp__github__issue_write Read Grep Glob) during repo investigation, that unrelated denial populates permission_denials and masks the successful issue_write. The denial gate should not fire when a valid issue URL was found."
+  artifacts:
+    - path: "Sources/MakeAnIssue/IssueResultParser.swift"
+      issue: "Lines 110-113: `if !deniedTools.isEmpty { throw .permissionDenied }` runs before the success return at line 116. A successful issue_write URL is discarded if any unrelated tool was denied."
+    - path: "Sources/MakeAnIssue/IssueFilingRunner.swift"
+      issue: "Lines 182-183: maps IssueParseError.permissionDenied -> IssueFilingError.permissionDenied (faithful passthrough; no change needed here, but downstream of root cause)."
+    - path: "Sources/MakeAnIssue/AppState.swift"
+      issue: "Lines 333-334: renders .permissionDenied as 'Issue tool not granted — check CLI Command config' — the misleading message the user sees."
+  missing:
+    - "Reorder IssueResultParser.parse: if a valid issue URL was extracted (fromToolResult or prose fallback), return it BEFORE the permission-denial gate — a successful issue_write is proof the issue was filed regardless of other denied tools."
+    - "Optionally narrow the denial gate to fire only when the DENIED tool is the issue-writing MCP tool (config.mcpToolName) AND no URL was found, rather than on any non-empty permission_denials."
+    - "Add/adjust IssueResultParserTests: a stream containing BOTH a non-empty permission_denials (for an unrelated tool, e.g. Bash) AND a successful issue_write URL must return the IssueFilingResult, not throw .permissionDenied. Keep the existing test where denials + NO url still throws."
+  debug_session: "Diagnosed inline during UAT — root cause confirmed by reading IssueResultParser.swift:65-122, IssueFilingRunner.swift:182-183, AppState.swift:333-334."
