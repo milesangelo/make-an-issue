@@ -350,11 +350,13 @@ final class AppStateTests: XCTestCase {
         XCTAssertNil(state.transcript, "Transcript must not be set on timeout")
     }
 
-    func testEmptyCommandShowsError() async {
+    func testBundledResourcesMissingResetsStateAndSurfacesStatus() async {
         let state = AppState(
             onStartRecording: { true },
             onStopRecording: {},
-            onRunTranscription: { _ in throw TranscriberError.emptyCommand }
+            onRunTranscription: { _ in
+                throw TranscriberError.bundledResourcesMissing(detail: "whisper-cli not found in bundle Resources")
+            }
         )
         state.micPermissionGranted = true
         state.startRecording()
@@ -362,12 +364,12 @@ final class AppStateTests: XCTestCase {
 
         try? await Task.sleep(for: .milliseconds(100))
 
-        XCTAssertEqual(state.captureState, .idle, "Empty command must reset state to .idle")
+        XCTAssertEqual(state.captureState, .idle, "bundledResourcesMissing must reset state to .idle")
         XCTAssertTrue(
-            state.statusText.lowercased().contains("asr command") || state.statusText.lowercased().contains("set your"),
-            "Status must mention ASR command setup, got: '\(state.statusText)'"
+            state.statusText.lowercased().contains("rebuild the app"),
+            "Status must contain 'rebuild the app', got: '\(state.statusText)'"
         )
-        XCTAssertNil(state.transcript, "Transcript must not be set when command is empty")
+        XCTAssertNil(state.transcript, "Transcript must not be set when bundle resources are missing")
     }
 
     func testFailureThrowingResetsStateToIdle() async {

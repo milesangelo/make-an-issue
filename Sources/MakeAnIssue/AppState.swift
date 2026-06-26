@@ -19,8 +19,6 @@ extension KeyboardShortcuts.Name {
 
 @MainActor
 final class AppState: ObservableObject {
-    /// Shared UserDefaults key for the ASR command — must match @AppStorage in MenuView (Pitfall 5).
-    static let asrCommandKey = "asrCommand"
     /// Shared UserDefaults key for the CLI command — must match @AppStorage in MenuView (Pitfall 5).
     static let cliCommandKey = "cliCommand"
 
@@ -96,8 +94,7 @@ final class AppState: ObservableObject {
         audioRecorder: AudioRecorder = AudioRecorder(),
         maxRecordingDuration: Duration = .seconds(120),
         onRunTranscription: @escaping (URL) async throws -> String = { url in
-            let cmd = UserDefaults.standard.string(forKey: AppState.asrCommandKey) ?? ""
-            return try await Transcriber.run(command: cmd, wavURL: url)
+            try await Transcriber.run(wavURL: url)
         },
         onRunIssueFiling: @escaping (String, RepoBinding) async throws -> IssueFilingResult = { transcript, repo in
             try await IssueFilingRunner.file(transcript: transcript, repo: repo, config: .claudeGitHub, ownerRepo: nil)
@@ -291,17 +288,15 @@ final class AppState: ObservableObject {
     /// Map a `TranscriberError` to a short user-facing message (D-11).
     private static func message(for error: TranscriberError) -> String {
         switch error {
-        case .emptyCommand:
-            return "Set your ASR command in the menu to transcribe"
-        case .missingWavToken:
-            return "ASR command must include {wav} — add it where the audio path goes"
+        case .bundledResourcesMissing(let detail):
+            return "Whisper not bundled — rebuild the app: \(detail)"
         case .asrFailed(let exitCode, let stderr):
             let tail = stderr.split(separator: "\n").last.map(String.init) ?? stderr
             return "ASR failed (exit \(exitCode))\(tail.isEmpty ? "" : " — \(tail)")"
         case .asrTimedOut:
             return "ASR timed out after 120s"
         case .emptyTranscript:
-            return "ASR produced no output — check your command"
+            return "ASR produced no output — re-record and try again"
         }
     }
 
