@@ -122,6 +122,16 @@ struct CLIRunner {
                 stdoutPipe.fileHandleForReading.readabilityHandler = nil
                 stderrPipe.fileHandleForReading.readabilityHandler = nil
 
+                // GCD does not guarantee every readabilityHandler callback for
+                // buffered pipe data has run before terminationHandler fires.
+                // Synchronously drain whatever remained buffered at exit so the
+                // tail of the output (for this app, the end of the transcript)
+                // is never truncated (WR-01).
+                let restOut = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+                if !restOut.isEmpty { state.appendStdout(restOut) }
+                let restErr = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+                if !restErr.isEmpty { state.appendStderr(restErr) }
+
                 guard let (out, err) = state.claim() else { return }
 
                 if p.terminationStatus == 0 {
