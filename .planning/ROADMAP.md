@@ -143,4 +143,4 @@ Phases execute in numeric order: 1 → 2 → 3 (rework) → 4
 | 1. Menu-Bar App + Repo-Bound Launch | 3/3 | Complete | 2026-06-24 |
 | 2. Push-to-Talk Voice Capture | 2/2 | Complete    | 2026-06-24 |
 | 3. Local Transcription | 5/5 | Complete    | 2026-06-26 |
-| 4. Voice → AI CLI Drafts & Files Issue (via MCP) + Spoken Confirmation | 5/5 | Complete   | 2026-06-26 |
+| 4. Voice → AI CLI Drafts & Files Issue (via MCP) + Spoken Confirmation | 5/5 | Complete    | 2026-06-26 |

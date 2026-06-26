@@ -1,19 +1,29 @@
 ---
 phase: 04-voice-ai-cli-drafts-files-issue-via-mcp-spoken-confirmation
-verified: 2026-06-25T19:15:00Z
+verified: 2026-06-26T00:45:00Z
 status: passed
 score: 5/5 must-haves verified
 behavior_unverified: 0
 overrides_applied: 0
-re_verification: false
+re_verification:
+  previous_status: passed
+  previous_score: 5/5
+  gaps_closed:
+    - "UAT Test 4 false-failure: IssueResultParser.parse threw .permissionDenied even when a real issue URL was parsed, because the denial gate ran before the fromToolResult return. Fixed by 04-05: url-wins reorder ensures a successfully-parsed /issues/N url is returned before the permission-denial gate is reached."
+  gaps_remaining: []
+  regressions: []
 ---
 
-# Phase 04: Voice AI CLI Drafts + Files Issue via MCP + Spoken Confirmation — Verification Report
+# Phase 04: Voice AI CLI Drafts + Files Issue via MCP + Spoken Confirmation — Re-Verification Report
 
-**Phase Goal:** Hand the transcript to the user's AI coding CLI (claude) running in the bound repo; the CLI investigates the repo, drafts the issue, and files it through its own configured MCP server (GitHub). The app parses the created issue's number/URL from stdout and speaks "created issue #NUMBER". No gh API token held by the app — it rides the CLI's existing session.
-**Verified:** 2026-06-25T19:15:00Z
+**Phase Goal:** Hand the transcript to the user's AI coding CLI (claude/codex) running in the bound repo; the CLI investigates the repo, drafts the issue, and files it through its own configured MCP server (GitHub or Atlassian/Jira). The app parses the created issue's number/URL from stdout and speaks "created issue #NUMBER". No gh, no API token.
+**Verified:** 2026-06-26T00:45:00Z
 **Status:** passed
-**Re-verification:** No — initial verification
+**Re-verification:** Yes — after gap closure (04-05: IssueResultParser url-wins-over-denial reorder)
+
+## Context
+
+The initial VERIFICATION.md (2026-06-25T19:15:00Z) marked this phase `passed` based on two human-confirmed filings (issues #90 and #91). Post-verification UAT (04-UAT.md) revealed a major false-failure: repeated filings showed "Issue tool not granted — check CLI Command config" even when the issue WAS created on GitHub. Diagnosis confirmed `IssueResultParser.parse` ran the permission-denial gate before returning the already-extracted `fromToolResult` url — any unrelated denied tool (e.g. `Bash` during repo investigation) populated `permission_denials` and masked the successful `issue_write`. Gap closure plan 04-05 reordered the logic (url found → return; only if no url AND denials → throw) and added a regression test pinning the corrected behavior.
 
 ## Goal Achievement
 
@@ -21,50 +31,53 @@ re_verification: false
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| 1 | The app invokes the configured AI CLI with the transcript and working directory = bound repo | ✓ VERIFIED | `IssueFilingRunner.file()` calls `CLIRunner().run(command:workingDirectory:repo.rootURL:environment:timeout:.seconds(300))` — cwd is set to `repo.rootURL` (IssueFilingRunner.swift:163). `AppState` default `onRunIssueFiling` closure calls `IssueFilingRunner.file(transcript:transcript, repo:repo, config:.claudeGitHub, ownerRepo:nil)` (AppState.swift:103). AppStateTests `testFilingSeamCalledWithTranscriptAndRepo` confirms transcript and repo are passed correctly. |
-| 2 | A real issue is created through the CLI's MCP server (GitHub proven). The app holds no tokens; it rides the CLI's session. | ✓ VERIFIED (human-confirmed) | Human checkpoint PASSED: issues #90 and #91 filed in pulsedemon/netshooter (2026-06-26). Token is acquired via `gh auth token` fallback and passed via `Process.environment` only — never in the command string (IssueFilingRunner.swift:122–137, 164). `IssueFilingConfig.claudeGitHub` uses docker-based GitHub MCP server, no app-held credential. |
-| 3 | The created issue number/URL is parsed from the CLI's stdout (URL-path regex, never the node id) | ✓ VERIFIED | `IssueResultParser` uses regex `"(?:url|html_url)"\s*:\s*"(https?://github\.com/[^"]+/issues/(\d+))"` — number is capture group 2 (path digit), not the `id` field. Prose fallback also uses `/issues/(\d+)` path capture. `testStructuredToolResultReturnsNumberFromURLPath` asserts `result.number == 89` (not the node-id string in `id` field). Human checkpoint confirmed small human-facing numbers were spoken. |
-| 4 | The app speaks "created issue #NUMBER" via native text-to-speech | ✓ VERIFIED (human-confirmed) | `AppState.speak()` builds `AVSpeechUtterance` and calls stored `speechSynthesizer.speak(utterance)` (AppState.swift:284–287). `beginFiling()` builds text as `"created issue #\(result.number)"` and calls the seam (AppState.swift:256). `AVSpeechSynthesizer` is a stored property (not a local) preventing dealloc before speaking completes. `testSuccessfulFilingSpeaksIssueNumber` asserts spoken text contains "42". Human checkpoint confirmed correct audio spoken for issues #90 and #91. |
-| 5 | Backend is provider-agnostic via a configurable command seam; codex + Jira explicitly documented as deferred | ✓ VERIFIED | `IssueFilingConfig` struct provides the provider seam with fields `cliCommand`, `mcpServerName`, `mcpToolName`, `tokenEnvKey`, `tokenCommand`, `mcpServerJSON`. `claudeGitHub` is the static default. Doc comment explicitly states: "codex + GitHub: codex exec non-interactive MCP writes are broken upstream... Atlassian/Jira: Zero-token non-interactive Jira write may require interactive OAuth. Deferred per REQUIREMENTS.md PROVIDER-01." MenuView exposes `@AppStorage(AppState.cliCommandKey)` CLI Command field defaulting to `"claude"` (MenuView.swift:11, 61–63). |
+| 1 | The app invokes the configured AI CLI with the transcript and working directory = bound repo | ✓ VERIFIED | `IssueFilingRunner.file()` calls `CLIRunner().run(command:workingDirectory:repo.rootURL:...)` — cwd = `repo.rootURL`. `AppState` default `onRunIssueFiling` closure wires transcript + repo. `AppStateTests.testFilingSeamCalledWithTranscriptAndRepo` passes (confirmed in full suite run). No changes in 04-05 touch these paths. |
+| 2 | A real issue is created through the CLI's MCP server (GitHub proven). The app holds no tokens; it rides the CLI's existing OAuth session. | ✓ VERIFIED (human-confirmed) | Human checkpoint (04-04-SUMMARY.md): issues #90 and #91 filed in pulsedemon/netshooter. Token passed via `Process.environment` only — never in command string (IssueFilingRunner.swift:122–137, 164). `IssueFilingConfig.claudeGitHub` uses docker-based GitHub MCP server, no app-held credential. 04-05 made no changes to this path. |
+| 3 | The created issue number/URL is parsed from the CLI's stdout (URL-path regex, never the node id). Unrelated denials do not mask a successfully-filed issue. | ✓ VERIFIED | `IssueResultParser.parse` (lines 111–123): `if let r = fromToolResult { return r }` at line 113 precedes the denial gate at lines 119–121. A successfully-parsed `/issues/N` url is returned before `!deniedTools.isEmpty` is evaluated. `testPermissionDenialWithSuccessfulUrlReturnsResult` (Bash denial + issue_write url → result.number == 42) PASSES. `testSuccessfulUrlBeatsPermissionDenial` (mcp__github__issue_write denial + `/issues/89` url → result.number == 89) PASSES. Safety invariant: `testPermissionDeniedDetected` (non-empty denials + NO url → throws `.permissionDenied(["mcp__github__issue_write"])`) PASSES. All 10 IssueResultParserTests pass. |
+| 4 | The app speaks "created issue #NUMBER" via native text-to-speech | ✓ VERIFIED (human-confirmed) | `AppState.speak()` builds `AVSpeechUtterance`, stored `speechSynthesizer` calls `speak(utterance)` (AppState.swift:284–287). `beginFiling()` builds `"created issue #\(result.number)"` (AppState.swift:256). `testSuccessfulFilingSpeaksIssueNumber` asserts spoken text contains "42". Human checkpoint confirmed correct audio for issues #90 and #91. The "Issue tool not granted" false path is now gated out when a url is parsed — the TTS path is reached correctly. |
+| 5 | Backend is provider-agnostic via a configurable command seam; codex + Jira explicitly documented as deferred | ✓ VERIFIED | `IssueFilingConfig` struct provides the provider seam. `claudeGitHub` static default. Doc comment states codex + Jira deferred (upstream non-interactive MCP write unreliable; zero-token Jira write may require OAuth). `MenuView` CLI Command `@AppStorage` field defaults to `"claude"`. No changes in 04-05. |
 
 **Score:** 5/5 truths verified (0 present, behavior-unverified)
+
+### Re-Verification: Gap Closure Confirmation (04-05 Must-Haves)
+
+These are the specific truths introduced by plan 04-05 to close the UAT Test 4 gap. All three are subsumed by Truth 3 above but recorded separately for auditability.
+
+| # | 04-05 Must-Have | Status | Evidence |
+|---|-----------------|--------|----------|
+| A | "When the AI CLI successfully files an issue, the app reports success even if an unrelated tool was denied during repo investigation" | ✓ VERIFIED | `testPermissionDenialWithSuccessfulUrlReturnsResult` fixture: `permission_denials:[{"tool_name":"Bash"}]` + issue_write url for `/issues/42` → parse returns `IssueFilingResult(number:42)`. PASSES. |
+| B | "The app never shows 'Issue tool not granted' when a real issue was created on GitHub" | ✓ VERIFIED | Follows from A: `.permissionDenied` is only thrown when no url was found. The "Issue tool not granted" message (AppState.swift:334) is unreachable when a url is parsed. |
+| C | "A permission denial WITH no successfully-filed issue still surfaces as an error (safety preserved)" | ✓ VERIFIED | `testPermissionDeniedDetected` fixture: `permission_denials:[{"tool_name":"mcp__github__issue_write"}]` + no url anywhere → throws `.permissionDenied(["mcp__github__issue_write"])`. PASSES. IssueResultParser.swift lines 119–121 confirm the denial gate fires only after both `fromToolResult` and prose fallback return nil. |
 
 ### Required Artifacts
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| `Sources/MakeAnIssue/IssueResultParser.swift` | JSONL tool_result walker + prose-regex fallback; IssueFilingResult, IssueParseError | ✓ VERIFIED | Exists, substantive (147 lines), wired — called by IssueFilingRunner.swift:178 |
-| `Sources/MakeAnIssue/IssueFilingConfig.swift` | Provider seam value type + IssueFilingError; claudeGitHub static default | ✓ VERIFIED | Exists, substantive (109 lines), wired — used by IssueFilingRunner.swift throughout |
-| `Sources/MakeAnIssue/IssueFilingRunner.swift` | file(transcript:repo:config:ownerRepo:) orchestration | ✓ VERIFIED | Exists, substantive (190 lines), wired — called by AppState.swift:103 default closure |
-| `Sources/MakeAnIssue/CLIRunner.swift` | environment: [String:String]? parameter on run() | ✓ VERIFIED | Parameter exists at line 78; merge logic at lines 88–92; all existing call sites unaffected by nil default |
-| `Sources/MakeAnIssue/AppState.swift` | .filing CaptureState, onRunIssueFiling seam, AVSpeechSynthesizer, speak(), beginFiling(), cliCommandKey | ✓ VERIFIED | All symbols present and wired: `case filing` (line 13), `onRunIssueFiling` seam (line 47), `speechSynthesizer` stored property (line 50), `speak()` method (line 284), `beginFiling()` (line 239), `cliCommandKey` (line 25) |
-| `Sources/MakeAnIssue/MenuView.swift` | .filing label "Filing issue…", CLI Command @AppStorage field | ✓ VERIFIED | `case .filing: return "Filing issue…"` (line 85); `@AppStorage(AppState.cliCommandKey) var cliCommand: String = "claude"` (line 11); `LabeledContent("CLI Command")` (line 61) |
+| `Sources/MakeAnIssue/IssueResultParser.swift` | JSONL tool_result walker + prose-regex fallback; IssueFilingResult, IssueParseError; url-wins-before-denial-gate ordering | ✓ VERIFIED | 149 lines; line 113 returns `fromToolResult` before line 119 denial gate; line 116 returns prose fallback before denial gate; comments updated to reflect corrected semantic. |
+| `Tests/MakeAnIssueTests/IssueResultParserTests.swift` | 10 tests including `testPermissionDenialWithSuccessfulUrlReturnsResult` (new) and `testSuccessfulUrlBeatsPermissionDenial` (rewritten from testPermissionDeniedBeatsSuccessfulToolResult) | ✓ VERIFIED | 149 lines; both tests exist at lines 85 and 101; old test name absent (correctly renamed, not deleted); 10/10 pass. |
+| `Sources/MakeAnIssue/IssueFilingConfig.swift` | Provider seam value type; claudeGitHub static default | ✓ VERIFIED | Unchanged by 04-05; wiring to IssueFilingRunner confirmed (no regression). |
+| `Sources/MakeAnIssue/IssueFilingRunner.swift` | `IssueResultParser.parse(stdout:)` call; `.permissionDenied` error mapping | ✓ VERIFIED | Line 178: `return try IssueResultParser.parse(stdout: stdout)`; line 182–183: `.permissionDenied` → `IssueFilingError.permissionDenied(tools:)`. Unchanged by 04-05. |
+| `Sources/MakeAnIssue/AppState.swift` | `.filing` state; `onRunIssueFiling` seam; TTS path | ✓ VERIFIED | Unchanged by 04-05. `.permissionDenied` message path at lines 333–334 is now only reached when no url was found (correct). |
 
 ### Key Link Verification
 
 | From | To | Via | Status | Details |
 |------|----|-----|--------|---------|
-| `AppState.swift` | `IssueFilingRunner.swift` | Default `onRunIssueFiling` closure calls `IssueFilingRunner.file(transcript:repo:config:.claudeGitHub:ownerRepo:nil)` | ✓ WIRED | AppState.swift:102–104 |
-| `AppState.swift` | `AVSpeechSynthesizer` | Stored `speechSynthesizer` property; `speak(_:)` method calls `speechSynthesizer.speak(utterance)` | ✓ WIRED | AppState.swift:50, 284–287 |
-| `IssueFilingRunner.swift` | `CLIRunner.swift` | `CLIRunner().run(command:workingDirectory:repo.rootURL:environment:[tokenEnvKey:token]:timeout:.seconds(300))` | ✓ WIRED | IssueFilingRunner.swift:161–166 |
-| `IssueFilingRunner.swift` | `IssueResultParser.swift` | `IssueResultParser.parse(stdout:)` called on `.success` stdout | ✓ WIRED | IssueFilingRunner.swift:178 |
-| `IssueFilingRunner.swift` | Issue URL path regex | Structured regex extracts `(\d+)` from `/issues/(\d+)` path, not `id` field | ✓ WIRED | IssueResultParser.swift:42 — capture group 2 is the path digit |
-
-### Data-Flow Trace (Level 4)
-
-Not applicable — no UI components rendering dynamic data from an API/store. The artifacts are a processing pipeline (transcript → CLI invocation → parsed result → spoken text), not a data-fetching renderer. The pipeline produces real side effects confirmed by human verification.
+| `IssueResultParser.parse` line 113 | `IssueFilingResult` return | `if let r = fromToolResult { return r }` before denial gate | ✓ WIRED | The url-wins reorder: structured result returned before `!deniedTools.isEmpty` check at line 119. |
+| `IssueResultParser.parse` line 116 | `IssueFilingResult` return (prose) | `if let r = extractFromProseText(finalResultText) { return r }` | ✓ WIRED | Prose fallback also precedes denial gate. |
+| `IssueResultParser.parse` lines 119–121 | `.permissionDenied` throw | `if !deniedTools.isEmpty { throw IssueParseError.permissionDenied(deniedTools) }` | ✓ WIRED | Only reached when both url extraction paths fail. |
+| `IssueFilingRunner.swift:178` | `IssueResultParser.parse` | `return try IssueResultParser.parse(stdout: stdout)` | ✓ WIRED | Unchanged by 04-05. |
+| `IssueFilingRunner.swift:182–183` | `IssueFilingError.permissionDenied` | `.permissionDenied(let tools)` catch + rethrow | ✓ WIRED | Downstream mapping unchanged and correct: now only triggered for genuine no-url denials. |
 
 ### Behavioral Spot-Checks
 
 | Behavior | Command | Result | Status |
 |----------|---------|--------|--------|
-| 111-test suite green | `swift test` | 111 tests, 0 failures | ✓ PASS |
-| IssueResultParser extracts number from URL path (not id) | `swift test --filter IssueResultParserTests/testStructuredToolResultReturnsNumberFromURLPath` | PASS — result.number == 89 | ✓ PASS (confirmed in suite run) |
-| permission_denials gate throws before returning result | `swift test --filter IssueResultParserTests/testPermissionDeniedDetected` | PASS | ✓ PASS (confirmed in suite run) |
-| parseFailed message does not imply issue was filed | `swift test --filter AppStateTests/testParseFailedStatusMessageIsNotMisleading` | PASS — "Couldn't confirm an issue was filed — check GitHub (is Docker running?)" | ✓ PASS (confirmed in suite run) |
-| Filing seam called with transcript + repo | `swift test --filter AppStateTests/testFilingSeamCalledWithTranscriptAndRepo` | PASS | ✓ PASS (confirmed in suite run) |
-| No tempfile left after token failure | `swift test --filter IssueFilingRunnerTests/testFileWithFailingTokenCommandLeavesNoTempFile` | PASS | ✓ PASS (confirmed in suite run) |
-| Full end-to-end: real GitHub issues filed, correct number spoken | Human checkpoint (Wave 4) | Issues #90 and #91 filed in pulsedemon/netshooter; correct small human-facing numbers spoken; negative-check (Docker stopped) showed no false success | ✓ PASS (human-confirmed, non-repeatable integration test) |
+| url-wins-over-denial (new regression test) | `swift test --filter IssueResultParserTests/testPermissionDenialWithSuccessfulUrlReturnsResult` | PASS — result.number == 42 | ✓ PASS |
+| url-wins when mcp tool is the denied one | `swift test --filter IssueResultParserTests/testSuccessfulUrlBeatsPermissionDenial` | PASS — result.number == 89 | ✓ PASS |
+| Safety: denial + no url still throws | `swift test --filter IssueResultParserTests/testPermissionDeniedDetected` | PASS — throws .permissionDenied(["mcp__github__issue_write"]) | ✓ PASS |
+| Full IssueResultParserTests suite | `swift test --filter IssueResultParserTests` | 10 tests, 0 failures | ✓ PASS |
+| Full suite | `swift test` | 107 tests, 0 failures | ✓ PASS |
 
 ### Probe Execution
 
@@ -74,13 +87,13 @@ No probe scripts declared or present for this phase. Step 7c: SKIPPED (no probe-
 
 | Requirement | Source Plan | Description | Status | Evidence |
 |-------------|-------------|-------------|--------|----------|
-| ANALYZE-01 | 04-02, 04-04 | App invokes user's AI coding CLI with cwd = bound repo | ✓ SATISFIED | `IssueFilingRunner.file()` sets `workingDirectory: repo.rootURL` in `CLIRunner().run()` call |
-| ANALYZE-02 | 04-02, 04-04 | AI CLI drafts the issue from transcript and repo context | ✓ SATISFIED | `buildPrompt()` instructs the model to "Briefly investigate the repo" and file the issue; proven by human-verified filing of real issues with accurate bodies |
-| ISSUE-01 | 04-02, 04-04 | AI CLI files through its own MCP server; app holds no gh/API token | ✓ SATISFIED | Token acquired via env-var-first / `gh auth token`, passed via `Process.environment` only; `IssueFilingConfig.claudeGitHub` uses docker GitHub MCP server |
-| ISSUE-02 | 04-01, 04-04 | App parses issue number/URL from CLI stdout (URL-path regex, not node id) | ✓ SATISFIED | `IssueResultParser` regex extracts number from `/issues/(\d+)` path; human checkpoint confirmed small human-facing numbers spoken |
-| FEEDBACK-01 | 04-03, 04-04 | App speaks "created issue #NUMBER" via native macOS TTS | ✓ SATISFIED | `AppState.speak()` + stored `AVSpeechSynthesizer`; human checkpoint confirmed audio spoken correctly |
-| PROVIDER-01 | 04-01, 04-03 | AI backend provider-agnostic via configurable command seam; codex+Jira documented deferred | ✓ SATISFIED | `IssueFilingConfig` struct is the provider seam; doc comment documents codex/Jira as deferred; MenuView CLI Command field defaults to `"claude"` |
-| AUTH-01 | 04-02, 04-04 | App never stores/transmits credentials; rides pre-authenticated MCP session | ✓ SATISFIED | Token only in `Process.environment`, never in command string; no token persistence; comment "Never log the token value. (T-04-05)" at IssueFilingRunner.swift:139 |
+| ANALYZE-01 | 04-02, 04-04 | App invokes user's AI coding CLI with cwd = bound repo | ✓ SATISFIED | `IssueFilingRunner.file()` sets `workingDirectory: repo.rootURL` in `CLIRunner().run()` call. Unchanged by 04-05. |
+| ANALYZE-02 | 04-02, 04-04 | AI CLI drafts the issue from transcript and repo context | ✓ SATISFIED | `buildPrompt()` instructs the model to "Briefly investigate the repo" and file the issue. Proven by human-verified filings. Unchanged by 04-05. |
+| ISSUE-01 | 04-02, 04-04 | AI CLI files through its own MCP server; app holds no gh/API token | ✓ SATISFIED | Token in `Process.environment` only; `IssueFilingConfig.claudeGitHub` uses docker GitHub MCP server. Unchanged. |
+| ISSUE-02 | 04-01, 04-04, 04-05 | App parses issue number/URL from CLI stdout (URL-path regex, not node id). False-failures on unrelated denied tools eliminated. | ✓ SATISFIED | 04-05 reorder: url returned before denial gate. `testPermissionDenialWithSuccessfulUrlReturnsResult` PASSES. `testStructuredToolResultReturnsNumberFromURLPath` PASSES (number from path, not id field). |
+| FEEDBACK-01 | 04-03, 04-04, 04-05 | App speaks "created issue #NUMBER" via native macOS TTS | ✓ SATISFIED | TTS path now reliably reached when url is parsed (false-failure path closed). `testSuccessfulFilingSpeaksIssueNumber` PASSES. Human checkpoint confirmed audio for issues #90 and #91. |
+| PROVIDER-01 | 04-01, 04-03 | AI backend provider-agnostic via configurable command seam; codex+Jira documented deferred | ✓ SATISFIED | `IssueFilingConfig` struct is the provider seam. Unchanged by 04-05. |
+| AUTH-01 | 04-02, 04-04 | App never stores/transmits credentials; rides pre-authenticated MCP session | ✓ SATISFIED | Token only in `Process.environment`, never in command string. Unchanged by 04-05. |
 
 All 7 phase-4 requirements verified as SATISFIED. No orphaned requirements.
 
@@ -88,28 +101,33 @@ All 7 phase-4 requirements verified as SATISFIED. No orphaned requirements.
 
 | File | Line | Pattern | Severity | Impact |
 |------|------|---------|----------|--------|
-| `Sources/MakeAnIssue/MenuView.swift` | 53 | `// The {wav} placeholder...` — comment contains "placeholder" | ℹ️ Info | Not a code stub — this is a doc comment explaining the `{wav}` substitution token in the ASR command field. Not a phase-04 concern; pre-existing from Phase 3. |
+| — | — | No TBD/FIXME/XXX markers found in either modified file | — | Clean |
 
-No BLOCKER anti-patterns found. No TBD/FIXME/XXX markers in any phase-4 modified files.
+No BLOCKER anti-patterns. No debt markers in `IssueResultParser.swift` or `IssueResultParserTests.swift`.
 
-**Known dead enum case (documented, not a blocker):** `IssueParseError.malformedOutput` is declared but never thrown anywhere in the codebase. The 04-04-SUMMARY.md documents this explicitly: "IssueParseError.malformedOutput is a declared-but-never-thrown dead enum case (known minor follow-up; not a phase-goal gap)." This does not affect any success criterion.
+**Known dead enum case (unchanged, documented):** `IssueParseError.malformedOutput` is declared but never thrown. Documented in 04-04-SUMMARY.md as a known minor follow-up. Not a phase-goal gap.
 
 ### Human Verification Required
 
-None. All human-verification items were completed at the Wave 4 (04-04) checkpoint:
+None. All human-verification items were completed at the Wave 4 (04-04) checkpoint and the gap closure does not introduce new items requiring human interaction:
 
-- Real issues #90 and #91 filed end-to-end in pulsedemon/netshooter via voice → whisper → claude+GitHub MCP.
-- Spoken numbers were the correct small human-facing URL-path numbers (not node-ids).
-- Negative check passed: Docker stopped → no false success spoken, status error shown, returns to Idle.
-- Full suite: 111 tests, 0 failures.
-
-The human checkpoint is documented in `04-04-SUMMARY.md` with issue URLs, timestamps, filing latency, and negative-check result.
+- Real issues #90 and #91 filed end-to-end in pulsedemon/netshooter via voice → whisper → claude+GitHub MCP (04-04-SUMMARY.md).
+- Spoken numbers were the correct small human-facing URL-path numbers.
+- Negative check passed (Docker stopped → no false success, honest error shown).
+- The 04-05 gap closure (url-wins reorder) is fully covered by deterministic unit tests — no new human verification required for this code path.
 
 ### Gaps Summary
 
-No gaps. All 5 observable truths verified. All 7 requirements satisfied. All 6 required artifacts exist, are substantive, and are wired. All key links confirmed. Full test suite (111 tests) passes. Human checkpoint confirmed end-to-end behavior including the integration criteria that cannot be re-run (real GitHub issues filed, correct number spoken).
+No gaps. The UAT Test 4 false-failure gap is closed:
+
+- **Root cause** (from 04-UAT.md): `IssueResultParser.parse` ran the `!deniedTools.isEmpty` denial gate before returning `fromToolResult`.
+- **Fix** (04-05, commit 159e863): reordered to return `fromToolResult` first; denial gate only reached when no url was found.
+- **Regression coverage** (04-05, commit f256fc8): `testPermissionDenialWithSuccessfulUrlReturnsResult` + `testSuccessfulUrlBeatsPermissionDenial` (rewritten) pin the corrected behavior; `testPermissionDeniedDetected` pins the safety invariant.
+- **Full suite**: 107 tests, 0 failures.
+- **No regressions** in the 5 original roadmap success criteria.
 
 ---
 
-_Verified: 2026-06-25T19:15:00Z_
+_Verified: 2026-06-26T00:45:00Z_
 _Verifier: Claude (gsd-verifier)_
+_Re-verification after gap closure: 04-05 IssueResultParser url-wins-over-denial reorder_
