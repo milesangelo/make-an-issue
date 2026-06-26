@@ -1,217 +1,156 @@
 ---
 phase: 03-local-transcription
-verified: 2026-06-25T21:45:00Z
-status: human_needed
-score: 16/18
-behavior_unverified: 2
+verified: 2026-06-26T00:00:00Z
+status: passed
+score: 3/3
+behavior_unverified: 0
 overrides_applied: 0
 re_verification:
   previous_status: human_needed
-  previous_score: 12/12
+  previous_score: 16/18
   context: >
-    Previous verification (2026-06-24) covered plans 03-01 (CLIRunner) and 03-02
-    (user-configured ASR command). The phase was reopened for a bundled-whisper rework.
-    Plans 03-03 and 03-04 delivered new build scripts and replaced the user-ASR surface
-    entirely. This is a rework re-verification — old truths 6-12 (user-ASR) are
-    superseded; the 16 rework must-haves are verified fresh below.
-  gaps_closed: []
+    Previous verification (2026-06-25) scored 16/18 with 2 PRESENT_BEHAVIOR_UNVERIFIED truths
+    (SC1 assembled .app smoke, SC3 Gatekeeper check). Those were resolved via human UAT
+    (03-UAT.md Tests 1 + 2: both pass). Two UAT-diagnosed gaps were then logged:
+    GAP 1 (major) — .app not self-contained (dylibs never bundled, LC_RPATH absolute build path);
+    GAP 2 (minor) — MODEL_SHA256 still the placeholder sentinel.
+    Plan 03-05 closed both gaps. This re-verification checks the 03-05 must_haves only;
+    the 16 prior must-haves (plans 03-01 through 03-04) are regression-spot-checked.
+  gaps_closed:
+    - "Assembled .app self-containment: all six @rpath dylibs bundled in Contents/Resources, LC_RPATH rewritten to @loader_path, each dylib ad-hoc signed bottom-up"
+    - "MODEL_SHA256 pinned to real content digest c6138d6d58ecc8322097e0f987c32f1be8bb0a18532a3f88f734d1bbf9c41e5d; shasum verify path exits 0"
   gaps_remaining: []
   regressions: []
-behavior_unverified_items:
-  - truth: "Releasing the shortcut transcribes the recording with the bundled whisper binary + model — no ASR command field, no PATH setup (SC1)"
-    test: "Run scripts/fetch-whisper.sh then scripts/build-app.sh; launch the assembled MakeAnIssue.app; hold push-to-talk shortcut, speak a phrase, release"
-    expected: "Menu transitions Recording → Transcribing → Done; transcript text from bundled whisper-cli appears in the TranscriptCard and Console.app NSLog shows 'MakeAnIssue transcript: <text>'"
-    why_human: "Requires the assembled .app (real Contents/Resources/whisper-cli + ggml-small.en.bin), a hardware microphone, and a running macOS app. The wiring is fully verified by tests (seam proves stopRecording → beginTranscription → Transcriber.run(wavURL:) → CLIRunner → whisper argv) but the actual bundled-binary invocation and round-trip cannot be confirmed without the assembled bundle."
-  - truth: "The bundled whisper-cli runs locally on the dev machine via the assembled .app (ad-hoc signed; not Gatekeeper-blocked locally) (SC3)"
-    test: "After scripts/build-app.sh, launch the assembled .app and trigger transcription"
-    expected: "No 'cannot be opened because the developer cannot be verified' Gatekeeper dialog appears; whisper-cli executes and produces a transcript"
-    why_human: "Gatekeeper/quarantine behaviour is only observable at real launch of the assembled .app. The ad-hoc codesign mechanism is verified in build-app.sh source, but whether the built binary passes Gatekeeper on the dev machine requires actual execution."
-human_verification:
-  - test: "Assembled .app end-to-end smoke (SC1 + SC2): scripts/fetch-whisper.sh → scripts/build-app.sh → launch MakeAnIssue.app → hold shortcut, speak, release"
-    expected: "Bundled whisper-cli produces a transcript visible in the TranscriptCard and in Console.app NSLog. Menu shows Transcribing... then Done. No ASR Command field in Settings — only Push-to-Talk Shortcut and CLI Command."
-    why_human: "Requires real ~466 MB whisper-cli + model, hardware microphone, and assembled .app. Cannot run in unit tests (injectable resourceBase seam was specifically added to avoid this). Deferred to /gsd-verify-work per plan."
-  - test: "Gatekeeper check (SC3): verify bundled whisper-cli spawns without dialog on the dev machine"
-    expected: "codesign -dv Contents/Resources/whisper-cli shows ad-hoc signature; no 'cannot be opened' dialog on launch; transcription executes."
-    why_human: "Gatekeeper/quarantine behaviour only observable at real .app launch. Developer-ID signing/notarization explicitly deferred to D-04/D-05 per ROADMAP."
-  - test: "scripts/fetch-whisper.sh full run (Wave-0 gap): cmake build + model download + SHA256 pinning"
-    expected: "vendor/whisper-cli built at v1.9.1; vendor/ggml-small.en.bin downloaded; on first run script prints computed SHA256 and exits 1 with instructions to pin it; after pinning, re-run verifies checksum and exits 0. otool -L vendor/whisper-cli shows no /opt/homebrew/ paths."
-    why_human: "Network fetch + cmake build + ~466 MB model download; MODEL_SHA256 is intentionally an unpinned sentinel (documented Wave-0 gap per plan 03-03). Cannot run in automated CI."
 ---
 
-# Phase 03: Local Transcription — Verification Report (Bundled-Whisper Rework)
+# Phase 03: Local Transcription — Re-Verification Report (Gap Closure 03-05)
 
 **Phase Goal:** Transcribe the recorded WAV with a bundled whisper model — zero configuration, no user-supplied ASR command.
-**Verified:** 2026-06-25T21:45:00Z
-**Status:** human_needed
-**Re-verification:** Yes — rework re-verification after bundled-whisper rework (plans 03-03 + 03-04). Previous verification (2026-06-24) covered the original user-ASR implementation (plans 03-01 + 03-02). The rework superseded truths 6-12 from the previous verification.
+**Verified:** 2026-06-26T00:00:00Z
+**Status:** passed
+**Re-verification:** Yes — gap-closure re-verification after plan 03-05. Previous verification (2026-06-25) was human_needed (16/18 VERIFIED + 2 PRESENT_BEHAVIOR_UNVERIFIED for assembled .app smokes). Human UAT (03-UAT.md) resolved those two items and diagnosed two new gaps. Plan 03-05 closes the diagnosed gaps. This report verifies the gap-closure claims.
+
+---
+
+## Context: Prior UAT Results
+
+Before verifying 03-05, the prior PRESENT_BEHAVIOR_UNVERIFIED truths were resolved by human execution (03-UAT.md):
+
+| UAT Test | Result | Note |
+|----------|--------|------|
+| Test 1: Assembled .app end-to-end smoke (SC1) | pass | Bundled whisper-cli produced a transcript; menu transitions verified |
+| Test 2: Gatekeeper check (SC3) | pass | `codesign -dv` → `adhoc`; no quarantine xattr on locally built .app; no "cannot be opened" dialog; spctl --assess rejects as expected (ad-hoc, not Developer-ID) |
+| Test 3: scripts/fetch-whisper.sh full run (Wave-0 gap) | pass | `otool -L` shows no `/opt/homebrew` paths; SHA gating logic confirmed; MODEL_SHA256 was still the placeholder at that point — separately fixed by 03-05 |
+
+UAT also diagnosed two gaps logged in 03-UAT.md § Gaps.
 
 ---
 
 ## Goal Achievement
 
-### Observable Truths
-
-Truths are drawn from the roadmap success criteria (SC1-SC3) and PLAN frontmatter must_haves for all four plans. SC2 is absorbed into plan truth 15 (identical intent). SC1 and SC3 add the assembled .app end-to-end requirement not covered by any plan truth.
-
-#### Roadmap Success Criteria (overarching)
+### Gap-Closure Must-Haves (Plan 03-05)
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| SC1 | Releasing the shortcut transcribes the recording with the bundled whisper binary + model — no ASR command field, no PATH setup | PRESENT_BEHAVIOR_UNVERIFIED | Wiring verified: `stopRecording()` → `beginTranscription()` → `onRunTranscription(wavURL)` → `Transcriber.run(wavURL:)` → `CLIRunner().run(whisper-cli argv)`. No `asrCommand`/`asrCommandKey` anywhere in production sources. No ASR Command field in MenuView. Assembled .app smoke requires human verification. |
-| SC3 | The bundled whisper-cli runs locally on the dev machine via the assembled .app (ad-hoc signed; not Gatekeeper-blocked locally) | PRESENT_BEHAVIOR_UNVERIFIED | `codesign --force -s -` in `build-app.sh` verified. `xattr -cr` quarantine strip in `fetch-whisper.sh` verified. Whether the ad-hoc signature passes Gatekeeper on the dev machine requires assembled .app execution. Developer-ID signing correctly deferred (D-04/D-05). |
+| 1 | The assembled MakeAnIssue.app runs the bundled whisper-cli from dylibs co-located inside the app, with no dependency on the whisper.cpp build tree | VERIFIED | All six `@rpath` dylibs present in `.build/MakeAnIssue.app/Contents/Resources/` as real Mach-O binaries; `otool -l` shows `@loader_path` as the sole LC_RPATH with no absolute build-tree path remaining |
+| 2 | The bundled whisper-cli's only rpath is @loader_path — no absolute build-tree path remains | VERIFIED | `otool -l $R/whisper-cli` shows exactly one LC_RPATH entry: `@loader_path`; grep for `build/bin` in the rpath section returns zero matches |
+| 3 | A clean re-run of scripts/fetch-whisper.sh verifies the model SHA256 against the pinned digest and exits 0 | VERIFIED | `MODEL_SHA256="c6138d6d58ecc8322097e0f987c32f1be8bb0a18532a3f88f734d1bbf9c41e5d"` on line 9; sentinel branch at line 62 falls through; `shasum -a 256 -c -` path at line 69 verified: `printf '%s  %s\n' "$SHA" "$FILE" | shasum -a 256 -c -` returns OK against the actual model file |
 
-#### Plan 01 — CLIRunner
-
-| # | Truth | Status | Evidence |
-|---|-------|--------|----------|
-| 1 | CLIRunner executes a command through /bin/zsh -lc and returns its stdout | VERIFIED | `CLIRunner.swift` line 83-84: `process.executableURL = URL(fileURLWithPath: "/bin/zsh")`, `process.arguments = ["-lc", command]`. `testStdoutCapture` passes (1/1). |
-| 2 | CLIRunner captures stdout and stderr on separate channels; stderr never merged into stdout | VERIFIED | Two distinct `Pipe()` instances (`stdoutPipe`, `stderrPipe`); separate `readabilityHandler` on each. `testStderrSeparateFromStdout` asserts both channels independently and passes. |
-| 3 | CLIRunner returns the process exit code so callers can distinguish success from failure | VERIFIED | `CLIResult.success(stdout:stderr:exitCode:)` and `CLIResult.failed(exitCode:stderr:)` carry `Int32` exit code. `testExitCodeCaptured` passes. |
-| 4 | CLIRunner enforces a 120s timeout, terminates the process, and resolves the async call exactly once | VERIFIED | `NSLock`-backed `RunState.claim()` provides atomic check-then-resume (upgraded from `nonisolated(unsafe)` in `fix(03)` commit). Timeout `Task` checks `!Task.isCancelled`, calls `state.claim()` before `process.terminate()`. `testTimeoutTerminatesAndResolvesOnce` and `testTimeoutAndExitBoundaryResolvesExactlyOnce` pass. |
-| 5 | CLIRunner can run in a caller-supplied working directory | VERIFIED | `process.currentDirectoryURL = wd` wired when `workingDirectory` non-nil. `testWorkingDirectoryRespected` passes. |
-
-#### Plan 03-03 — Bundled-Whisper Build Scripts
-
-| # | Truth | Status | Evidence |
-|---|-------|--------|----------|
-| 6 | scripts/fetch-whisper.sh builds whisper-cli from source at pinned tag v1.9.1 via cmake Release into gitignored vendor/ | VERIFIED | `WHISPER_TAG="v1.9.1"` (line 5); `git clone --depth 1 --branch "$WHISPER_TAG"` (line 19); `cmake --build ... -j --config Release` (line 25); `cp ... "$VENDOR/whisper-cli"` (line 26). `sh -n scripts/fetch-whisper.sh` passes (syntax OK). |
-| 7 | scripts/fetch-whisper.sh downloads ggml-small.en.bin from pinned Hugging Face URL and verifies SHA256 | VERIFIED | `MODEL_URL` set to HuggingFace URL (line 6). SHA256 gate: if sentinel `<sha256-to-fill-in-on-first-download>`, computes and prints digest then `exit 1` — model never used unverified (lines 40-46). `shasum -a 256 -c` verification on pinned runs (line 47). `MODEL_SHA256` is intentionally unpinned (documented Wave-0 gap per plan intent). |
-| 8 | scripts/build-app.sh copies vendor artifacts into MakeAnIssue.app/Contents/Resources and ad-hoc signs whisper-cli | VERIFIED | `resources_dir="$contents_dir/Resources"` (line 27); `cp "$repo_root/vendor/whisper-cli" "$resources_dir/whisper-cli"` (line 29); `cp ... ggml-small.en.bin` (line 30); `codesign --force -s - "$resources_dir/whisper-cli"` (line 35). Existence guard exits 1 with clear message if vendor/ not populated (lines 21-25). `sh -n scripts/build-app.sh` passes. |
-| 9 | The whisper-cli binary is ad-hoc signed BEFORE any outer .app signing (bottom-up order) | VERIFIED | `codesign --force -s -` on `whisper-cli` is the last step in `build-app.sh`; no outer `.app` signing exists in the script. Comment on line 33 explicitly states bottom-up order. No `notarytool` present. |
-| 10 | vendor/ is listed in .gitignore so the ~466 MB binary + model never enter git history | VERIFIED | `.gitignore` line 16: `vendor/`. `grep -n "vendor/" .gitignore` confirmed. |
-
-#### Plan 03-04 — Bundled-Whisper Transcriber Rework
-
-| # | Truth | Status | Evidence |
-|---|-------|--------|----------|
-| 11 | Transcriber.run(wavURL:resourceBase:) invokes bundled whisper-cli with bundled ggml-small.en.bin via generic CLIRunner — no user-supplied ASR command | VERIFIED | `Transcriber.swift` line 65-79: resolves `bundledBinaryURL`, `bundledModelURL`, builds command, calls `await CLIRunner().run(command: command)`. No `UserDefaults` read anywhere in Transcriber. `testRunConstructsCorrectCommand` passes (fake echo whisper-cli). |
-| 12 | The whisper-cli argv is `'<bin>' -m '<model>' -f '<wav>' -l en -nt -t 4` with all three paths POSIX single-quote escaped | VERIFIED | `Transcriber.swift` line 77: `let command = "'\(escapedBin)' -m '\(escapedModel)' -f '\(escapedWav)' -l en -nt -t 4"`. POSIX escaping via `.replacingOccurrences(of: "'", with: "'\\''")`  on lines 71-73. `testRunConstructsCorrectCommand` asserts `-m`, `-f`, `-l en`, `-nt`, `-t 4`, and WAV path all present. |
-| 13 | Transcriber resolves bundled binary and model from Bundle.main.resourceURL via bundledBinaryURL(resourceBase:) / bundledModelURL(resourceBase:), with injectable resourceBase override | VERIFIED | `Transcriber.swift` lines 27-52: `guard let base = resourceBase ?? Bundle.main.resourceURL`; throws `bundledResourcesMissing` when base is nil or file absent. `testBundledBinaryURLThrowsWhenResourcesNil` and `testBundledModelURLThrowsWhenModelAbsent` pass. |
-| 14 | When bundled binary or model is missing, Transcriber throws TranscriberError.bundledResourcesMissing(detail:) and AppState resets captureState to .idle with a clear "rebuild the app" status | VERIFIED | `TranscriberError.bundledResourcesMissing(detail:)` case exists. `AppState.message(for:)` line 291-292: returns `"Whisper not bundled — rebuild the app: \(detail)"`. `captureState = .idle` on all TranscriberError paths. `testBundledResourcesMissingResetsStateAndSurfacesStatus` passes: asserts `captureState == .idle` and `statusText.lowercased().contains("rebuild the app")`. |
-| 15 | The trimmed stdout transcript is stored in AppState.transcript, shown in the menu (TranscriptCard), and NSLog'd (TRANSCRIBE-02 / SC2) | VERIFIED | `AppState.swift` line 208: `self.transcript = text`; line 209: `NSLog("MakeAnIssue transcript: \(text)")`. `MenuView.swift` lines 54-56: `if let transcript = appState.transcript { TranscriptCard(transcript: transcript) }`. `TranscriptCard` has `.textSelection(.enabled)` (line 535). `testSuccessfulTranscriptionStoresText` passes. |
-| 16 | AppState.onRunTranscription default closure calls Transcriber.run(wavURL:) with no UserDefaults asrCommand read; tests inject their own stub | VERIFIED | `AppState.swift` lines 96-98: default closure is `{ url in try await Transcriber.run(wavURL: url) }` — no `UserDefaults.standard.string(forKey:)` call. Seam parameter type unchanged `(URL) async throws -> String` — existing test stubs compile unchanged. |
-
-**Score:** 16/18 truths verified (16 VERIFIED; 2 PRESENT_BEHAVIOR_UNVERIFIED — assembled .app smokes for SC1 and SC3; deferred to /gsd-verify-work by design per plan 03-03 §Manual-Only and 03-04 §Manual-Only)
+**Score:** 3/3 gap-closure truths verified (0 behavior-unverified; 0 overrides)
 
 ---
 
-### Required Artifacts
+### Regression Spot-Check (Plans 03-01 to 03-04 Prior Must-Haves)
+
+Quick regression check on the 16 truths verified in the prior report. No Swift source files were modified by 03-05; only `scripts/fetch-whisper.sh` and `scripts/build-app.sh` changed.
+
+| Area | Check | Status |
+|------|-------|--------|
+| CLIRunner.swift unchanged | Not in `03-05-SUMMARY.md files_modified` | PASS |
+| Transcriber.swift unchanged | Not in `03-05-SUMMARY.md files_modified` | PASS |
+| AppState.swift unchanged | Not in `03-05-SUMMARY.md files_modified` | PASS |
+| MenuView.swift unchanged | Not in `03-05-SUMMARY.md files_modified` | PASS |
+| No `asrCommand`/`asrCommandKey` in production sources | Verified in prior report; no Swift changes to introduce it | PASS |
+| `build-app.sh` still copies `vendor/whisper-cli` and model | Lines 38-39 confirmed in current script | PASS |
+| `build-app.sh` still ad-hoc signs `whisper-cli` | Line 60 confirmed: `codesign --force -s - "$resources_dir/whisper-cli"` | PASS |
+| `fetch-whisper.sh` still builds at pinned tag v1.9.1 | Lines 5, 19 confirmed: `WHISPER_TAG="v1.9.1"` | PASS |
+| `.gitignore` vendor/ rule unchanged | Not in modified files | PASS |
+
+No regressions detected.
+
+---
+
+## Required Artifacts (Plan 03-05)
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| `Sources/MakeAnIssue/CLIRunner.swift` | /bin/zsh -lc runner, separate stdout/stderr, 120s single-resume timeout, optional workingDirectory + environment | VERIFIED | 170 lines; `struct CLIRunner` + `enum CLIResult`; `NSLock`-backed `RunState` for single-resume; `readabilityHandler` on both pipes; `timeoutTask?.cancel()` after normal completion |
-| `Tests/MakeAnIssueTests/CLIRunnerTests.swift` | Functional tests using real /bin/echo, /bin/sh | VERIFIED | 8 tests pass (expanded from original 5 with boundary + environment tests) |
-| `Sources/MakeAnIssue/Transcriber.swift` | bundledBinaryURL/bundledModelURL (injectable resourceBase); run(wavURL:resourceBase:) building whisper-cli argv; reworked TranscriberError | VERIFIED | 98 lines; `struct Transcriber`; `enum TranscriberError` with `bundledResourcesMissing`; NO `prepare()`, NO `emptyCommand`, NO `missingWavToken`; `Bundle.main.resourceURL` (7 references) |
-| `Tests/MakeAnIssueTests/TranscriberTests.swift` | 3 bundled-binary tests (throws when absent, model absent, correct command construction) | VERIFIED | 80 lines; `testBundledBinaryURLThrowsWhenResourcesNil`, `testBundledModelURLThrowsWhenModelAbsent`, `testRunConstructsCorrectCommand` — all pass; no old `prepare()` tests |
-| `Sources/MakeAnIssue/AppState.swift` | Default onRunTranscription calls Transcriber.run(wavURL:); no asrCommandKey; message(for: .bundledResourcesMissing); cliCommandKey retained | VERIFIED | Contains `cliCommandKey` (not `asrCommandKey`); default closure `Transcriber.run(wavURL: url)`; `bundledResourcesMissing` in `message(for:)` returning "rebuild the app" string |
-| `Sources/MakeAnIssue/MenuView.swift` | No ASR Command field / asrCommand @AppStorage; CLI Command and TranscriptCard retained; .transcribing case handled | VERIFIED | `@AppStorage(AppState.cliCommandKey)` (no asrCommandKey); `TranscriptCard` rendered when transcript non-nil; `.transcribing` case in `ActionCard` shows "Transcribing Audio" + spinner; `grep -c asrCommand MenuView.swift` = 0 |
-| `scripts/fetch-whisper.sh` | Pinned-tag cmake build + SHA256-gated model download into vendor/; executable | VERIFIED | WHISPER_TAG="v1.9.1"; git clone --depth 1 --branch; cmake --build; SHA256 sentinel gate; executable (rwxr-xr-x) |
-| `scripts/build-app.sh` | Copy vendor artifacts into Contents/Resources + codesign --force -s -; no notarytool | VERIFIED | resources_dir="$contents_dir/Resources"; both vendor cp lines; chmod +x; codesign --force -s -; no notarytool |
-| `.gitignore` | vendor/ rule | VERIFIED | Line 16: `vendor/` |
+| `scripts/fetch-whisper.sh` | Pinned MODEL_SHA256 + DYLIBS vendoring block | VERIFIED | Line 9: pinned digest; lines 31-51: DYLIBS variable + copy loop with idempotent guard; `sh -n` parses clean; commit 56c2e3c |
+| `scripts/build-app.sh` | Dylib preflight guard + copy to Resources + LC_RPATH rewrite + bottom-up sign | VERIFIED | Lines 21-60: DYLIBS variable; preflight for-loop; dylib cp loop; install_name_tool delete+add @loader_path; codesign loop (dylibs first, whisper-cli last); `sh -n` parses clean; commit 2691bf5 |
 
 ---
 
-### Key Link Verification
+## Key Link Verification (Plan 03-05)
 
-| From | To | Via | Status | Details |
+| From | To | Via | Status | Evidence |
 |------|----|-----|--------|---------|
-| `AppState.swift` | `Transcriber.swift` | default `onRunTranscription` closure calls `Transcriber.run(wavURL:)` | WIRED | Line 97: `try await Transcriber.run(wavURL: url)` — no UserDefaults asrCommand read |
-| `Transcriber.swift` | `CLIRunner.swift` | `Transcriber.run` invokes `CLIRunner().run(command:)` and trims stdout | WIRED | Line 79: `let result = await CLIRunner().run(command: command)` |
-| `Transcriber.swift` | `Bundle.main.resourceURL` | `bundledBinaryURL`/`bundledModelURL` resolve whisper-cli and ggml-small.en.bin | WIRED | Lines 28, 44: `resourceBase ?? Bundle.main.resourceURL`; `appendingPathComponent("whisper-cli")` / `"ggml-small.en.bin"` |
-| `AppState.swift` | `AudioRecorder.swift` | `beginTranscription` reads `audioRecorder.latestWavURL` to feed wavURL | WIRED | Line 198: `guard let wavURL = audioRecorder.latestWavURL else { ... }` |
-| `MenuView.swift` | `AppState.swift` | `@AppStorage(AppState.cliCommandKey)` and `appState.transcript` / `captureState` | WIRED | Line 8: `@AppStorage(AppState.cliCommandKey)`; line 54: `if let transcript = appState.transcript { TranscriptCard(...) }` |
-| `scripts/fetch-whisper.sh` | `vendor/whisper-cli` | cmake build at v1.9.1 + cp | WIRED | Lines 18-28: guarded build block; no prebuilt download |
-| `scripts/build-app.sh` | `MakeAnIssue.app/Contents/Resources/whisper-cli` | cp vendor/whisper-cli + codesign | WIRED | Lines 27-35: resources_dir, cp, chmod +x, codesign |
+| `scripts/fetch-whisper.sh` | `vendor/lib*.dylib` | `cp "$SRC/build/bin/$_lib" "$VENDOR/$_lib"` dereferences build-tree symlinks into flat real files | WIRED | Lines 46-49 confirmed; all 6 dylibs present in `vendor/` as real Mach-O files |
+| `scripts/build-app.sh` | `Contents/Resources/whisper-cli` LC_RPATH | `install_name_tool -delete_rpath <abs> + -add_rpath @loader_path` | WIRED | Lines 49-53 confirmed; `otool -l` shows `@loader_path` as sole LC_RPATH |
+| `scripts/build-app.sh` | `Contents/Resources/lib*.dylib` | `cp vendor/$_lib $resources_dir/$_lib` + `codesign --force -s -` | WIRED | Lines 43-59 confirmed; all 6 dylibs present and ad-hoc signed in `Contents/Resources/` |
 
 ---
 
-### Behavioral Spot-Checks
+## Behavioral Spot-Checks
 
 | Behavior | Command | Result | Status |
 |----------|---------|--------|--------|
-| CLIRunner /bin/zsh -lc stdout capture | `swift test --filter CLIRunnerTests/testStdoutCapture` | 1/1 pass | PASS |
-| CLIRunner stderr separation | `swift test --filter CLIRunnerTests/testStderrSeparateFromStdout` | 1/1 pass | PASS |
-| CLIRunner 120s timeout (200ms short test) | `swift test --filter CLIRunnerTests/testTimeoutTerminatesAndResolvesOnce` | 1/1 pass | PASS |
-| CLIRunner 8 tests (includes boundary + env) | `swift test --filter CLIRunnerTests` | 8/8 pass | PASS |
-| Transcriber bundledBinaryURL throws when absent | `swift test --filter TranscriberTests/testBundledBinaryURLThrowsWhenResourcesNil` | 1/1 pass | PASS |
-| Transcriber run constructs correct argv | `swift test --filter TranscriberTests/testRunConstructsCorrectCommand` | 1/1 pass | PASS |
-| All 3 TranscriberTests | `swift test --filter TranscriberTests` | 3/3 pass | PASS |
-| bundledResourcesMissing resets state | `swift test --filter AppStateTests/testBundledResourcesMissingResetsStateAndSurfacesStatus` | 1/1 pass | PASS |
-| Full test suite | `swift test` (orchestrator-confirmed) | 106/106 pass | PASS |
+| fetch-whisper.sh syntax | `sh -n scripts/fetch-whisper.sh` | exit 0 | PASS |
+| build-app.sh syntax | `sh -n scripts/build-app.sh` | exit 0 | PASS |
+| MODEL_SHA256 exact pattern match | `grep -Eq '^MODEL_SHA256="c6138d..."$' scripts/fetch-whisper.sh` | matched | PASS |
+| Sentinel comparison preserved | `grep '"<sha256-to-fill-in-on-first-download>"' scripts/fetch-whisper.sh` | line 62 found | PASS |
+| Six dylibs present in vendor/ as real Mach-O | `file vendor/lib*.dylib \| grep Mach-O` (x6) | all 6 Mach-O | PASS |
+| Six dylibs present in Contents/Resources/ | `ls .build/MakeAnIssue.app/Contents/Resources/lib*.dylib` | all 6 present | PASS |
+| Each bundled dylib is ad-hoc signed | `codesign -dv $R/$lib` for each (x6) | `flags=0x2(adhoc)` on all 6 | PASS |
+| whisper-cli bundled + ad-hoc signed | `codesign -dv $R/whisper-cli` | `flags=0x2(adhoc)` | PASS |
+| LC_RPATH = @loader_path (exactly one entry) | `otool -l $R/whisper-cli \| grep -A3 LC_RPATH` | `@loader_path`, count=1 | PASS |
+| No absolute build-tree path in LC_RPATH | `otool -l $R/whisper-cli \| grep -A3 LC_RPATH \| grep build/bin` | no match | PASS |
+| DYLIBS list consistent between both scripts | `grep 'DYLIBS=' fetch-whisper.sh build-app.sh` | identical 6-name list | PASS |
+| shasum verify against pinned digest | `printf '%s  %s\n' "$SHA" "$FILE" \| shasum -a 256 -c -` | OK, exit 0 | PASS |
+| Commits exist in git history | `git log --oneline \| grep -E '56c2e3c\|2691bf5'` | both commits found | PASS |
 
 ---
 
-### Requirements Coverage
+## Requirements Coverage
 
-| Requirement | Source Plan(s) | Description | Status | Evidence |
-|-------------|----------------|-------------|--------|----------|
-| TRANSCRIBE-01 (reworked) | 03-03, 03-04 | Transcribes recorded WAV with bundled whisper binary + bundled model — zero configuration, no user-supplied ASR command | SATISFIED (automated evidence; assembled .app smoke human-deferred) | Bundled binary/model resolved via `bundledBinaryURL`/`bundledModelURL`; whisper-cli argv built with `-l en -nt -t 4`; invoked via generic `CLIRunner`; no `asrCommand`/`asrCommandKey` anywhere in production sources; `testRunConstructsCorrectCommand` passes with fake echo binary |
-| TRANSCRIBE-02 | 03-01, 03-04 | The transcription output is captured as transcript text for the request | SATISFIED | `CLIRunner` captures stdout separately; `Transcriber.run()` trims and returns it; `AppState.transcript` stores it; `NSLog` records it; `TranscriptCard` renders it with `.textSelection(.enabled)`; `testSuccessfulTranscriptionStoresText` passes |
+| Requirement | Source Plan | Description | Status | Evidence |
+|-------------|-------------|-------------|--------|---------|
+| TRANSCRIBE-01 (reworked) | 03-03, 03-04, 03-05 | Transcribes recorded WAV with bundled whisper binary + model, zero config | SATISFIED | Bundled binary/model + dylibs in Contents/Resources; LC_RPATH = @loader_path; zero external dependency; 03-UAT Test 1 passed end-to-end smoke |
+| TRANSCRIBE-02 | 03-01, 03-04 | Transcription output captured as transcript text | SATISFIED | Verified in prior report (plans 03-01, 03-04); no regressions (Swift sources unchanged) |
 
----
-
-### Prohibition Verification (Plan 03-04)
-
-All six prohibitions from plan 03-04 frontmatter are satisfied:
-
-| Prohibition | Status | Evidence |
-|-------------|--------|----------|
-| MenuView MUST NOT contain asrCommand @AppStorage or ASR Command field | SATISFIED | `grep -c 'asrCommand' MenuView.swift` = 0; Settings group has only Push-to-Talk Shortcut and CLI Command |
-| AppState MUST NOT declare asrCommandKey nor read UserDefaults for asrCommand | SATISFIED | `grep -c 'asrCommandKey' AppState.swift` = 0; `cliCommandKey` retained |
-| AppState onRunTranscription injectable closure is TEST seam only; production default calls Transcriber.run(wavURL:) directly | SATISFIED | Default closure body is `try await Transcriber.run(wavURL: url)` — no `UserDefaults.standard.string(forKey:)` call |
-| Transcriber MUST NOT keep prepare(command:wavURL:) or accept user-supplied command/{wav} token | SATISFIED | `grep 'prepare(' Transcriber.swift` returns 0 matches; `grep 'emptyCommand\|missingWavToken' Transcriber.swift` returns 0 matches |
-| TranscriberError MUST NOT contain emptyCommand or missingWavToken; MUST add bundledResourcesMissing | SATISFIED | `TranscriberError` has: `bundledResourcesMissing`, `asrFailed`, `asrTimedOut`, `emptyTranscript`. No `emptyCommand`, no `missingWavToken`. |
-| CLIRunner MUST NOT be modified or whisper-specialized in plan 03-04 | SATISFIED | Plan 03-04 commit history confirms CLIRunner.swift NOT in files_modified for 03-04 commits. The NSLock fix (`fix(03)` commit) and environment parameter (`feat(04-01)` commit) were separate commits outside plan 03-04 scope. CLIRunner remains generic. |
+**NOTE (non-blocking):** `REQUIREMENTS.md` line 24 still carries `[~]` and "Needs rework" / "Phase 3 needs rework" annotations — stale since the gap-closure plan completed. The ROADMAP.md correctly marks Phase 3 `[x]` "(completed 2026-06-26)". Recommend updating REQUIREMENTS.md TRANSCRIBE-01 to `[x]` / "Complete" for documentation consistency.
 
 ---
 
-### Anti-Patterns Found
+## Anti-Patterns Found
 
 | File | Line | Pattern | Severity | Impact |
 |------|------|---------|----------|--------|
-| `scripts/fetch-whisper.sh` | 9 | `MODEL_SHA256="<sha256-to-fill-in-on-first-download>"` | Info | Intentional unpinned sentinel (documented Wave-0 gap per plan 03-03). Script computes and prints the real SHA256 on first download then `exit 1` — model never used unverified. Not a stub; it is the specified safety mechanism. |
+| None | — | — | — | — |
 
-No unresolved debt markers (TBD/FIXME/XXX). No stub returns in production data paths. No hardcoded empty arrays/objects rendering as user-visible data.
-
----
-
-### Human Verification Required
-
-#### 1. Assembled .app End-to-End Smoke (SC1 + TRANSCRIBE-01)
-
-**Test:** Run `scripts/fetch-whisper.sh` to populate `vendor/` (requires cmake + ~466 MB download + SHA256 pinning). Then run `scripts/build-app.sh` to produce `MakeAnIssue.app`. Launch the app, open the menu, confirm no ASR Command field appears (only Push-to-Talk Shortcut and CLI Command in Settings). Hold the push-to-talk shortcut, speak a phrase, release.
-
-**Expected:** Menu transitions "Recording" → "Transcribing Audio" (with spinner, state badge "ASR") → "Transcription Done" → transcript text appears in `TranscriptCard`; Console.app shows `MakeAnIssue transcript: <spoken text>` from NSLog.
-
-**Why human:** Requires the real ~466 MB `ggml-small.en.bin` model (never used in unit tests by design — injectable `resourceBase` seam), a hardware microphone, and the assembled `.app`. Unit tests verify the wiring with a fake echo binary; the real whisper inference is the unverified end of the chain.
-
-#### 2. Gatekeeper Non-Block Check (SC3)
-
-**Test:** After `scripts/build-app.sh`, run `codesign -dv .build/MakeAnIssue.app/Contents/Resources/whisper-cli` to confirm ad-hoc signature. Then trigger transcription via the running app.
-
-**Expected:** `codesign -dv` shows the ad-hoc signature (not code-signed by Developer ID). Transcription executes — no "cannot be opened because the developer cannot be verified" dialog appears on the dev machine.
-
-**Why human:** Gatekeeper behaviour is only observable at real `.app` launch. The ad-hoc codesign mechanism is in `build-app.sh` and `xattr -cr` is in `fetch-whisper.sh`, both verified. Whether this combination passes Gatekeeper locally requires actual execution. Developer-ID signing/notarization explicitly deferred (D-04/D-05).
-
-#### 3. scripts/fetch-whisper.sh Full Run (Wave-0 Gap)
-
-**Test:** Run `scripts/fetch-whisper.sh` on a clean machine. Observe first run exits 1 and prints a 64-char SHA256. Paste it as `MODEL_SHA256` in the script. Re-run; confirm it exits 0. Run `otool -L vendor/whisper-cli` to verify no `/opt/homebrew/` paths.
-
-**Expected:** First run: SHA256 printed, `exit 1`. After pinning: `shasum -a 256 -c` passes, `exit 0`. `otool -L` shows only system frameworks (no Homebrew paths).
-
-**Why human:** Network fetch + cmake build + ~466 MB download. `MODEL_SHA256` is intentionally an unpinned sentinel — the plan documents this as the Wave-0 gap requiring one manual developer run to pin the value.
+No TBD/FIXME/XXX/TODO/HACK/PLACEHOLDER markers in either modified script. No stub returns, no hardcoded empty values in build paths. The `<sha256-to-fill-in-on-first-download>` sentinel at line 62 of `fetch-whisper.sh` is a conditional comparison target, not a current value — MODEL_SHA256 is pinned on line 9.
 
 ---
 
 ## Gaps Summary
 
-No gaps. All 16 plan must-have truths are VERIFIED by code inspection and targeted test runs. All 9 required artifacts exist and are substantive. All 7 key links are wired. Both TRANSCRIBE-01 (reworked) and TRANSCRIBE-02 are satisfied with implementation evidence.
+No gaps. All three 03-05 must-have truths are VERIFIED by direct codebase inspection and behavioral checks:
 
-Two roadmap success criteria (SC1, SC3) are PRESENT_BEHAVIOR_UNVERIFIED — code wiring and scripts are correct, but the assembled `.app` end-to-end smokes require human execution. These are explicitly deferred to `/gsd-verify-work` per plans 03-03 and 03-04 §Manual-Only. They are not implementation gaps.
+1. Self-containment: six dylibs in `Contents/Resources/`, `@loader_path` sole LC_RPATH, no absolute build path — confirmed by `otool -l`, `ls`, `codesign -dv`.
+2. LC_RPATH: exactly one `@loader_path` entry, zero `build/bin` entries — confirmed by `otool`.
+3. SHA256 pin: real digest on line 9, shasum verify passes against actual model file — confirmed by `grep` and `shasum`.
 
-All plan 03-04 prohibitions are satisfied: the user-ASR surface (`asrCommand`, `asrCommandKey`, `prepare()`, `emptyCommand`, `missingWavToken`) is fully removed from production sources, confirmed by compiler (swift build passes) and grep.
+Both UAT gaps are closed. No regressions in the prior 16 must-haves (Swift sources untouched). One non-blocking documentation inconsistency noted (REQUIREMENTS.md TRANSCRIBE-01 status stale).
 
 ---
 
-_Verified: 2026-06-25T21:45:00Z_
+_Verified: 2026-06-26T00:00:00Z_
 _Verifier: Claude (gsd-verifier)_

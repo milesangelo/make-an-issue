@@ -21,7 +21,7 @@ Happy-path only. Each requirement maps to exactly one roadmap phase.
 
 ### Transcription
 
-- [~] **TRANSCRIBE-01**: The app transcribes the recorded WAV with a **bundled** `whisper.cpp` binary + bundled model — zero configuration, no user-supplied ASR command. *(Reworked 2026-06-25 — was "user-configured local ASR CLI"; Phase 3 needs rework.)*
+- [x] **TRANSCRIBE-01**: The app transcribes the recorded WAV with a **bundled** `whisper.cpp` binary + bundled model — zero configuration, no user-supplied ASR command. *(Reworked 2026-06-25 — was "user-configured local ASR CLI"; Phase 3 rework complete 2026-06-26.)*
 - [x] **TRANSCRIBE-02**: The transcription output is captured as transcript text for the request.
 
 ### Issue Drafting & Filing (via the user's AI CLI + MCP)
@@ -80,7 +80,7 @@ Each v1 requirement maps to exactly one phase.
 | CAPTURE-01 | Phase 2 | Complete |
 | CAPTURE-02 | Phase 2 | Complete |
 | CAPTURE-03 | Phase 2 | Complete |
-| TRANSCRIBE-01 | Phase 3 (rework) | Needs rework |
+| TRANSCRIBE-01 | Phase 3 (rework) | Complete |
 | TRANSCRIBE-02 | Phase 3 | Complete |
 | ANALYZE-01 | Phase 4 (merged) | Complete |
 | ANALYZE-02 | Phase 4 (merged) | Complete |
