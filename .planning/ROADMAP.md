@@ -111,9 +111,11 @@ Plans:
   4. The app speaks "created issue #NUMBER" via native text-to-speech.
   5. Backend is provider-agnostic via a configurable command seam; `codex` + Jira validated or explicitly documented as deferred.
 
-**Plans**: 4/4 plans complete
+**Plans**: 5/5 plans complete
 
 Plans:
+
+- [x] 04-05-PLAN.md
 
 **Wave 1**
 
@@ -141,4 +143,4 @@ Phases execute in numeric order: 1 → 2 → 3 (rework) → 4
 | 1. Menu-Bar App + Repo-Bound Launch | 3/3 | Complete | 2026-06-24 |
 | 2. Push-to-Talk Voice Capture | 2/2 | Complete    | 2026-06-24 |
 | 3. Local Transcription | 5/5 | Complete    | 2026-06-26 |
-| 4. Voice → AI CLI Drafts & Files Issue (via MCP) + Spoken Confirmation | 4/4 | Complete    | 2026-06-26 |
+| 4. Voice → AI CLI Drafts & Files Issue (via MCP) + Spoken Confirmation | 5/5 | Complete   | 2026-06-26 |
