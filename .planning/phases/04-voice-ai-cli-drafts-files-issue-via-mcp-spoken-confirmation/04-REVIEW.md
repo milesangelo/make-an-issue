@@ -263,6 +263,6 @@ _Depth: deep_
 
 ## Resolution
 
-CR-01 fixed in commit `<will fill>`, regression test `testPushToTalkDuringFilingIsIgnored` added.
+CR-01 fixed in commit `011cc17`, regression test `testPushToTalkDuringFilingIsIgnored` added.
 WR-01 (decorative CLI Command field), WR-02 (stale status on success), WR-03 (parser trailing-URL-segment),
 WR-04 (multi tool_result last-wins), IN-01 (test scaffolding), IN-02 (dead malformedOutput case) — DEFERRED as tracked v1.x follow-ups.
