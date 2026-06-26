@@ -25,7 +25,8 @@ enum IssueParseError: Error, Equatable {
 /// Two-pass algorithm (ported from spike 002 `parse-issue.js`):
 /// 1. Walk `assistant` message content blocks for `tool_result` blocks → extract url via regex.
 /// 2. Fall back to prose regex over the `result` event's `result` string.
-/// 3. If `permission_denials` is non-empty, throw `.permissionDenied` — the tool was blocked.
+/// 3. A parsed issue url wins — return it before inspecting permission_denials. Only if no url
+///    was found AND `permission_denials` is non-empty, throw `.permissionDenied`.
 ///
 /// Critical rule: the issue NUMBER lives ONLY in the url path (`/issues/N`), NEVER in the
 /// `id` field of the GitHub MCP `issue_write` result. [Spike 002, T-04-03]
@@ -59,8 +60,8 @@ struct IssueResultParser {
     /// - Parameter stdout: The raw stdout string from `claude -p --output-format stream-json --verbose`.
     /// - Returns: `IssueFilingResult` with the issue number (from url path) and full url.
     /// - Throws:
-    ///   - `IssueParseError.permissionDenied([String])` when `permission_denials` is non-empty —
-    ///     indicates no issue was filed even if exit code was 0.
+    ///   - `IssueParseError.permissionDenied([String])` when `permission_denials` is non-empty
+    ///     AND no issue url was found — indicates no issue was filed even if exit code was 0.
     ///   - `IssueParseError.noIssueFound` when the stream completed but no parseable url appeared.
     static func parse(stdout: String) throws -> IssueFilingResult {
         let lines = stdout.split(separator: "\n", omittingEmptySubsequences: true)
@@ -107,16 +108,17 @@ struct IssueResultParser {
             }
         }
 
-        // Permission denial takes priority: even apparent success is a non-filing.
-        if !deniedTools.isEmpty {
-            throw IssueParseError.permissionDenied(deniedTools)
-        }
-
+        // A parsed issue url is proof the issue was filed — success wins over any denial.
         // Structured tool_result result wins over prose.
         if let r = fromToolResult { return r }
 
         // Prose fallback: regex the final result text.
         if let r = extractFromProseText(finalResultText) { return r }
+
+        // No url found. If tools were denied, surface the denial — the filing did not succeed.
+        if !deniedTools.isEmpty {
+            throw IssueParseError.permissionDenied(deniedTools)
+        }
 
         throw IssueParseError.noIssueFound
     }
