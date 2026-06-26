@@ -73,7 +73,7 @@ Plans:
 
   1. Releasing the shortcut transcribes the recording with the bundled whisper binary + model — no ASR command field, no PATH setup.
   2. The transcript text is captured and shown (menu/log) for the request.
-  3. The bundled `whisper-cli` runs on a clean machine (signed + hardened-runtime notarized; not Gatekeeper-blocked).
+  3. The bundled `whisper-cli` runs locally on the dev machine via the assembled `.app` (ad-hoc signed; not Gatekeeper-blocked locally). *(Full Developer-ID signing + hardened-runtime notarization for clean-machine distribution is deferred to a future distribution/release phase — see 03-CONTEXT.md D-04/D-05.)*
 
 **Status**: Original pipeline (2/2 plans) shipped & passed UAT 2026-06-25; ⟳ reopened 2026-06-25 for the bundled-whisper rework below.
 
@@ -89,7 +89,7 @@ Plans:
 
 **Wave 3 — bundled-whisper rework (2026-06-25)**
 
-- [ ] 03-03: Vendor `whisper-cli` + a model into the app bundle (Resources); sign + hardened-runtime notarize the binary; resolve the bundle path at runtime
+- [ ] 03-03: Vendor `whisper-cli` + the `small.en` model into the app bundle (fetch-at-build into gitignored `vendor/`, copied into Resources by `build-app.sh`); **ad-hoc sign** the binary (`codesign -s -`); resolve the bundle path at runtime *(full notarization deferred — see 03-CONTEXT.md D-04)*
 - [ ] 03-04: Rewire `Transcriber` to invoke the bundled binary + bundled model (drop the user ASR command + `{wav}`-from-user path); **remove the ASR Command field** and `asrCommand`/`onRunTranscription` user-config surface from MenuView/AppState; update tests
 
 ### Phase 4: Voice → AI CLI Drafts & Files Issue (via MCP) + Spoken Confirmation
