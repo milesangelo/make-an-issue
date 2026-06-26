@@ -629,6 +629,42 @@ final class AppStateTests: XCTestCase {
         sem.signal()
     }
 
+    func testPushToTalkDuringFilingIsIgnored() async throws {
+        // CR-01 regression: a PTT re-press while the state machine is in .filing
+        // must be ignored — startRecording() must not overwrite .filing with
+        // .recording, and the in-flight filing Task must complete normally,
+        // leaving state at .idle.
+        let repoURL = try makeRepo(named: "ptt-during-filing-repo")
+        let binding = RepoBinding(rootURL: repoURL, displayName: "ptt-during-filing-repo", displayPath: repoURL.path)
+        let state = AppState(
+            boundRepo: binding,
+            boundRepoDisplayText: "ptt-during-filing-repo",
+            onStartRecording: { true },
+            onStopRecording: {},
+            onRunTranscription: { _ in "file this bug" },
+            onRunIssueFiling: { _, _ in
+                // Slow enough that we can observe .filing and attempt re-entry before it finishes.
+                try? await Task.sleep(for: .milliseconds(300))
+                return IssueFilingResult(number: 1, url: "https://github.com/o/r/issues/1")
+            }
+        )
+        state.micPermissionGranted = true
+        state.startRecording()
+        state.stopRecording()
+
+        // Wait for transcription to complete and filing to begin (.filing is entered synchronously).
+        try? await Task.sleep(for: .milliseconds(150))
+        XCTAssertEqual(state.captureState, .filing, "Must be in .filing before testing re-entry")
+
+        // Simulate a PTT re-press during filing — must be a no-op (CR-01).
+        state.startRecording()
+        XCTAssertEqual(state.captureState, .filing, "PTT re-entry during .filing must leave captureState unchanged")
+
+        // Wait for the in-flight filing to complete normally.
+        try? await Task.sleep(for: .milliseconds(300))
+        XCTAssertEqual(state.captureState, .idle, "State must return to .idle after filing completes normally")
+    }
+
     private func makeRepo(named name: String) throws -> URL {
         let repo = temporaryDirectory.appendingPathComponent(name, isDirectory: true)
         try FileManager.default.createDirectory(at: repo.appendingPathComponent(".git", isDirectory: true), withIntermediateDirectories: true)

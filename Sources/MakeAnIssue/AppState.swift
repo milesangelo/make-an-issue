@@ -130,7 +130,7 @@ final class AppState: ObservableObject {
         // would otherwise pin every AppState instance for the process lifetime (WR-03).
         KeyboardShortcuts.onKeyDown(for: .pushToTalk) { [weak self] in
             MainActor.assumeIsolated {
-                guard let self, self.captureState != .recording else { return }
+                guard let self, self.captureState == .idle else { return }
                 self.startRecording()
             }
         }
@@ -161,10 +161,12 @@ final class AppState: ObservableObject {
     }
 
     func startRecording() {
-        // Allow starting from .idle (normal case). Only an in-progress recording
-        // suppresses a fresh start — this also enforces D-04 (ignore key repeats
-        // while already recording). (.finished is transient; it flows to .filing → .idle.)
-        guard captureState != .recording else { return }
+        // Only allow starting from .idle. This blocks re-entry during .recording
+        // (D-04: ignore key repeats), .transcribing, and .filing (CR-01: a PTT
+        // press during the up-to-300 s filing window must not start a new capture
+        // and corrupt the in-flight state machine). .finished is transient and
+        // flows straight into .filing, so it is also correctly excluded here.
+        guard captureState == .idle else { return }
         guard micPermissionGranted else {
             statusText = "Microphone access denied — enable in System Settings"
             captureState = .idle
