@@ -16,6 +16,17 @@ existing auth.
 Capture a repo-aware GitHub issue by voice in seconds, without leaving the keyboard or
 opening a browser — the full path from spoken word to filed issue must work end to end.
 
+## Current Milestone: v1.1 Concurrent Filing & Control
+
+**Goal:** Remove the serial filing bottleneck and give the user control over filing and the LLM prompt — so a developer can fire off issues back-to-back, cancel a bad one, and tune how the AI drafts them.
+
+**Target features:**
+- Background/concurrent issue filing — after transcription the app returns to idle immediately and files in the background; multiple filings run at once, each speaking its own confirmation
+- Right-click menu-bar Settings window with an editable **system-prompt** tab (instructions only; the app keeps enforcing the scoped tool grant + "Issue URL on last line" contract)
+- Stop/Cancel control to abort an in-flight filing (terminates its `claude` subprocess)
+- Surfaced, recoverable errors for failed filing (RESIL-01) — complements the new jobs/cancel UI
+- Resolve FINDING-06: the orphaned "CLI Command" field (relocate into Settings; wire or remove)
+
 ## Requirements
 
 ### Validated
@@ -33,9 +44,13 @@ opening a browser — the full path from spoken word to filed issue must work en
 
 <!-- Next-milestone candidates (from REQUIREMENTS.md v2). Formalized when /gsd-new-milestone defines the next milestone's requirements. -->
 
-- [ ] Review/edit the drafted title & body before filing (v2 REVIEW-01)
-- [ ] Surfaced, recoverable errors for missing binding / failed filing (v2 RESIL-01)
-- [ ] View and switch the bound repository from the menu (v2 MULTI-01)
+- [ ] Background/concurrent issue filing — no waiting on the current filing to start the next (v1.1)
+- [ ] Right-click Settings window with an editable system-prompt tab (v1.1)
+- [ ] Stop/Cancel an in-flight filing (v1.1)
+- [ ] Surfaced, recoverable errors for missing binding / failed filing (v1.1 RESIL-01)
+- [ ] Resolve FINDING-06 orphaned "CLI Command" field (v1.1)
+- [ ] Review/edit the drafted title & body before filing (REVIEW-01 — deferred)
+- [ ] View and switch the bound repository from the menu (MULTI-01 — deferred)
 - [ ] Developer-ID signing + notarization of the bundled whisper binary for clean-machine distribution (deferred from v1.0)
 - [ ] Prove/wire non-Claude providers — `codex` + Atlassian/Jira (gated by upstream MCP-write feasibility)
 
@@ -93,5 +108,22 @@ opening a browser — the full path from spoken word to filed issue must work en
 | Issue creation via `gh issue create` | Uses existing auth; no GitHub API client needed | **Retired 2026-06-25** — replaced by AI-CLI-files-via-MCP (no `gh`, supports Jira, no API token) |
 | v1 build runs non-sandboxed | App Sandbox blocks external CLI execution | ✓ Good — shipped v1.0 non-sandboxed; revisit if distributing via App Store |
 
+## Evolution
+
+This document evolves at phase transitions and milestone boundaries.
+
+**After each phase transition** (via `/gsd-transition`):
+1. Requirements invalidated? → Move to Out of Scope with reason
+2. Requirements validated? → Move to Validated with phase reference
+3. New requirements emerged? → Add to Active
+4. Decisions to log? → Add to Key Decisions
+5. "What This Is" still accurate? → Update if drifted
+
+**After each milestone** (via `/gsd-complete-milestone`):
+1. Full review of all sections
+2. Core Value check — still the right priority?
+3. Audit Out of Scope — reasons still valid?
+4. Update Context with current state
+
 ---
-*Last updated: 2026-06-28 after v1.0 MVP milestone — shipped the full voice → filed-issue → spoken-confirmation happy path (4 phases, 15 plans). Requirements moved to Validated; Active now holds v2 candidates.*
+*Last updated: 2026-06-28 — started milestone v1.1 (Concurrent Filing & Control): background/concurrent filing, right-click Settings with editable system prompt, Stop/Cancel, recoverable errors (RESIL-01), and FINDING-06 cleanup. v1.0 MVP shipped (4 phases, 15 plans).*
