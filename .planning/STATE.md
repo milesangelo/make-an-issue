@@ -6,7 +6,7 @@ status: planning
 last_updated: "2026-06-28T07:06:21.993Z"
 last_activity: 2026-06-28
 progress:
-  total_phases: 0
+  total_phases: 5
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-28)
 
 **Core value:** Capture a repo-aware tracker issue (GitHub or Jira) by voice in seconds — spoken word to filed issue, end to end.
-**Current focus:** Planning next milestone (v1.0 MVP shipped 2026-06-28)
+**Current focus:** v1.1 roadmap created (Phases 5-9). Next: plan Phase 5 (Concurrent Filing Jobs Model).
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: Phase 5 — Concurrent Filing Jobs Model (not started)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-06-28 — Milestone v1.1 started
+Status: Roadmap created — ready to plan Phase 5
+Last activity: 2026-06-28 — Milestone v1.1 roadmap created (5 phases, 15/15 requirements mapped)
 
 ## Accumulated Context
 
@@ -65,12 +65,14 @@ Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecti
 
 ### Blockers/Concerns
 
-Open items carried into the next milestone:
+Open items carried into the v1.1 milestone:
 
-- **Distribution gap:** bundled `whisper-cli` is only ad-hoc signed for local use. Developer-ID signing + hardened-runtime notarization is required before clean-machine distribution (deferred — see 03-CONTEXT.md D-04/D-05).
-- **Provider breadth deferred:** `codex exec` non-interactive MCP writes are broken upstream (stdin-EOF auto-cancel); Atlassian/Jira zero-token non-interactive write may be infeasible. v1 proven leg = `claude -p` + GitHub remote MCP. Re-spike before promising non-Claude/Jira providers.
-- **Tech debt (from v1.0 audit):** orphaned "CLI Command" UI field (FINDING-06); incomplete Nyquist/VALIDATION paperwork on Phases 1–3.
-- AI-CLI output parsing is non-deterministic — instruct "issue URL on the last line" + regex extract; budget seconds-to-a-minute latency in the spoken-confirmation UX.
+- **Cancellation correctness (Phase 6 — highest risk):** `Process.terminate()` only signals the direct `/bin/zsh -lc` child; the real tree is `zsh → claude → docker run --rm`. Must kill the whole **process group** (SIGTERM + grace → SIGKILL) and sweep `make-an-issue-mcp-*.json` tempfiles on launch + quit, or Docker `--rm` containers leak. Open implementation choice: `setsid`/`exec` prefix vs `posix_spawn` wrapper; SIGTERM vs SIGINT for `claude` — resolve with a leak-check spike during Phase 6 planning.
+- **KeyboardShortcuts under NSPopover/NSMenu (Phase 7):** the `MenuBarExtra` `.onDisappear` hotkey workaround may fire spuriously or be unneeded once on `NSStatusItem` — re-validate empirically, do not blindly carry over.
+- **Editable-prompt parse safety (Phase 8):** keep the editable field instructions-only; the enforced contract (scoped `--allowedTools`, `method=create`, "Issue URL on last line") is appended by `buildPrompt` and the CLI flags live in `assembleCommand`. Harden `IssueResultParser` prose fallback to match the **last** URL/line, not the first occurrence anywhere, or user edits produce false "created #N".
+- **Distribution gap (carried):** bundled `whisper-cli` is only ad-hoc signed for local use. Developer-ID signing + hardened-runtime notarization required before clean-machine distribution (deferred — DIST-01; see 03-CONTEXT.md D-04/D-05).
+- **Provider breadth deferred (carried):** `codex exec` non-interactive MCP writes broken upstream; Atlassian/Jira zero-token non-interactive write may be infeasible. v1 proven leg = `claude -p` + GitHub remote MCP. Re-spike before promising non-Claude/Jira providers (PROVIDER-01).
+- **Migration cost (Phase 5):** the jobs-model refactor intentionally rewrites serial-filing AppStateTests (`testFilingEntersFilingState`, `testPushToTalkDuringFilingIsIgnored` — re-press during filing is now *allowed*, the feature; `testStartRecordingAfterFilingReturnsToIdle`; `.filing` assertions in `testSuccessfulTranscriptionStoresText`).
 
 ## Deferred Items
 
@@ -80,10 +82,10 @@ Open items carried into the next milestone:
 
 ## Session Continuity
 
-Last session: 2026-06-26T06:38:33.202Z
-Stopped at: Phase 3 context reworked (bundled whisper)
-Resume file: .planning/phases/03-local-transcription/03-CONTEXT.md
-Decision record: .planning/notes/v1-realign-bundled-whisper-ai-cli-mcp.md
+Last session: 2026-06-28 — v1.1 roadmap created
+Stopped at: ROADMAP.md Phases 5-9 written; REQUIREMENTS.md traceability filled (15/15)
+Resume file: .planning/ROADMAP.md
+Decision record: .planning/research/SUMMARY.md (v1.1 research)
 
 ## Performance Metrics
 
@@ -104,4 +106,4 @@ Decision record: .planning/notes/v1-realign-bundled-whisper-ai-cli-mcp.md
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Plan Phase 5 (Concurrent Filing Jobs Model) with /gsd-plan-phase 5

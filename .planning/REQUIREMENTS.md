@@ -79,27 +79,27 @@ Which phases cover which requirements. Filled during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CONCUR-01 | Phase ? | Pending |
-| CONCUR-02 | Phase ? | Pending |
-| CONCUR-03 | Phase ? | Pending |
-| CANCEL-01 | Phase ? | Pending |
-| CANCEL-02 | Phase ? | Pending |
-| CANCEL-03 | Phase ? | Pending |
-| SETTINGS-01 | Phase ? | Pending |
-| SETTINGS-02 | Phase ? | Pending |
-| SETTINGS-03 | Phase ? | Pending |
-| SETTINGS-04 | Phase ? | Pending |
-| SETTINGS-05 | Phase ? | Pending |
-| JOBS-01 | Phase ? | Pending |
-| JOBS-02 | Phase ? | Pending |
-| RESIL-01 | Phase ? | Pending |
-| FEEDBACK-02 | Phase ? | Pending |
+| CONCUR-01 | Phase 5 | Pending |
+| CONCUR-02 | Phase 5 | Pending |
+| CONCUR-03 | Phase 5 | Pending |
+| CANCEL-01 | Phase 6 | Pending |
+| CANCEL-02 | Phase 6 | Pending |
+| CANCEL-03 | Phase 6 | Pending |
+| SETTINGS-01 | Phase 7 | Pending |
+| SETTINGS-02 | Phase 8 | Pending |
+| SETTINGS-03 | Phase 8 | Pending |
+| SETTINGS-04 | Phase 8 | Pending |
+| SETTINGS-05 | Phase 8 | Pending |
+| JOBS-01 | Phase 9 | Pending |
+| JOBS-02 | Phase 9 | Pending |
+| RESIL-01 | Phase 9 | Pending |
+| FEEDBACK-02 | Phase 7 | Pending |
 
 **Coverage:**
 - v1.1 requirements: 15 total
-- Mapped to phases: 0 (filled by roadmapper)
-- Unmapped: 15 ⚠️
+- Mapped to phases: 15 ✓
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-06-28*
-*Last updated: 2026-06-28 after milestone v1.1 definition*
+*Last updated: 2026-06-28 — roadmap created (Phases 5-9); all 15 requirements mapped*
