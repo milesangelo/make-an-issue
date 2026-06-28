@@ -1,13 +1,13 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.0
-milestone_name: milestone
-current_phase: 04
-status: executing
+milestone_name: MVP
+current_phase: 0
+status: Awaiting next milestone
 stopped_at: Phase 3 context reworked (bundled whisper)
-last_updated: "2026-06-26T06:45:44.953Z"
-last_activity: 2026-06-26
-last_activity_desc: Phase 04 complete
+last_updated: "2026-06-28T06:09:51.705Z"
+last_activity: 2026-06-28
+last_activity_desc: Milestone v1.0 completed and archived
 progress:
   total_phases: 4
   completed_phases: 4
@@ -21,19 +21,17 @@ current_phase_name: voice-ai-cli-drafts-files-issue-via-mcp-spoken-confirmation
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-25)
+See: .planning/PROJECT.md (updated 2026-06-28)
 
 **Core value:** Capture a repo-aware tracker issue (GitHub or Jira) by voice in seconds — spoken word to filed issue, end to end.
-**Current focus:** Phase 04 — voice-ai-cli-drafts-files-issue-via-mcp-spoken-confirmation
+**Current focus:** Planning next milestone (v1.0 MVP shipped 2026-06-28)
 
 ## Current Position
 
-Phase: 04
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-06-26 — Phase 04 complete
-
-Progress: [██████░░░░] 54% (7/13 plans)
+Phase: Milestone v1.0 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-06-28 — Milestone v1.0 completed and archived
 
 ## Accumulated Context
 
@@ -67,14 +65,15 @@ Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecti
 
 ### Pending Todos
 
-- Phase 3 rework (03-03/03-04): bundle + sign/notarize `whisper-cli` + model; rewire `Transcriber`; remove ASR Command field.
-- Run `/gsd-spike` to prove non-interactive AI-CLI issue-filing via MCP (claude+GitHub first; codex + Jira) BEFORE planning the merged Phase 4.
+- (none — v1.0 todos resolved: Phase 3 bundled-whisper rework shipped; AI-CLI/MCP filing spike proven via `claude` + GitHub.)
 
 ### Blockers/Concerns
 
-- Tooling: Global GSD CLI (`~/.codex/gsd-core/bin/gsd-tools.cjs`) fails to load — `runtime-artifact-conversion.cjs` requires a missing `../../../package.json`. Bypassed by authoring artifacts directly from GSD templates. Re-run GSD commands only after the global install is fixed/updated.
-- ⚠️ Phase 4 spike-gated: `codex exec` non-interactive MCP writes are broken upstream (stdin-EOF auto-cancel); Atlassian/Jira zero-token non-interactive write may be infeasible (interactive OAuth). v1 proven leg = `claude -p` + GitHub remote MCP. Resolve via `/gsd-spike` before committing build.
-- Phase 3 rework: bundled `whisper-cli` must be signed + hardened-runtime notarized or Gatekeeper blocks it on teammates' machines.
+Open items carried into the next milestone:
+
+- **Distribution gap:** bundled `whisper-cli` is only ad-hoc signed for local use. Developer-ID signing + hardened-runtime notarization is required before clean-machine distribution (deferred — see 03-CONTEXT.md D-04/D-05).
+- **Provider breadth deferred:** `codex exec` non-interactive MCP writes are broken upstream (stdin-EOF auto-cancel); Atlassian/Jira zero-token non-interactive write may be infeasible. v1 proven leg = `claude -p` + GitHub remote MCP. Re-spike before promising non-Claude/Jira providers.
+- **Tech debt (from v1.0 audit):** orphaned "CLI Command" UI field (FINDING-06); incomplete Nyquist/VALIDATION paperwork on Phases 1–3.
 - AI-CLI output parsing is non-deterministic — instruct "issue URL on the last line" + regex extract; budget seconds-to-a-minute latency in the spoken-confirmation UX.
 
 ## Deferred Items
@@ -106,3 +105,7 @@ Decision record: .planning/notes/v1-realign-bundled-whisper-ai-cli-mcp.md
 | Phase 03 P04 | 15m | 3 tasks | 5 files |
 | Phase 03 P05 | 99s | 2 tasks | 2 files |
 | Phase 04 P05 | 4m | 3 tasks | 2 files |
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone
