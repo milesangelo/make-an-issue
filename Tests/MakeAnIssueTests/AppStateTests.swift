@@ -831,6 +831,192 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(state.jobs[1].state, .filing, "jobs[1] must be .filing while stub is sleeping (CONCUR-02/SC-2)")
     }
 
+    // MARK: - Announcement and distinct-transcript tests (Plan 02 / CONCUR-02 / CONCUR-03)
+
+    func testBothConcurrentJobsRetainDistinctTranscripts() async throws {
+        // CONCUR-02 / Pitfall 1: two concurrent jobs must carry distinct, correct transcripts —
+        // no stale-transcript bleed from the shared self.transcript property.
+        let repoURL = try makeRepo(named: "distinct-transcripts-repo")
+        let binding = RepoBinding(rootURL: repoURL, displayName: "distinct-transcripts-repo", displayPath: repoURL.path)
+        var callIndex = 0
+        let expectedTranscripts = ["first transcript", "second transcript"]
+        let state = AppState(
+            boundRepo: binding,
+            boundRepoDisplayText: "distinct-transcripts-repo",
+            onStartRecording: { true },
+            onStopRecording: {},
+            onRunTranscription: { _ in
+                defer { callIndex += 1 }
+                return expectedTranscripts[callIndex]
+            },
+            onRunIssueFiling: { _, _ in
+                try? await Task.sleep(for: .milliseconds(500))
+                return IssueFilingResult(number: 1, url: "https://github.com/o/r/issues/1")
+            }
+        )
+        state.micPermissionGranted = true
+
+        // First cycle.
+        state.startRecording()
+        state.stopRecording()
+        await waitUntil { state.jobs.count == 1 }
+
+        // Second cycle while first job is still in-flight.
+        state.startRecording()
+        state.stopRecording()
+        await waitUntil { state.jobs.count == 2 }
+
+        // CONCUR-02 / Pitfall 1: no stale-transcript bleed.
+        XCTAssertEqual(state.jobs[0].transcript, "first transcript", "jobs[0] must carry the first transcript (no stale-capture bleed)")
+        XCTAssertEqual(state.jobs[1].transcript, "second transcript", "jobs[1] must carry the second transcript (no stale-capture bleed)")
+        XCTAssertNotEqual(state.jobs[0].transcript, state.jobs[1].transcript, "concurrent jobs must have distinct transcripts")
+    }
+
+    func testSuccessfulFilingJobSpeaksIssueNumber() async throws {
+        // CONCUR-03 / D-01: a successful filing announces "created issue #N".
+        let repoURL = try makeRepo(named: "speak-success-repo")
+        let binding = RepoBinding(rootURL: repoURL, displayName: "speak-success-repo", displayPath: repoURL.path)
+        var spokenTexts: [String] = []
+        let state = AppState(
+            boundRepo: binding,
+            boundRepoDisplayText: "speak-success-repo",
+            onStartRecording: { true },
+            onStopRecording: {},
+            onRunTranscription: { _ in "create issue" },
+            onRunIssueFiling: { _, _ in
+                IssueFilingResult(number: 42, url: "https://github.com/owner/repo/issues/42")
+            },
+            onSpeak: { text in spokenTexts.append(text) }
+        )
+        state.micPermissionGranted = true
+        state.startRecording()
+        state.stopRecording()
+
+        await waitUntil { !spokenTexts.isEmpty }
+
+        XCTAssertFalse(spokenTexts.isEmpty, "onSpeak must be called after successful filing (CONCUR-03/D-01)")
+        XCTAssertTrue(
+            spokenTexts.first?.contains("42") == true,
+            "Spoken text must contain the issue number '42', got: \(spokenTexts.first ?? "nil")"
+        )
+        XCTAssertTrue(
+            spokenTexts.first?.contains("created") == true,
+            "Spoken text must match 'created issue #N' shape (D-01), got: \(spokenTexts.first ?? "nil")"
+        )
+    }
+
+    func testFailedFilingJobSpeaksGenericFailure() async throws {
+        // CONCUR-03 / D-04 / D-05: a failed filing speaks exactly "issue filing failed" —
+        // one generic phrase, no per-type reason exposed to the user.
+        let repoURL = try makeRepo(named: "speak-failure-repo")
+        let binding = RepoBinding(rootURL: repoURL, displayName: "speak-failure-repo", displayPath: repoURL.path)
+        var spokenTexts: [String] = []
+        let state = AppState(
+            boundRepo: binding,
+            boundRepoDisplayText: "speak-failure-repo",
+            onStartRecording: { true },
+            onStopRecording: {},
+            onRunTranscription: { _ in "create issue" },
+            onRunIssueFiling: { _, _ in throw IssueFilingError.timeout },
+            onSpeak: { text in spokenTexts.append(text) }
+        )
+        state.micPermissionGranted = true
+        state.startRecording()
+        state.stopRecording()
+
+        await waitUntil { !spokenTexts.isEmpty }
+
+        XCTAssertEqual(
+            spokenTexts.first,
+            "issue filing failed",
+            "Failed filing must speak 'issue filing failed' (D-04/D-05), got: \(spokenTexts.first ?? "nil")"
+        )
+    }
+
+    func testAnnouncementDeferredDuringRecording() async throws {
+        // D-02: while captureState == .recording, a completed job's announcement is
+        // deferred to pendingAnnouncements and NOT immediately spoken.
+        let repoURL = try makeRepo(named: "defer-during-recording-repo")
+        let binding = RepoBinding(rootURL: repoURL, displayName: "defer-during-recording-repo", displayPath: repoURL.path)
+        var spokenTexts: [String] = []
+        let state = AppState(
+            boundRepo: binding,
+            boundRepoDisplayText: "defer-during-recording-repo",
+            onStartRecording: { true },
+            onStopRecording: {},
+            onRunTranscription: { _ in "deferred announcement transcript" },
+            onRunIssueFiling: { _, _ in
+                // Short enough that the job completes while the second recording is active.
+                try? await Task.sleep(for: .milliseconds(100))
+                return IssueFilingResult(number: 10, url: "https://github.com/o/r/issues/10")
+            },
+            onSpeak: { text in spokenTexts.append(text) }
+        )
+        state.micPermissionGranted = true
+
+        // First cycle — spawns a job.
+        state.startRecording()
+        state.stopRecording()
+
+        // Wait for the job to be in-flight (captureState is .idle at this point).
+        await waitUntil { state.jobs.count == 1 && state.jobs[0].state == .filing }
+
+        // Start second recording so captureState transitions to .recording.
+        state.startRecording()
+        XCTAssertEqual(state.captureState, .recording, "precondition: captureState must be .recording")
+
+        // Wait for the first job to complete — announce() must defer because captureState == .recording.
+        await waitUntil { state.jobs[0].state == .done }
+
+        // D-02: announcement was deferred; onSpeak must NOT have been called yet.
+        XCTAssertTrue(spokenTexts.isEmpty, "onSpeak must NOT be called while captureState == .recording (D-02)")
+    }
+
+    func testDeferredAnnouncementFlushedOnRecordingStop() async throws {
+        // D-03: the deferred announcement is flushed when stopRecording() triggers
+        // beginTranscription(), which calls flushPendingAnnouncements() synchronously.
+        let repoURL = try makeRepo(named: "flush-on-stop-repo")
+        let binding = RepoBinding(rootURL: repoURL, displayName: "flush-on-stop-repo", displayPath: repoURL.path)
+        var spokenTexts: [String] = []
+        let state = AppState(
+            boundRepo: binding,
+            boundRepoDisplayText: "flush-on-stop-repo",
+            onStartRecording: { true },
+            onStopRecording: {},
+            onRunTranscription: { _ in "flush test transcript" },
+            onRunIssueFiling: { _, _ in
+                try? await Task.sleep(for: .milliseconds(100))
+                return IssueFilingResult(number: 11, url: "https://github.com/o/r/issues/11")
+            },
+            onSpeak: { text in spokenTexts.append(text) }
+        )
+        state.micPermissionGranted = true
+
+        // First cycle — spawns a filing job.
+        state.startRecording()
+        state.stopRecording()
+        await waitUntil { state.jobs.count == 1 && state.jobs[0].state == .filing }
+
+        // Start second recording — captureState = .recording.
+        state.startRecording()
+        XCTAssertEqual(state.captureState, .recording)
+
+        // Wait for first job to complete (announcement must be deferred while recording).
+        await waitUntil { state.jobs[0].state == .done }
+        XCTAssertTrue(spokenTexts.isEmpty, "precondition: announcement must be deferred during recording (D-02)")
+
+        // Stop second recording — flushPendingAnnouncements() fires inside beginTranscription().
+        state.stopRecording()
+
+        // D-03: deferred announcement must be spoken after recording stops.
+        await waitUntil { !spokenTexts.isEmpty }
+        XCTAssertFalse(spokenTexts.isEmpty, "deferred announcement must be flushed when recording stops (D-03)")
+        XCTAssertTrue(
+            spokenTexts.first?.contains("11") == true || spokenTexts.first?.contains("created") == true,
+            "Flushed text must be the deferred filing announcement, got: \(spokenTexts.first ?? "nil")"
+        )
+    }
+
     func testCaptureReturnsToIdleImmediatelyWhenFilingBegins() async throws {
         // CONCUR-01: captureState == .idle as soon as transcription succeeds —
         // filing runs independently in jobs[0], not in captureState.
