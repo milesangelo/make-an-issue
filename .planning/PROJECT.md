@@ -39,12 +39,12 @@ opening a browser — the full path from spoken word to filed issue must work en
 - ✓ The user's AI CLI, run in the bound repo, **drafts and files** the issue via its own MCP — no `gh`, no API token — v1.0 (Phase 4; GitHub via `claude -p` proven end-to-end + UAT)
 - ✓ The created issue number/URL is parsed from the CLI output and spoken aloud ("created issue #N") — v1.0 (Phase 4)
 - ✓ Backend is provider-agnostic via a configurable command seam (`IssueFilingConfig`) — v1.0 (Phase 4; claude + GitHub proven, `codex` + Jira explicitly deferred)
+- ✓ Background/concurrent issue filing — capture returns to idle the instant transcription completes; multiple filings run concurrently as independent jobs, each speaking its own outcome — v1.1 (Phase 5; CONCUR-01/02/03)
 
 ### Active
 
 <!-- Next-milestone candidates (from REQUIREMENTS.md v2). Formalized when /gsd-new-milestone defines the next milestone's requirements. -->
 
-- [ ] Background/concurrent issue filing — no waiting on the current filing to start the next (v1.1)
 - [ ] Right-click Settings window with an editable system-prompt tab (v1.1)
 - [ ] Stop/Cancel an in-flight filing (v1.1)
 - [ ] Surfaced, recoverable errors for missing binding / failed filing (v1.1 RESIL-01)
@@ -126,4 +126,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-28 — started milestone v1.1 (Concurrent Filing & Control): background/concurrent filing, right-click Settings with editable system prompt, Stop/Cancel, recoverable errors (RESIL-01), and FINDING-06 cleanup. v1.0 MVP shipped (4 phases, 15 plans).*
+*Last updated: 2026-06-29 — Phase 5 (Concurrent Filing Jobs Model) complete: background/concurrent filing delivered (CONCUR-01/02/03). v1.1 (Concurrent Filing & Control) continues with right-click Settings + editable system prompt, Stop/Cancel, recoverable errors (RESIL-01), and FINDING-06 cleanup. v1.0 MVP shipped (4 phases, 15 plans).*
