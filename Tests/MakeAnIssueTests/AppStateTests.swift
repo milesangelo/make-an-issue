@@ -697,4 +697,67 @@ final class AppStateTests: XCTestCase {
         try FileManager.default.createDirectory(at: repo.appendingPathComponent(".git", isDirectory: true), withIntermediateDirectories: true)
         return repo
     }
+
+    // MARK: - Jobs model (CONCUR-01 / D-08)
+
+    func testCaptureReturnsToIdleImmediatelyWhenFilingBegins() async throws {
+        // CONCUR-01: captureState == .idle as soon as transcription succeeds —
+        // filing runs independently in jobs[0], not in captureState.
+        let repoURL = try makeRepo(named: "idle-on-filing-repo")
+        let binding = RepoBinding(rootURL: repoURL, displayName: "idle-on-filing-repo", displayPath: repoURL.path)
+        let state = AppState(
+            boundRepo: binding,
+            boundRepoDisplayText: "idle-on-filing-repo",
+            onStartRecording: { true },
+            onStopRecording: {},
+            onRunTranscription: { _ in "a transcript" },
+            onRunIssueFiling: { _, _ in
+                try? await Task.sleep(for: .milliseconds(300))
+                return IssueFilingResult(number: 7, url: "https://github.com/o/r/issues/7")
+            }
+        )
+        state.micPermissionGranted = true
+        state.startRecording()
+        state.stopRecording()
+
+        // Wait for a job to be spawned (transcription has completed)
+        await waitUntil { state.jobs.count == 1 }
+
+        // Capture is immediately idle; the filing runs in jobs[0]
+        XCTAssertEqual(state.captureState, .idle, "captureState must be .idle while filing runs in jobs[0] (CONCUR-01)")
+        XCTAssertEqual(state.jobs[0].state, .filing, "jobs[0].state must be .filing while the seam is in-flight")
+
+        // Let the job finish
+        await waitUntil { state.jobs[0].state == .done }
+        XCTAssertEqual(state.jobs[0].state, .done)
+    }
+
+    func testFilingJobTrackedInJobsArray() async throws {
+        // D-06: terminal jobs are retained; jobs array grows per filing.
+        let repoURL = try makeRepo(named: "jobs-array-repo")
+        let binding = RepoBinding(rootURL: repoURL, displayName: "jobs-array-repo", displayPath: repoURL.path)
+        var spokenText: String?
+        let state = AppState(
+            boundRepo: binding,
+            boundRepoDisplayText: "jobs-array-repo",
+            onStartRecording: { true },
+            onStopRecording: {},
+            onRunTranscription: { _ in "create an issue" },
+            onRunIssueFiling: { _, _ in
+                IssueFilingResult(number: 42, url: "https://github.com/o/r/issues/42")
+            },
+            onSpeak: { text in spokenText = text }
+        )
+        state.micPermissionGranted = true
+        state.startRecording()
+        state.stopRecording()
+
+        await waitUntil { state.jobs.count == 1 && state.jobs[0].state == .done }
+
+        XCTAssertEqual(state.jobs.count, 1, "one filing produces one job entry")
+        XCTAssertEqual(state.jobs[0].state, .done)
+        XCTAssertNotNil(state.jobs[0].result)
+        XCTAssertEqual(state.jobs[0].result?.number, 42)
+        XCTAssertTrue(spokenText?.contains("42") == true, "spoken text must announce the issue number")
+    }
 }
