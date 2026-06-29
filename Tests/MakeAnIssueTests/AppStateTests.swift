@@ -699,6 +699,138 @@ final class AppStateTests: XCTestCase {
 
     // MARK: - Jobs model (CONCUR-01 / D-08)
 
+    // MARK: - Concurrency tests (Plan 02 / CONCUR-01 / CONCUR-02 / D-09)
+
+    func testTranscriptionCompletionReturnsCaptureToIdleImmediately() async throws {
+        // CONCUR-01 / SC-1: captureState is .idle the moment transcription completes,
+        // even though the filing job is still in-flight.
+        let repoURL = try makeRepo(named: "concur01-idle-repo")
+        let binding = RepoBinding(rootURL: repoURL, displayName: "concur01-idle-repo", displayPath: repoURL.path)
+        let state = AppState(
+            boundRepo: binding,
+            boundRepoDisplayText: "concur01-idle-repo",
+            onStartRecording: { true },
+            onStopRecording: {},
+            onRunTranscription: { _ in "concur test transcript" },
+            onRunIssueFiling: { _, _ in
+                // Slow stub keeps jobs[0].state == .filing long enough to observe concurrency.
+                try? await Task.sleep(for: .milliseconds(300))
+                return IssueFilingResult(number: 1, url: "https://github.com/o/r/issues/1")
+            }
+        )
+        state.micPermissionGranted = true
+        state.startRecording()
+        state.stopRecording()
+
+        // Wait for the job to be spawned (transcription has completed).
+        await waitUntil { state.jobs.count == 1 }
+
+        // CONCUR-01 / SC-1: captureState is idle the moment transcription completes.
+        XCTAssertEqual(state.captureState, .idle, "captureState must be .idle as soon as transcription completes (CONCUR-01/SC-1)")
+        XCTAssertEqual(state.jobs[0].state, .filing, "jobs[0] must be .filing while stub is sleeping")
+    }
+
+    func testNewRecordingAllowedWhileFilingIsInFlight() async throws {
+        // D-09: startRecording() is allowed from .idle even while a job is in-flight.
+        let repoURL = try makeRepo(named: "d09-reentry-repo")
+        let binding = RepoBinding(rootURL: repoURL, displayName: "d09-reentry-repo", displayPath: repoURL.path)
+        let state = AppState(
+            boundRepo: binding,
+            boundRepoDisplayText: "d09-reentry-repo",
+            onStartRecording: { true },
+            onStopRecording: {},
+            onRunTranscription: { _ in "first recording" },
+            onRunIssueFiling: { _, _ in
+                try? await Task.sleep(for: .milliseconds(300))
+                return IssueFilingResult(number: 2, url: "https://github.com/o/r/issues/2")
+            }
+        )
+        state.micPermissionGranted = true
+        state.startRecording()
+        state.stopRecording()
+
+        // Wait for the job to be in-flight and captureState to be .idle.
+        await waitUntil { state.jobs.count == 1 && state.jobs[0].state == .filing }
+
+        // D-09: re-entry is allowed because captureState is .idle (not blocked by filing).
+        state.startRecording()
+        XCTAssertEqual(state.captureState, .recording, "startRecording() must succeed while a job is .filing (D-09)")
+        XCTAssertEqual(state.jobs[0].state, .filing, "in-flight job must remain .filing after PTT re-entry")
+    }
+
+    func testPTTReEntryDuringFilingStartsNewRecording() async throws {
+        // D-09: PTT re-entry during in-flight filing starts a new recording;
+        // the guard admits entry from .idle regardless of concurrent jobs.
+        let repoURL = try makeRepo(named: "ptt-reentry-repo")
+        let binding = RepoBinding(rootURL: repoURL, displayName: "ptt-reentry-repo", displayPath: repoURL.path)
+        var startCallCount = 0
+        let state = AppState(
+            boundRepo: binding,
+            boundRepoDisplayText: "ptt-reentry-repo",
+            onStartRecording: { startCallCount += 1; return true },
+            onStopRecording: {},
+            onRunTranscription: { _ in "ptt transcript" },
+            onRunIssueFiling: { _, _ in
+                try? await Task.sleep(for: .milliseconds(300))
+                return IssueFilingResult(number: 3, url: "https://github.com/o/r/issues/3")
+            }
+        )
+        state.micPermissionGranted = true
+        state.startRecording()
+        state.stopRecording()
+
+        // Wait for filing to be in-flight and captureState to be .idle.
+        await waitUntil { state.jobs.count == 1 && state.captureState == .idle }
+
+        // Simulate PTT re-press while a job is in-flight.
+        state.startRecording()
+        XCTAssertEqual(state.captureState, .recording, "PTT re-entry from .idle during in-flight filing must reach .recording (D-09)")
+        XCTAssertEqual(startCallCount, 2, "onStartRecording must be called for both recordings")
+    }
+
+    func testTwoConcurrentFilingJobsCanBeSpawned() async throws {
+        // CONCUR-02 / SC-2: two full record/stop cycles produce two simultaneous .filing jobs.
+        let repoURL = try makeRepo(named: "concur02-two-jobs-repo")
+        let binding = RepoBinding(rootURL: repoURL, displayName: "concur02-two-jobs-repo", displayPath: repoURL.path)
+        var transcriptionCallCount = 0
+        let state = AppState(
+            boundRepo: binding,
+            boundRepoDisplayText: "concur02-two-jobs-repo",
+            onStartRecording: { true },
+            onStopRecording: {},
+            onRunTranscription: { _ in
+                defer { transcriptionCallCount += 1 }
+                return "transcript \(transcriptionCallCount + 1)"
+            },
+            onRunIssueFiling: { _, _ in
+                // Long sleep keeps both jobs in-flight simultaneously.
+                try? await Task.sleep(for: .milliseconds(500))
+                return IssueFilingResult(number: 1, url: "https://github.com/o/r/issues/1")
+            }
+        )
+        state.micPermissionGranted = true
+
+        // First record/stop cycle.
+        state.startRecording()
+        state.stopRecording()
+
+        // Wait for first job to be spawned (captureState is now .idle).
+        await waitUntil { state.jobs.count == 1 }
+        XCTAssertEqual(state.captureState, .idle, "captureState must be .idle after first transcription (CONCUR-01)")
+        XCTAssertEqual(state.jobs[0].state, .filing, "first job must be .filing")
+
+        // Second record/stop cycle while first job is still in-flight.
+        state.startRecording()
+        state.stopRecording()
+
+        // Wait for second job to be spawned.
+        await waitUntil { state.jobs.count == 2 }
+
+        // CONCUR-02 / SC-2: both jobs are simultaneously .filing.
+        XCTAssertEqual(state.jobs[0].state, .filing, "jobs[0] must still be .filing (CONCUR-02/SC-2)")
+        XCTAssertEqual(state.jobs[1].state, .filing, "jobs[1] must be .filing while stub is sleeping (CONCUR-02/SC-2)")
+    }
+
     func testCaptureReturnsToIdleImmediatelyWhenFilingBegins() async throws {
         // CONCUR-01: captureState == .idle as soon as transcription succeeds —
         // filing runs independently in jobs[0], not in captureState.
