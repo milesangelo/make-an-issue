@@ -1179,4 +1179,30 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(state.jobs[0].result?.number, 42)
         XCTAssertTrue(spokenText?.contains("42") == true, "spoken text must announce the issue number")
     }
+
+    // MARK: - Cancel scaffolds (fleshed out in 06-03)
+
+    func testCancelJobIdTransitionsToCancel() async throws {
+        // 06-03 will assert: cancelling one job by ID drives its state to .cancelled
+        // and speaks the cancelled phrase via the onSpeak seam (D-05).
+        throw XCTSkip("Pending — fleshed out in 06-03")
+    }
+
+    func testCancelAnnouncementDeferredDuringRecording() async throws {
+        // 06-03 will assert: the cancelled announcement is deferred while the mic is
+        // recording and flushed after stopRecording() drains pendingAnnouncements (D-05).
+        throw XCTSkip("Pending — fleshed out in 06-03")
+    }
+
+    func testCancelAllCancelsEveryInFlightJob() async throws {
+        // 06-03 will assert: cancelAll() transitions every in-flight (.filing) job to
+        // .cancelled — no in-flight job is left running after the call completes.
+        throw XCTSkip("Pending — fleshed out in 06-03")
+    }
+
+    func testCancelledJobRetainedInJobsList() async throws {
+        // 06-03 will assert: a cancelled job is retained in state.jobs (D-02/D-03),
+        // not deleted — jobs.count stays at 1 and jobs[0].state == .cancelled.
+        throw XCTSkip("Pending — fleshed out in 06-03")
+    }
 }
