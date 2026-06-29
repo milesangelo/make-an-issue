@@ -111,13 +111,13 @@ final class AppStateTests: XCTestCase {
     }
 
     func testStartRecordingAfterFilingReturnsToIdleStartsNewRecording() async {
-        // Use a stub that returns a transcript and completes filing so state reaches .idle.
-        // (.finished is now transient — it flows into .filing then .idle)
+        // Use a stub that returns a transcript so captureState reaches .idle.
+        // No boundRepo → spawnFilingJob is never called; captureState = .idle right after transcription.
         let state = AppState(
             onStartRecording: { true },
             onStopRecording: {},
             onRunTranscription: { _ in "Hello world" }
-            // No boundRepo → beginFiling() skips to .idle immediately
+            // No boundRepo → spawnFilingJob skipped; captureState = .idle immediately
         )
         state.micPermissionGranted = true
         state.startRecording()
@@ -205,7 +205,7 @@ final class AppStateTests: XCTestCase {
         XCTAssertTrue(stopCalled)
 
         await waitUntil { state.captureState == .idle && state.transcript == "Capped transcript" }
-        // .finished is transient; no repo bound → filing fast-path → .idle
+        // No repo bound → spawnFilingJob skipped; captureState = .idle immediately after transcription
         XCTAssertEqual(state.captureState, .idle)
         XCTAssertEqual(state.transcript, "Capped transcript")
     }
@@ -236,7 +236,7 @@ final class AppStateTests: XCTestCase {
         await waitUntil { state.captureState == .idle && state.transcript == "Auto transcript" }
 
         XCTAssertTrue(stopCalled)
-        // .finished is transient; no repo bound → filing fast-path → .idle
+        // No repo bound → spawnFilingJob skipped; captureState = .idle immediately after transcription
         XCTAssertEqual(state.captureState, .idle)
         XCTAssertEqual(state.transcript, "Auto transcript")
     }
@@ -272,7 +272,7 @@ final class AppStateTests: XCTestCase {
             onStartRecording: { true },
             onStopRecording: {},
             onRunTranscription: { _ in
-                // Small delay ensures we can observe .transcribing before .finished.
+                // Small delay ensures we can observe .transcribing before .idle.
                 try? await Task.sleep(for: .milliseconds(200))
                 return "Hello"
             }
@@ -310,7 +310,9 @@ final class AppStateTests: XCTestCase {
     }
 
     func testSuccessfulTranscriptionStoresText() async {
-        // Provide an onRunIssueFiling stub so .finished → .filing → .idle cycle completes cleanly.
+        // Provide an onRunIssueFiling stub so the filing job completes cleanly.
+        // Under the jobs model, captureState is .idle immediately after transcription;
+        // filing runs concurrently in jobs[0].
         let state = AppState(
             onStartRecording: { true },
             onStopRecording: {},
@@ -331,7 +333,7 @@ final class AppStateTests: XCTestCase {
         await waitUntil { state.captureState == .idle && state.transcript == "Hello world" }
 
         XCTAssertEqual(state.transcript, "Hello world")
-        // .finished is transient; after filing completes state returns to .idle
+        // captureState = .idle immediately after transcription; filing runs in jobs[0]
         XCTAssertEqual(state.captureState, .idle)
         XCTAssertNil(state.transcriptError)
     }
@@ -495,35 +497,39 @@ final class AppStateTests: XCTestCase {
     }
 
     func testFilingErrorTokenAcquisitionSetsStatus() async throws {
+        // Under the jobs model, tokenAcquisitionFailed is stored in jobs[0].error (D-06).
+        // captureState returns to .idle immediately on transcription completion (CONCUR-01).
         let repoURL = try makeRepo(named: "token-error-repo")
         let binding = RepoBinding(rootURL: repoURL, displayName: "token-error-repo", displayPath: repoURL.path)
+        var spokenText: String?
         let state = AppState(
             boundRepo: binding,
             boundRepoDisplayText: "token-error-repo",
             onStartRecording: { true },
             onStopRecording: {},
             onRunTranscription: { _ in "create issue" },
-            onRunIssueFiling: { _, _ in throw IssueFilingError.tokenAcquisitionFailed }
+            onRunIssueFiling: { _, _ in throw IssueFilingError.tokenAcquisitionFailed },
+            onSpeak: { text in spokenText = text }
         )
         state.micPermissionGranted = true
         state.startRecording()
         state.stopRecording()
 
-        await waitUntil { state.captureState == .idle }
+        await waitUntil { state.jobs.count == 1 && state.jobs[0].state == .failed }
 
-        XCTAssertEqual(state.captureState, .idle)
-        XCTAssertTrue(
-            state.statusText.lowercased().contains("github") || state.statusText.lowercased().contains("sign in") || state.statusText.lowercased().contains("gh"),
-            "Token error must mention GitHub auth, got: '\(state.statusText)'"
-        )
+        XCTAssertEqual(state.captureState, .idle, "captureState must be .idle (CONCUR-01)")
+        XCTAssertEqual(state.jobs[0].state, .failed, "job must be .failed on tokenAcquisitionFailed")
+        XCTAssertEqual(state.jobs[0].error, IssueFilingError.tokenAcquisitionFailed, "job error must be the specific IssueFilingError")
+        XCTAssertEqual(spokenText, "issue filing failed", "failure announcement must be 'issue filing failed' (D-04)")
     }
 
     func testParseFailedStatusMessageIsNotMisleading() async throws {
-        // Regression: parseFailed must NOT say "Issue filed" — nothing was filed.
-        // The message must accurately reflect that confirmation failed (not that an issue was created).
+        // Regression: parseFailed must NOT announce "created issue #N" — nothing was confirmed filed.
+        // Under the jobs model: job is .failed, job.error == .parseFailed, and the spoken outcome
+        // is "issue filing failed" (D-04/D-05) — a failure announcement, not a false success.
         let repoURL = try makeRepo(named: "parse-failed-repo")
         let binding = RepoBinding(rootURL: repoURL, displayName: "parse-failed-repo", displayPath: repoURL.path)
-        var speakCalled = false
+        var spokenText: String?
         let state = AppState(
             boundRepo: binding,
             boundRepoDisplayText: "parse-failed-repo",
@@ -531,24 +537,22 @@ final class AppStateTests: XCTestCase {
             onStopRecording: {},
             onRunTranscription: { _ in "create issue" },
             onRunIssueFiling: { _, _ in throw IssueFilingError.parseFailed },
-            onSpeak: { _ in speakCalled = true }
+            onSpeak: { text in spokenText = text }
         )
         state.micPermissionGranted = true
         state.startRecording()
         state.stopRecording()
 
-        await waitUntil { state.captureState == .idle }
+        await waitUntil { state.jobs.count == 1 && state.jobs[0].state == .failed }
 
-        // Status must show the corrected wording — not the old misleading "Issue filed" text.
-        XCTAssertEqual(
-            state.statusText,
-            "Couldn't confirm an issue was filed — check GitHub (is Docker running?)",
-            "parseFailed message must not imply an issue was filed; got: '\(state.statusText)'"
-        )
-        // Speak seam must NOT be called — no false success announcement.
-        XCTAssertFalse(speakCalled, "speak seam must NOT be called on parseFailed (no false success)")
-        // State machine must return to .idle so PTT is usable again.
-        XCTAssertEqual(state.captureState, .idle, "parseFailed must reset captureState to .idle")
+        // Job must be .failed with the parseFailed error stored (D-06).
+        XCTAssertEqual(state.jobs[0].state, .failed, "parseFailed must set job state to .failed")
+        XCTAssertEqual(state.jobs[0].error, IssueFilingError.parseFailed, "parseFailed error must be stored in the job")
+        // Spoken outcome must be "issue filing failed" — a failure announcement, not "created issue #N" (no false success).
+        XCTAssertEqual(spokenText, "issue filing failed", "parseFailed must announce 'issue filing failed', not a success (D-04/T-5-05)")
+        XCTAssertFalse(spokenText?.contains("created") == true, "parseFailed must never announce a creation (no false success)")
+        // State machine must be .idle so PTT is usable again.
+        XCTAssertEqual(state.captureState, .idle, "parseFailed must leave captureState .idle (CONCUR-01)")
     }
 
     func testNoRepoBoundSkipsFilingAndReturnsToIdle() async throws {
@@ -601,15 +605,12 @@ final class AppStateTests: XCTestCase {
     }
 
     func testFilingEntersFilingState() async throws {
-        // Verify that AppState enters .filing synchronously when filing begins.
+        // CONCUR-01: captureState == .idle immediately after transcription.
+        // The per-job filing state is tracked in jobs[0].state, not captureState.
         let repoURL = try makeRepo(named: "filing-state-repo")
         let binding = RepoBinding(rootURL: repoURL, displayName: "filing-state-repo", displayPath: repoURL.path)
-        var filingStateObserved = false
-        let filingStarted = CheckedContinuation<Void, Never>.self
-        _ = filingStarted  // silence unused warning
 
-        // Use a slow filing seam to ensure we can observe .filing before it completes.
-        let sem = DispatchSemaphore(value: 0)
+        // Slow seam keeps jobs[0].state == .filing long enough to observe it.
         let state = AppState(
             boundRepo: binding,
             boundRepoDisplayText: "filing-state-repo",
@@ -625,24 +626,23 @@ final class AppStateTests: XCTestCase {
         state.startRecording()
         state.stopRecording()
 
-        // Wait for transcription to finish and filing to begin. The filing seam
-        // holds .filing for ~300 ms, so polling reliably catches the transient state.
-        await waitUntil { state.captureState == .filing }
-        filingStateObserved = state.captureState == .filing
+        // Wait for a job to be spawned (transcription completed, spawnFilingJob called).
+        await waitUntil { state.jobs.count == 1 }
 
-        // Wait for filing to complete
-        await waitUntil { state.captureState == .idle }
+        // CONCUR-01: captureState is .idle immediately; the filing runs in jobs[0].
+        XCTAssertEqual(state.captureState, .idle, "captureState must be .idle while filing runs concurrently in jobs[0] (CONCUR-01)")
+        XCTAssertEqual(state.jobs[0].state, .filing, "jobs[0].state must be .filing while the seam is in-flight")
 
-        XCTAssertTrue(filingStateObserved, "AppState must enter .filing state while the filing seam is in-flight")
-        XCTAssertEqual(state.captureState, .idle, "After filing completes state must be .idle")
-        sem.signal()
+        // Wait for filing to complete.
+        await waitUntil { state.jobs[0].state == .done }
+        XCTAssertEqual(state.jobs[0].state, .done, "jobs[0].state must be .done after filing completes")
+        XCTAssertEqual(state.captureState, .idle, "captureState must remain .idle after filing completes")
     }
 
-    func testPushToTalkDuringFilingIsIgnored() async throws {
-        // CR-01 regression: a PTT re-press while the state machine is in .filing
-        // must be ignored — startRecording() must not overwrite .filing with
-        // .recording, and the in-flight filing Task must complete normally,
-        // leaving state at .idle.
+    func testPushToTalkDuringFilingIsAllowedUnderJobsModel() async throws {
+        // D-09: under the jobs model, filings run concurrently in the background and
+        // do not block PTT. A re-press while jobs[0].state == .filing succeeds and
+        // starts a new capture without disturbing the in-flight job.
         let repoURL = try makeRepo(named: "ptt-during-filing-repo")
         let binding = RepoBinding(rootURL: repoURL, displayName: "ptt-during-filing-repo", displayPath: repoURL.path)
         let state = AppState(
@@ -652,7 +652,7 @@ final class AppStateTests: XCTestCase {
             onStopRecording: {},
             onRunTranscription: { _ in "file this bug" },
             onRunIssueFiling: { _, _ in
-                // Slow enough that we can observe .filing and attempt re-entry before it finishes.
+                // Slow enough that we can observe jobs[0].state == .filing and attempt PTT re-entry.
                 try? await Task.sleep(for: .milliseconds(300))
                 return IssueFilingResult(number: 1, url: "https://github.com/o/r/issues/1")
             }
@@ -661,17 +661,16 @@ final class AppStateTests: XCTestCase {
         state.startRecording()
         state.stopRecording()
 
-        // Wait for transcription to complete and filing to begin (.filing is entered synchronously).
-        await waitUntil { state.captureState == .filing }
-        XCTAssertEqual(state.captureState, .filing, "Must be in .filing before testing re-entry")
+        // Wait for a job to be spawned and be in .filing state.
+        await waitUntil { state.jobs.count == 1 && state.jobs[0].state == .filing }
+        XCTAssertEqual(state.jobs[0].state, .filing, "must have an in-flight job before testing PTT re-entry")
 
-        // Simulate a PTT re-press during filing — must be a no-op (CR-01).
+        // Simulate a PTT re-press while jobs[0] is still in .filing — D-09: re-entry is NOW ALLOWED.
         state.startRecording()
-        XCTAssertEqual(state.captureState, .filing, "PTT re-entry during .filing must leave captureState unchanged")
+        XCTAssertEqual(state.captureState, .recording, "PTT re-entry during an in-flight filing must succeed (D-09)")
 
-        // Wait for the in-flight filing to complete normally.
-        await waitUntil { state.captureState == .idle }
-        XCTAssertEqual(state.captureState, .idle, "State must return to .idle after filing completes normally")
+        // The in-flight job (jobs[0]) must not be disturbed by the re-entry.
+        XCTAssertEqual(state.jobs[0].state, .filing, "in-flight job must remain .filing after PTT re-entry")
     }
 
     /// Polls `condition` on the main actor until it returns true or the deadline
