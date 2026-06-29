@@ -1017,6 +1017,108 @@ final class AppStateTests: XCTestCase {
         )
     }
 
+    // MARK: - Retention tests (Plan 02 / D-06 / D-07) and SC-4 tempfile isolation
+
+    func testCompletedFilingJobRetainedInJobsArray() async throws {
+        // D-06/D-07: terminal jobs are NOT removed from the jobs array on completion —
+        // they are retained for the Phase 9 job-list UI.
+        let repoURL = try makeRepo(named: "retention-done-repo")
+        let binding = RepoBinding(rootURL: repoURL, displayName: "retention-done-repo", displayPath: repoURL.path)
+        let state = AppState(
+            boundRepo: binding,
+            boundRepoDisplayText: "retention-done-repo",
+            onStartRecording: { true },
+            onStopRecording: {},
+            onRunTranscription: { _ in "retained transcript" },
+            onRunIssueFiling: { _, _ in
+                IssueFilingResult(number: 20, url: "https://github.com/o/r/issues/20")
+            }
+        )
+        state.micPermissionGranted = true
+        state.startRecording()
+        state.stopRecording()
+
+        await waitUntil { state.jobs.first?.state == .done }
+
+        // D-06/D-07: completed job is retained (not removed) in jobs array.
+        XCTAssertEqual(state.jobs.count, 1, "jobs array must retain the completed job (D-06/D-07)")
+        XCTAssertEqual(state.jobs[0].state, .done, "retained job state must be .done")
+    }
+
+    func testFailedFilingJobRetainedInJobsArray() async throws {
+        // D-06/D-07: failed jobs are also retained for Phase 9 error-row display.
+        let repoURL = try makeRepo(named: "retention-failed-repo")
+        let binding = RepoBinding(rootURL: repoURL, displayName: "retention-failed-repo", displayPath: repoURL.path)
+        let state = AppState(
+            boundRepo: binding,
+            boundRepoDisplayText: "retention-failed-repo",
+            onStartRecording: { true },
+            onStopRecording: {},
+            onRunTranscription: { _ in "failed transcript" },
+            onRunIssueFiling: { _, _ in throw IssueFilingError.timeout }
+        )
+        state.micPermissionGranted = true
+        state.startRecording()
+        state.stopRecording()
+
+        await waitUntil { state.jobs.first?.state == .failed }
+
+        // D-06/D-07: failed job is retained in jobs array.
+        XCTAssertEqual(state.jobs.count, 1, "jobs array must retain the failed job (D-06/D-07)")
+        XCTAssertEqual(state.jobs[0].state, .failed, "retained job state must be .failed")
+    }
+
+    func testTwoConcurrentStubFilingsDoNotInterfere() async throws {
+        // SC-4 behavior: two concurrent filings each complete with their own distinct result —
+        // observable evidence that jobs do not share state at the jobs layer.
+        let repoURL = try makeRepo(named: "sc4-isolation-repo")
+        let binding = RepoBinding(rootURL: repoURL, displayName: "sc4-isolation-repo", displayPath: repoURL.path)
+        var filingCallCount = 0
+        var transcriptionCallCount = 0
+        let state = AppState(
+            boundRepo: binding,
+            boundRepoDisplayText: "sc4-isolation-repo",
+            onStartRecording: { true },
+            onStopRecording: {},
+            onRunTranscription: { _ in
+                defer { transcriptionCallCount += 1 }
+                return "transcript \(transcriptionCallCount + 1)"
+            },
+            onRunIssueFiling: { _, _ in
+                // Each invocation captures its own issue number before suspending,
+                // proving the two concurrent tasks do not share per-invocation state.
+                filingCallCount += 1
+                let myNumber = filingCallCount
+                try? await Task.sleep(for: .milliseconds(200))
+                return IssueFilingResult(number: myNumber, url: "https://github.com/o/r/issues/\(myNumber)")
+            }
+        )
+        state.micPermissionGranted = true
+
+        // First cycle.
+        state.startRecording()
+        state.stopRecording()
+        await waitUntil { state.jobs.count == 1 }
+
+        // Second cycle while first is in-flight.
+        state.startRecording()
+        state.stopRecording()
+        await waitUntil { state.jobs.count == 2 }
+
+        // Wait for both to complete.
+        await waitUntil { state.jobs.filter { $0.state == .done }.count == 2 }
+
+        // SC-4: both jobs completed with their own distinct results — no cross-job bleed.
+        XCTAssertEqual(state.jobs.filter { $0.state == .done }.count, 2, "both jobs must complete as .done (SC-4)")
+        XCTAssertNotNil(state.jobs[0].result, "jobs[0] must have a result")
+        XCTAssertNotNil(state.jobs[1].result, "jobs[1] must have a result")
+        XCTAssertNotEqual(
+            state.jobs[0].result?.number,
+            state.jobs[1].result?.number,
+            "concurrent jobs must have distinct issue numbers — no cross-job result bleed (SC-4)"
+        )
+    }
+
     func testCaptureReturnsToIdleImmediatelyWhenFilingBegins() async throws {
         // CONCUR-01: captureState == .idle as soon as transcription succeeds —
         // filing runs independently in jobs[0], not in captureState.
