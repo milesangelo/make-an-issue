@@ -27,7 +27,7 @@ One foundational `FilingJob` model refactor plus four UI/control surfaces grafte
 solved v1.0 architecture. The critical chain is `jobs model → cancellation → status-item shell →
 editable prompt / jobs list`. No new third-party dependencies.
 
-- [ ] **Phase 5: Concurrent Filing Jobs Model** - Lift filing out of the single `captureState` enum so capture returns to idle immediately and filings run concurrently
+- [x] **Phase 5: Concurrent Filing Jobs Model** - Lift filing out of the single `captureState` enum so capture returns to idle immediately and filings run concurrently (completed 2026-06-29)
 - [ ] **Phase 6: Cancellation / Stop Control** - Abort an in-flight filing by terminating its full `claude → docker` process tree; clean up on quit
 - [ ] **Phase 7: AppKit Status-Item UI + Settings Window Shell** - Replace `MenuBarExtra` with `NSStatusItem` (left-click popover / right-click menu), self-owned Settings window, and a live recording indicator on the icon
 - [ ] **Phase 8: Editable System Prompt + FINDING-06 Cleanup** - Editable, persisted drafting instructions in Settings with an unbreakable enforced contract; resolve the orphaned "CLI Command" field
@@ -47,10 +47,10 @@ editable prompt / jobs list`. No new third-party dependencies.
   3. Each filing independently speaks its own "created issue #N" confirmation when it completes, regardless of what the user is doing.
   4. Per-invocation MCP tempfile isolation is preserved across concurrent jobs — no shared-state collision between simultaneous filings.
 
-**Plans**: 1/2 plans executed
+**Plans**: 2/2 plans complete
 
 - [x] 05-01-PLAN.md
-- [ ] 05-02-PLAN.md
+- [x] 05-02-PLAN.md
 
 ### Phase 6: Cancellation / Stop Control
 
@@ -118,7 +118,7 @@ editable prompt / jobs list`. No new third-party dependencies.
 | 2. Push-to-Talk Voice Capture | v1.0 | 2/2 | Complete | 2026-06-24 |
 | 3. Local Transcription | v1.0 | 5/5 | Complete | 2026-06-26 |
 | 4. Voice → AI CLI Files Issue via MCP + Spoken Confirmation | v1.0 | 5/5 | Complete | 2026-06-26 |
-| 5. Concurrent Filing Jobs Model | v1.1 | 1/2 | In Progress|  |
+| 5. Concurrent Filing Jobs Model | v1.1 | 2/2 | Complete   | 2026-06-29 |
 | 6. Cancellation / Stop Control | v1.1 | 0/? | Not started | - |
 | 7. AppKit Status-Item UI + Settings Window Shell | v1.1 | 0/? | Not started | - |
 | 8. Editable System Prompt + FINDING-06 Cleanup | v1.1 | 0/? | Not started | - |
