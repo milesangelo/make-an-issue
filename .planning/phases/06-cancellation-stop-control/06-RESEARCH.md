@@ -665,17 +665,19 @@ No new ASVS HIGH violations are introduced. The existing `--strict-mcp-config`, 
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Empirical verification of process group inheritance**
    - What we know: Strong circumstantial evidence that Foundation.Process creates a new process group for each spawned child; POSIX non-interactive shells inherit the parent's PGID.
    - What's unclear: Not directly confirmed via Apple documentation in this research session.
    - Recommendation: Wave 0 integration test — spawn a `sleep 60` subprocess, verify `ps -o pid,pgid` shows zsh PGID = zsh PID, then kill with `kill(-pgid, SIGTERM)` and verify sleep is also gone.
+   - **RESOLVED:** Plan 06-01 (Wave 0) implements this as an empirical gate with an explicit halt condition — if `getpgid(child) == getpgrp()`, the phase stops and replans rather than relying on the unverified assumption. The kill approach is gated, not assumed.
 
 2. **PGID propagation to AppState — API shape**
    - What we know: `IssueFilingRunner.file` is a `static func`; it doesn't currently expose the process PID.
    - What's unclear: Cleanest way to surface the PGID to `AppState` for quit-time SIGKILL.
    - Recommendation: Add `onProcessStarted: ((pid_t) -> Void)? = nil` callback parameter to `IssueFilingRunner.file`. Called after `process.run()` with the PGID. `AppState.spawnFilingJob` injects a closure that sets `jobs[idx].processGroupID`. All existing call sites pass `nil` (source-compatible).
+   - **RESOLVED:** Plan 06-02 (Task 3) adds the `CLIRunner.run(onSpawn:)` / `IssueFilingRunner.file(onProcessStarted:)` callback chain; 06-03 stores the PGID on `FilingJob.processGroupID` for 06-04's quit-time force-kill. API shape is locked.
 
 ---
 

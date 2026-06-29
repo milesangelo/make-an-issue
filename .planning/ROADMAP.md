@@ -65,10 +65,17 @@ editable prompt / jobs list`. No new third-party dependencies.
   4. Cancelling or quitting never triggers a double-resume crash or a hung "Filing…" job — the single-resume continuation invariant holds.
 
 **Plans**: 4 plans
+**Wave 1**
 
 - [ ] 06-01-PLAN.md — Wave 0: empirical process-group gate (validate A1/A2) + cancel test scaffolds
 - [ ] 06-02-PLAN.md — Wave 1: CLIRunner process-group kill + withTaskCancellationHandler bridge + onSpawn pgid; IssueFilingRunner checkCancellation seam; FilingJob.processGroupID
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 06-03-PLAN.md — Wave 2: AppState cancel surface (cancel/cancelAll/forceKillAllProcessTrees + CancellationError catch) + AppStateTests
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 06-04-PLAN.md — Wave 3: AppDelegate quit teardown (applicationShouldTerminate + MCP tempfile sweep)
 
 ### Phase 7: AppKit Status-Item UI + Settings Window Shell
