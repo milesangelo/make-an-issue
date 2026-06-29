@@ -147,18 +147,14 @@ struct StateBadge: View {
         case .idle:          return "IDLE"
         case .recording:     return "RECORDING"
         case .transcribing:  return "ASR"
-        case .finished:      return "DONE"
-        case .filing:        return "FILING"
         }
     }
-    
+
     private var backgroundColor: Color {
         switch state {
         case .idle:          return .secondary
         case .recording:     return .red
         case .transcribing:  return .orange
-        case .finished:      return .green
-        case .filing:        return .purple
         }
     }
 }
@@ -289,43 +285,6 @@ struct ActionCard: View {
                 }
                 .padding(.vertical, 4)
                 
-            case .finished:
-                HStack(spacing: 14) {
-                    ZStack {
-                        Circle()
-                            .fill(Color.green.opacity(0.15))
-                            .frame(width: 32, height: 32)
-                        Image(systemName: "checkmark")
-                            .foregroundColor(.green)
-                            .font(.system(size: 14, weight: .bold))
-                    }
-                    
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Transcription Done")
-                            .font(.system(size: 13, weight: .semibold))
-                        Text("Filing issue next...")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                    }
-                    Spacer()
-                }
-                .padding(.vertical, 4)
-                
-            case .filing:
-                HStack(spacing: 14) {
-                    ActivitySpinner(color: .purple)
-                    
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Filing Issue")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(.purple)
-                        Text("Investigating repo & creating...")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                    }
-                    Spacer()
-                }
-                .padding(.vertical, 4)
             }
         }
         .padding(12)

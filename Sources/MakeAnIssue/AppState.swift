@@ -8,9 +8,7 @@ enum CaptureState: Equatable {
     case recording
     /// ASR command is executing; results are in-flight (D-10).
     case transcribing
-    case finished
-    /// AI CLI is filing the issue; result is in-flight.
-    case filing
+    // .finished and .filing removed — filing state now lives in FilingJob.state (D-08).
 }
 
 extension KeyboardShortcuts.Name {
@@ -32,6 +30,10 @@ final class AppState: ObservableObject {
     @Published var transcript: String?
     /// Last transcription failure reason; cleared when a new transcription starts.
     @Published var transcriptError: String?
+    /// Active and terminal filing jobs for this session. Retained per D-06/D-07.
+    @Published var jobs: [FilingJob] = []
+    /// Announcements deferred while captureState == .recording (D-02/D-03).
+    private var pendingAnnouncements: [String] = []
 
     // Anchors the AudioRecorder's lifetime and is the integration point for its
     // delegate callbacks (onRecordingError, wired in init). The start/stop seam
@@ -172,10 +174,8 @@ final class AppState: ObservableObject {
 
     func startRecording() {
         // Only allow starting from .idle. This blocks re-entry during .recording
-        // (D-04: ignore key repeats), .transcribing, and .filing (CR-01: a PTT
-        // press during the up-to-300 s filing window must not start a new capture
-        // and corrupt the in-flight state machine). .finished is transient and
-        // flows straight into .filing, so it is also correctly excluded here.
+        // (D-04: ignore key repeats) and .transcribing. Under the jobs model,
+        // filings run concurrently in the background and do not block PTT (D-09).
         guard captureState == .idle else { return }
         // Re-query the live authorization status instead of trusting the one-shot
         // startup result, so a grant made in System Settings after launch takes
@@ -212,6 +212,7 @@ final class AppState: ObservableObject {
     /// command off the main actor and routes the result back.
     private func beginTranscription() {
         captureState = .transcribing   // D-10: show transcribing state immediately
+        flushPendingAnnouncements()    // D-02/D-03: drain announcements deferred during .recording
         transcriptError = nil           // clear stale error from prior attempt
 
         guard let wavURL = audioRecorder.latestWavURL else {
@@ -223,12 +224,13 @@ final class AppState: ObservableObject {
         Task {
             do {
                 let text = try await onRunTranscription(wavURL)
-                await MainActor.run {
-                    self.transcript = text
-                    NSLog("MakeAnIssue transcript: \(text)")   // D-09
-                    // .finished is transient — immediately flow into filing (Open Q2 / accepted_v1_behavior).
-                    self.captureState = .finished
-                    self.beginFiling()
+                self.transcript = text
+                NSLog("MakeAnIssue transcript: \(text)")
+                self.captureState = .idle   // D-08: capture returns to idle immediately (CONCUR-01)
+                if let repo = self.boundRepo {
+                    self.spawnFilingJob(transcript: text, repo: repo)
+                } else {
+                    self.statusText = "No repository bound — cannot file"
                 }
             } catch let error as TranscriberError {
                 let message = Self.message(for: error)
@@ -248,50 +250,72 @@ final class AppState: ObservableObject {
         }
     }
 
-    /// Transition into issue filing, mirroring the `beginTranscription` Task structure.
+    /// Spawns an independent filing job for the given transcript and repo.
     ///
-    /// Called on the MainActor immediately after `transcript` is set. Requires a bound repo —
-    /// if none is bound, surfaces a status message and returns to `.idle` so the next
-    /// push-to-talk works. On success, speaks "created issue #N" and returns to `.idle`.
-    /// On failure, sets `statusText` and returns to `.idle`.
-    private func beginFiling() {
-        guard let repo = boundRepo else {
-            statusText = "No repository bound — cannot file"
-            captureState = .idle
-            return
-        }
-        guard let transcript = transcript else {
-            statusText = "No transcript available — cannot file"
-            captureState = .idle
-            return
-        }
-        captureState = .filing   // synchronous transition visible to callers
+    /// Generalizes the former `beginFiling()` single-Task pattern to N concurrent jobs (CONCUR-02).
+    /// `transcript` and `repo` are captured by value from the function parameters — never read
+    /// from `self` properties after an `await` (Pitfall 1). Uses `[weak self]` to avoid a retain
+    /// cycle (Pitfall 4). The Task inherits `@MainActor` isolation from the calling context —
+    /// no `await MainActor.run {}` is needed inside (Pitfall 2).
+    private func spawnFilingJob(transcript: String, repo: RepoBinding) {
+        let id = UUID()
+        jobs.append(FilingJob(id: id, transcript: transcript, repo: repo, state: .filing))
 
-        Task {
+        let task = Task { [weak self, id, transcript, repo] in
+            guard let self else { return }
             do {
                 let result = try await onRunIssueFiling(transcript, repo)
-                await MainActor.run {
-                    let text = "created issue #\(result.number)"
-                    if let onSpeak = self.onSpeak {
-                        onSpeak(text)
-                    } else {
-                        self.speak(text)
-                    }
-                    self.captureState = .idle
+                // @MainActor-inherited Task — no MainActor.run needed after await.
+                if let idx = self.jobs.firstIndex(where: { $0.id == id }) {
+                    self.jobs[idx].state = .done
+                    self.jobs[idx].result = result
                 }
-            } catch let error as IssueFilingError {
-                let message = Self.message(for: error)
-                await MainActor.run {
-                    self.statusText = message
-                    self.captureState = .idle
+                self.announce("created issue #\(result.number)")   // D-01
+            } catch let filingError as IssueFilingError {
+                if let idx = self.jobs.firstIndex(where: { $0.id == id }) {
+                    self.jobs[idx].state = .failed
+                    self.jobs[idx].error = filingError
                 }
+                self.announce("issue filing failed")   // D-04
             } catch {
-                let message = "Filing failed — \(error.localizedDescription)"
-                await MainActor.run {
-                    self.statusText = message
-                    self.captureState = .idle
+                if let idx = self.jobs.firstIndex(where: { $0.id == id }) {
+                    self.jobs[idx].state = .failed
                 }
+                self.announce("issue filing failed")   // D-04
             }
+        }
+
+        // Store the task handle for Phase 6 cancellation (forward-prep).
+        if let idx = jobs.firstIndex(where: { $0.id == id }) {
+            jobs[idx].task = task
+        }
+    }
+
+    /// Speak text now if mic is not active; defer to `pendingAnnouncements` if recording (D-02/D-03).
+    private func announce(_ text: String) {
+        if captureState == .recording {
+            pendingAnnouncements.append(text)
+        } else {
+            speakText(text)
+        }
+    }
+
+    /// Drain all deferred announcements through TTS (D-02/D-03).
+    private func flushPendingAnnouncements() {
+        let pending = pendingAnnouncements
+        pendingAnnouncements = []
+        for text in pending {
+            speakText(text)
+        }
+    }
+
+    /// Routes through the `onSpeak` seam when set, otherwise calls the real TTS.
+    /// Consolidates the seam-routing check in one place (preserves test injection).
+    private func speakText(_ text: String) {
+        if let onSpeak = onSpeak {
+            onSpeak(text)
+        } else {
+            speak(text)
         }
     }
 
