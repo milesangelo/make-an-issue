@@ -9,9 +9,9 @@ Requirements for this milestone. Each maps to a roadmap phase. (v1.0 requirement
 
 ### Concurrent Filing (CONCUR)
 
-- [ ] **CONCUR-01**: After transcription completes, the app returns to idle immediately so the user can start a new recording without waiting for the current filing to finish.
-- [ ] **CONCUR-02**: Multiple issue filings run concurrently in the background — a second (and third) request can be in flight while the first is still filing.
-- [ ] **CONCUR-03**: Each filing independently speaks its own "created issue #N" confirmation when it completes, regardless of what the user is doing at the time.
+- [x] **CONCUR-01**: After transcription completes, the app returns to idle immediately so the user can start a new recording without waiting for the current filing to finish.
+- [x] **CONCUR-02**: Multiple issue filings run concurrently in the background — a second (and third) request can be in flight while the first is still filing.
+- [x] **CONCUR-03**: Each filing independently speaks its own "created issue #N" confirmation when it completes, regardless of what the user is doing at the time.
 
 ### Stop / Cancel (CANCEL)
 
@@ -79,9 +79,9 @@ Which phases cover which requirements. Filled during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CONCUR-01 | Phase 5 | Pending |
-| CONCUR-02 | Phase 5 | Pending |
-| CONCUR-03 | Phase 5 | Pending |
+| CONCUR-01 | Phase 5 | Complete |
+| CONCUR-02 | Phase 5 | Complete |
+| CONCUR-03 | Phase 5 | Complete |
 | CANCEL-01 | Phase 6 | Pending |
 | CANCEL-02 | Phase 6 | Pending |
 | CANCEL-03 | Phase 6 | Pending |
@@ -96,6 +96,7 @@ Which phases cover which requirements. Filled during roadmap creation.
 | FEEDBACK-02 | Phase 7 | Pending |
 
 **Coverage:**
+
 - v1.1 requirements: 15 total
 - Mapped to phases: 15 ✓
 - Unmapped: 0 ✓

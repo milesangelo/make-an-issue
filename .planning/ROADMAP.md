@@ -36,59 +36,77 @@ editable prompt / jobs list`. No new third-party dependencies.
 ## Phase Details
 
 ### Phase 5: Concurrent Filing Jobs Model
+
 **Goal**: A developer can fire off issue filings back-to-back — capture returns to idle the moment transcription completes, and multiple filings run concurrently in the background, each announcing its own result.
 **Depends on**: Phase 4 (v1.0 filing pipeline)
 **Requirements**: CONCUR-01, CONCUR-02, CONCUR-03
 **Success Criteria** (what must be TRUE):
+
   1. After transcription completes, the app returns to idle immediately — the user can hold the shortcut and start a new recording without waiting for the prior filing to finish.
   2. Two or more filings can be in flight at the same time (a second and third dictation begin filing while the first is still running).
   3. Each filing independently speaks its own "created issue #N" confirmation when it completes, regardless of what the user is doing.
   4. Per-invocation MCP tempfile isolation is preserved across concurrent jobs — no shared-state collision between simultaneous filings.
-**Plans**: TBD
+
+**Plans**: 1/2 plans executed
+
+- [x] 05-01-PLAN.md
+- [ ] 05-02-PLAN.md
 
 ### Phase 6: Cancellation / Stop Control
+
 **Goal**: A developer can abort a bad in-flight filing cleanly, and quitting the app never leaves orphaned processes or leaked Docker containers behind.
 **Depends on**: Phase 5 (per-job model + cancel handles)
 **Requirements**: CANCEL-01, CANCEL-02, CANCEL-03
 **Success Criteria** (what must be TRUE):
+
   1. Stopping an in-flight filing terminates the full `claude → docker` process tree — no orphaned `claude` process and no leaked `--rm` container remain (verifiable via `pgrep -f claude` / `docker ps`).
   2. A cancelled filing surfaces a "filing cancelled" outcome (spoken + status), removes the job, and files no issue.
   3. Quitting the app while filings are in flight terminates their subprocesses and removes their per-invocation MCP tempfiles, leaving no orphans.
   4. Cancelling or quitting never triggers a double-resume crash or a hung "Filing…" job — the single-resume continuation invariant holds.
+
 **Plans**: TBD
 
 ### Phase 7: AppKit Status-Item UI + Settings Window Shell
+
 **Goal**: Right-clicking the menu-bar icon opens a Settings/Quit menu while left-click keeps the status popover, and the icon itself shows a live recording indicator — all on a self-owned AppKit shell that works across macOS 13–15.
 **Depends on**: Phase 5 (popover binds the jobs model)
 **Requirements**: SETTINGS-01, FEEDBACK-02
 **Success Criteria** (what must be TRUE):
+
   1. Right-clicking the menu-bar icon opens a menu with "Settings…" and "Quit"; left-clicking still opens the status popover.
   2. Choosing "Settings…" opens a focusable Settings window (an empty shell is acceptable this phase) that can take keyboard focus in the accessory (LSUIElement) app.
   3. While push-to-talk is held and recording is live, the menu-bar icon shows an active-recording indicator (tinted/highlighted button or recording symbol) visible with the popover closed, and reverts when recording stops.
   4. The global push-to-talk shortcut continues to fire reliably across popover/menu open-close cycles with another app focused.
+
 **Plans**: TBD
 **UI hint**: yes
 
 ### Phase 8: Editable System Prompt + FINDING-06 Cleanup
+
 **Goal**: A developer can tune how the AI drafts issues through an editable instructions field in Settings — without ever being able to break the enforced tool-scope + issue-URL contract — and the orphaned "CLI Command" field is resolved.
 **Depends on**: Phase 7 (Settings window shell), Phase 5/6 (`instructions:` plumbing through IssueFilingRunner)
 **Requirements**: SETTINGS-02, SETTINGS-03, SETTINGS-04, SETTINGS-05
 **Success Criteria** (what must be TRUE):
+
   1. The Settings window exposes an editable field for the LLM investigation/drafting instructions, and its contents persist across app launches.
   2. A "Reset to Default" control restores the shipped default prompt instructions.
   3. No matter what the user types, the app still appends the scoped `--allowedTools` grant and the "Issue URL on the last line" instruction — so issue-number parsing and tool scoping cannot be broken by edits (the editable field is instructions-only; flags and the enforced trailer live outside it).
   4. The orphaned "CLI Command" field (FINDING-06) is relocated into Settings (wired or removed), with no false affordance left in the menu.
+
 **Plans**: TBD
 **UI hint**: yes
 
 ### Phase 9: Jobs List UI + Per-Job Stop + Surfaced Errors
+
 **Goal**: The menu surfaces every active filing as a live job row with its state and a Stop button, and a failed filing persists as a visible, recoverable error instead of silently disappearing.
 **Depends on**: Phase 5 (jobs model), Phase 6 (cancel path), Phase 7 (popover shell)
 **Requirements**: JOBS-01, JOBS-02, RESIL-01
 **Success Criteria** (what must be TRUE):
+
   1. The menu shows a list of active filing jobs, each with its state (filing / done / failed / cancelled) and an activity indicator.
   2. Each active job row has a Stop control that cancels that specific job (the UI surface for CANCEL-01).
   3. A failed filing surfaces a recoverable error — spoken (the popover is usually closed) and shown as a persistent job row with the message and originating transcript — that remains until the user dismisses it.
+
 **Plans**: TBD
 **UI hint**: yes
 
@@ -100,7 +118,7 @@ editable prompt / jobs list`. No new third-party dependencies.
 | 2. Push-to-Talk Voice Capture | v1.0 | 2/2 | Complete | 2026-06-24 |
 | 3. Local Transcription | v1.0 | 5/5 | Complete | 2026-06-26 |
 | 4. Voice → AI CLI Files Issue via MCP + Spoken Confirmation | v1.0 | 5/5 | Complete | 2026-06-26 |
-| 5. Concurrent Filing Jobs Model | v1.1 | 0/? | Not started | - |
+| 5. Concurrent Filing Jobs Model | v1.1 | 1/2 | In Progress|  |
 | 6. Cancellation / Stop Control | v1.1 | 0/? | Not started | - |
 | 7. AppKit Status-Item UI + Settings Window Shell | v1.1 | 0/? | Not started | - |
 | 8. Editable System Prompt + FINDING-06 Cleanup | v1.1 | 0/? | Not started | - |
