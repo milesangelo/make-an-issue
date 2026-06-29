@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Concurrent Filing & Control
-current_phase: 6
-current_phase_name: Cancellation / Stop Control
+current_phase: 06
+current_phase_name: cancellation-stop-control
 status: executing
 stopped_at: Phase 6 context gathered
-last_updated: "2026-06-29T22:31:55.730Z"
+last_updated: "2026-06-29T22:49:10.086Z"
 last_activity: 2026-06-29
-last_activity_desc: Phase 05 complete, transitioned to Phase 6
+last_activity_desc: Phase 06 execution started
 progress:
   total_phases: 5
   completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
+  total_plans: 6
+  completed_plans: 3
   percent: 20
 ---
 
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-28)
 
 **Core value:** Capture a repo-aware tracker issue (GitHub or Jira) by voice in seconds — spoken word to filed issue, end to end.
-**Current focus:** Phase 05 — concurrent-filing-jobs-model
+**Current focus:** Phase 06 — cancellation-stop-control
 
 ## Current Position
 
-Phase: 6 — Cancellation / Stop Control
-Plan: Not started
+Phase: 06 (cancellation-stop-control) — EXECUTING
+Plan: 2 of 4
 Status: Ready to execute
-Last activity: 2026-06-29 — Phase 05 complete, transitioned to Phase 6
+Last activity: 2026-06-29 — Phase 06 execution started
 
 ## Accumulated Context
 
@@ -63,6 +63,9 @@ Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecti
 - [Phase ?]: Phase 03-05: MODEL_SHA256 pinned to content digest c6138d6d...1e5d
 - [Phase ?]: Phase 03-05: install_name_tool reads LC_RPATH dynamically via otool/awk (no hardcoded home path)
 - [Phase ?]: jobs model
+- [Phase 06]: A1 confirmed: Foundation.Process spawns /bin/zsh children as their own process-group leaders — kill(-pgid) approach is safe
+- [Phase 06]: A2 confirmed: spawned child group is distinct from app group — group-directed signal stays in child tree
+- [Phase 06]: Negative-PID reap confirmed: kill(-pid, SIGTERM) reaps the spawned process group on macOS within 3s
 
 ### Pending Todos
 
@@ -87,7 +90,7 @@ Open items carried into the v1.1 milestone:
 
 ## Session Continuity
 
-Last session: 2026-06-29T21:26:05.230Z
+Last session: 2026-06-29T22:48:34.464Z
 Stopped at: Phase 6 context gathered
 Resume file: .planning/phases/06-cancellation-stop-control/06-CONTEXT.md
 Decision record: .planning/research/SUMMARY.md (v1.1 research)
@@ -110,6 +113,7 @@ Decision record: .planning/research/SUMMARY.md (v1.1 research)
 | Phase 04 P05 | 4m | 3 tasks | 2 files |
 | Phase 05 P01 | 549s | 3 tasks | 5 files |
 | Phase 05 P02 | 845 | 3 tasks | 1 files |
+| Phase 06 P01 | 225s | 2 tasks | 2 files |
 
 ## Operator Next Steps
 

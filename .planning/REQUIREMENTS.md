@@ -15,9 +15,9 @@ Requirements for this milestone. Each maps to a roadmap phase. (v1.0 requirement
 
 ### Stop / Cancel (CANCEL)
 
-- [ ] **CANCEL-01**: User can stop an in-flight filing, which terminates its subprocess and the full `claude → docker` process tree — no orphaned `claude` process or leaked `--rm` Docker container.
-- [ ] **CANCEL-02**: A cancelled filing surfaces a "filing cancelled" outcome (spoken + status) and removes the job; no issue is filed.
-- [ ] **CANCEL-03**: Quitting the app while filings are in flight cleans up their subprocesses and per-invocation MCP tempfiles (no orphans left behind).
+- [x] **CANCEL-01**: User can stop an in-flight filing, which terminates its subprocess and the full `claude → docker` process tree — no orphaned `claude` process or leaked `--rm` Docker container.
+- [x] **CANCEL-02**: A cancelled filing surfaces a "filing cancelled" outcome (spoken + status) and removes the job; no issue is filed.
+- [x] **CANCEL-03**: Quitting the app while filings are in flight cleans up their subprocesses and per-invocation MCP tempfiles (no orphans left behind).
 
 ### Settings & Editable Prompt (SETTINGS)
 
@@ -82,9 +82,9 @@ Which phases cover which requirements. Filled during roadmap creation.
 | CONCUR-01 | Phase 5 | Complete |
 | CONCUR-02 | Phase 5 | Complete |
 | CONCUR-03 | Phase 5 | Complete |
-| CANCEL-01 | Phase 6 | Pending |
-| CANCEL-02 | Phase 6 | Pending |
-| CANCEL-03 | Phase 6 | Pending |
+| CANCEL-01 | Phase 6 | Complete |
+| CANCEL-02 | Phase 6 | Complete |
+| CANCEL-03 | Phase 6 | Complete |
 | SETTINGS-01 | Phase 7 | Pending |
 | SETTINGS-02 | Phase 8 | Pending |
 | SETTINGS-03 | Phase 8 | Pending |
