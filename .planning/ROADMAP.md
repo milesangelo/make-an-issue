@@ -118,7 +118,7 @@ editable prompt / jobs list`. No new third-party dependencies.
 | 2. Push-to-Talk Voice Capture | v1.0 | 2/2 | Complete | 2026-06-24 |
 | 3. Local Transcription | v1.0 | 5/5 | Complete | 2026-06-26 |
 | 4. Voice → AI CLI Files Issue via MCP + Spoken Confirmation | v1.0 | 5/5 | Complete | 2026-06-26 |
-| 5. Concurrent Filing Jobs Model | v1.1 | 2/2 | Complete   | 2026-06-29 |
+| 5. Concurrent Filing Jobs Model | v1.1 | 2/2 | Complete    | 2026-06-29 |
 | 6. Cancellation / Stop Control | v1.1 | 0/? | Not started | - |
 | 7. AppKit Status-Item UI + Settings Window Shell | v1.1 | 0/? | Not started | - |
 | 8. Editable System Prompt + FINDING-06 Cleanup | v1.1 | 0/? | Not started | - |
