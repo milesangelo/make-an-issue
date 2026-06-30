@@ -108,11 +108,14 @@ struct IssueFilingRunner {
     ///   - `.cliFailed(exitCode:stderr:)` — AI CLI exited non-zero.
     ///   - `.permissionDenied(tools:)` — exit 0 but `permission_denials` non-empty.
     ///   - `.parseFailed` — AI CLI exited 0 but no parseable issue URL found.
+    ///   - `CancellationError` — the enclosing Task was cancelled; the MCP tempfile
+    ///     is still removed by the existing `defer` on this throw path (CANCEL-02).
     static func file(
         transcript: String,
         repo: RepoBinding,
         config: IssueFilingConfig = .claudeGitHub,
-        ownerRepo: String? = nil
+        ownerRepo: String? = nil,
+        onProcessStarted: (@Sendable (pid_t) -> Void)? = nil
     ) async throws -> IssueFilingResult {
 
         // Step 1: Acquire token — env-var-first (Open Q3 / AUTH-01).
@@ -158,12 +161,22 @@ struct IssueFilingRunner {
         // - cwd = repo.rootURL (ANALYZE-01 — model investigates real code).
         // - Token in environment, never in the command string (AUTH-01 / Pitfall 2).
         // - 300s timeout (Pitfall 7 — AI-CLI path is far slower than transcription).
+        // - onSpawn forwarded so the caller can store the pgid for quit-time SIGKILL (CANCEL-03).
         let result = await CLIRunner().run(
             command: command,
             workingDirectory: repo.rootURL,
             environment: [config.tokenEnvKey: token],
-            timeout: .seconds(300)
+            timeout: .seconds(300),
+            onSpawn: onProcessStarted
         )
+
+        // Surface CancellationError before interpreting the CLI result. If the enclosing
+        // Task was cancelled, CLIRunner's onCancel will have sent SIGTERM to the process
+        // group; the process exits and terminationHandler delivers a .failed result. We
+        // throw CancellationError here instead of treating the forced-exit as a real
+        // filing outcome. The defer { removeItem(tempURL) } above still runs on this
+        // throw path, so the MCP tempfile is cleaned up on cancel (CANCEL-02).
+        try Task.checkCancellation()
 
         // Step 5: Map CLIResult → IssueFilingResult (mirrors Transcriber.run switch shape).
         switch result {

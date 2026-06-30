@@ -33,4 +33,7 @@ struct FilingJob: Identifiable {
     var error: IssueFilingError?
     /// Cancellation handle for Phase 6. Stored here; `.cancel()` is wired in Phase 6.
     var task: Task<Void, Never>?
+    /// Process group id of the filing subprocess. Set by AppState once CLIRunner starts
+    /// (06-03); read for quit-time SIGKILL in AppDelegate.forceKillAllProcessTrees() (06-04).
+    var processGroupID: pid_t?
 }
