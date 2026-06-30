@@ -1,4 +1,6 @@
 import AppKit
+import Combine
+import SwiftUI
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -6,8 +8,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private let launchRequestStore = LaunchRequestStore()
 
+    // Phase 7 additions — AppKit status-item shell
+    private var statusItem: NSStatusItem!           // must be stored property; local var = released + icon vanishes
+    private let popover = NSPopover()
+    private var cancellables = Set<AnyCancellable>()
+    private var settingsWindowController: NSWindowController?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         consumeLatestLaunchRequest()
+        setUpStatusItem()                       // NEW
+        observeCaptureStateForIndicator()       // NEW — after setUpStatusItem so contentView hierarchy exists
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -64,5 +74,97 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } catch {
             NSLog("MakeAnIssue: failed to consume launch request: \(error.localizedDescription)")
         }
+    }
+
+    // MARK: - Status Item Shell (Phase 7)
+
+    private func setUpStatusItem() {
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        statusItem.button?.image = NSImage(systemSymbolName: "exclamationmark.bubble",
+                                           accessibilityDescription: "Make an Issue")
+        statusItem.button?.target = self
+        statusItem.button?.action = #selector(statusItemClicked(_:))
+        statusItem.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
+
+        popover.behavior = .transient
+        popover.contentViewController = NSHostingController(
+            rootView: MenuView().environmentObject(appState))
+    }
+
+    @objc private func statusItemClicked(_ sender: NSStatusBarButton) {
+        guard let event = NSApp.currentEvent else { return }
+        let isRightClick = event.type == .rightMouseUp
+            || (event.type == .leftMouseUp && event.modifierFlags.contains(.control))
+        if isRightClick {
+            showRightClickMenu()
+        } else {
+            togglePopover(sender)
+        }
+    }
+
+    private func togglePopover(_ sender: NSStatusBarButton) {
+        if popover.isShown {
+            popover.performClose(nil)
+        } else {
+            NSApp.activate(ignoringOtherApps: true)
+            popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .minY)
+        }
+    }
+
+    @objc private func showRightClickMenu() {
+        let menu = NSMenu()
+        let settingsItem = NSMenuItem(title: "Settings\u{2026}",
+                                      action: #selector(showSettingsWindow),
+                                      keyEquivalent: ",")
+        settingsItem.target = self
+        menu.addItem(settingsItem)
+        menu.addItem(.separator())
+        let quitItem = NSMenuItem(title: "Quit",
+                                  action: #selector(NSApplication.terminate(_:)),
+                                  keyEquivalent: "q")
+        menu.addItem(quitItem)
+        // assign-popUp-clear: positions menu correctly; clears so button.action fires next left-click
+        statusItem.menu = menu
+        statusItem.button?.performClick(nil)
+        statusItem.menu = nil
+    }
+
+    @objc private func showSettingsWindow() {
+        if let controller = settingsWindowController, controller.window?.isVisible == true {
+            NSApp.activate(ignoringOtherApps: true)
+            controller.window?.makeKeyAndOrderFront(nil)
+            return
+        }
+        let hostingController = NSHostingController(
+            rootView: SettingsView().environmentObject(appState))
+        let window = NSWindow(contentViewController: hostingController)
+        window.title = "Settings"
+        window.styleMask = [.titled, .closable, .miniaturizable]
+        window.center()
+        let controller = NSWindowController(window: window)
+        settingsWindowController = controller
+        NSApp.activate(ignoringOtherApps: true)   // BEFORE makeKeyAndOrderFront (Pitfall 8/9)
+        controller.showWindow(nil)
+        window.makeKeyAndOrderFront(nil)
+    }
+
+    // MARK: - Recording Indicator (Phase 7, FEEDBACK-02)
+
+    private func observeCaptureStateForIndicator() {
+        appState.$captureState
+            .receive(on: RunLoop.main)
+            .sink { [weak self] state in
+                self?.updateRecordingIndicator(state == .recording)
+            }
+            .store(in: &cancellables)
+    }
+
+    private func updateRecordingIndicator(_ isRecording: Bool) {
+        let contentView = statusItem.button?.superview?.window?.contentView
+        contentView?.wantsLayer = true
+        contentView?.layer?.backgroundColor = isRecording
+            ? NSColor.systemRed.withAlphaComponent(0.3).cgColor
+            : NSColor.clear.cgColor
+        contentView?.layer?.cornerRadius = 4
     }
 }
