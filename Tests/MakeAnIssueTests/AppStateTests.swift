@@ -317,7 +317,7 @@ final class AppStateTests: XCTestCase {
             onStartRecording: { true },
             onStopRecording: {},
             onRunTranscription: { _ in "Hello world" },
-            onRunIssueFiling: { _, _ in
+            onRunIssueFiling: { _, _, _ in
                 IssueFilingResult(number: 1, url: "https://github.com/o/r/issues/1")
             }
         )
@@ -409,7 +409,7 @@ final class AppStateTests: XCTestCase {
             onStartRecording: { true },
             onStopRecording: {},
             onRunTranscription: { _ in "file this bug" },
-            onRunIssueFiling: { transcript, repo in
+            onRunIssueFiling: { transcript, repo, _ in
                 capturedTranscript = transcript
                 capturedRepo = repo
                 return IssueFilingResult(number: 42, url: "https://github.com/owner/repo/issues/42")
@@ -435,7 +435,7 @@ final class AppStateTests: XCTestCase {
             onStartRecording: { true },
             onStopRecording: {},
             onRunTranscription: { _ in "create issue" },
-            onRunIssueFiling: { _, _ in
+            onRunIssueFiling: { _, _, _ in
                 IssueFilingResult(number: 42, url: "https://github.com/owner/repo/issues/42")
             },
             onSpeak: { text in spokenText = text }
@@ -462,7 +462,7 @@ final class AppStateTests: XCTestCase {
             onStartRecording: { true },
             onStopRecording: {},
             onRunTranscription: { _ in "create issue" },
-            onRunIssueFiling: { _, _ in
+            onRunIssueFiling: { _, _, _ in
                 IssueFilingResult(number: 7, url: "https://github.com/owner/repo/issues/7")
             }
         )
@@ -484,7 +484,7 @@ final class AppStateTests: XCTestCase {
             onStartRecording: { true },
             onStopRecording: {},
             onRunTranscription: { _ in "create issue" },
-            onRunIssueFiling: { _, _ in throw IssueFilingError.timeout }
+            onRunIssueFiling: { _, _, _ in throw IssueFilingError.timeout }
         )
         state.micPermissionGranted = true
         state.startRecording()
@@ -508,7 +508,7 @@ final class AppStateTests: XCTestCase {
             onStartRecording: { true },
             onStopRecording: {},
             onRunTranscription: { _ in "create issue" },
-            onRunIssueFiling: { _, _ in throw IssueFilingError.tokenAcquisitionFailed },
+            onRunIssueFiling: { _, _, _ in throw IssueFilingError.tokenAcquisitionFailed },
             onSpeak: { text in spokenText = text }
         )
         state.micPermissionGranted = true
@@ -536,7 +536,7 @@ final class AppStateTests: XCTestCase {
             onStartRecording: { true },
             onStopRecording: {},
             onRunTranscription: { _ in "create issue" },
-            onRunIssueFiling: { _, _ in throw IssueFilingError.parseFailed },
+            onRunIssueFiling: { _, _, _ in throw IssueFilingError.parseFailed },
             onSpeak: { text in spokenText = text }
         )
         state.micPermissionGranted = true
@@ -561,7 +561,7 @@ final class AppStateTests: XCTestCase {
             onStartRecording: { true },
             onStopRecording: {},
             onRunTranscription: { _ in "create issue" },
-            onRunIssueFiling: { _, _ in
+            onRunIssueFiling: { _, _, _ in
                 filingCalled = true
                 return IssueFilingResult(number: 1, url: "https://github.com/o/r/issues/1")
             }
@@ -590,7 +590,7 @@ final class AppStateTests: XCTestCase {
             onStartRecording: { true },
             onStopRecording: {},
             onRunTranscription: { _ in "persistent transcript" },
-            onRunIssueFiling: { _, _ in
+            onRunIssueFiling: { _, _, _ in
                 IssueFilingResult(number: 5, url: "https://github.com/owner/repo/issues/5")
             }
         )
@@ -617,7 +617,7 @@ final class AppStateTests: XCTestCase {
             onStartRecording: { true },
             onStopRecording: {},
             onRunTranscription: { _ in "file me" },
-            onRunIssueFiling: { _, _ in
+            onRunIssueFiling: { _, _, _ in
                 try? await Task.sleep(for: .milliseconds(300))
                 return IssueFilingResult(number: 99, url: "https://github.com/owner/repo/issues/99")
             }
@@ -651,7 +651,7 @@ final class AppStateTests: XCTestCase {
             onStartRecording: { true },
             onStopRecording: {},
             onRunTranscription: { _ in "file this bug" },
-            onRunIssueFiling: { _, _ in
+            onRunIssueFiling: { _, _, _ in
                 // Slow enough that we can observe jobs[0].state == .filing and attempt PTT re-entry.
                 try? await Task.sleep(for: .milliseconds(300))
                 return IssueFilingResult(number: 1, url: "https://github.com/o/r/issues/1")
@@ -712,7 +712,7 @@ final class AppStateTests: XCTestCase {
             onStartRecording: { true },
             onStopRecording: {},
             onRunTranscription: { _ in "concur test transcript" },
-            onRunIssueFiling: { _, _ in
+            onRunIssueFiling: { _, _, _ in
                 // Slow stub keeps jobs[0].state == .filing long enough to observe concurrency.
                 try? await Task.sleep(for: .milliseconds(300))
                 return IssueFilingResult(number: 1, url: "https://github.com/o/r/issues/1")
@@ -740,7 +740,7 @@ final class AppStateTests: XCTestCase {
             onStartRecording: { true },
             onStopRecording: {},
             onRunTranscription: { _ in "first recording" },
-            onRunIssueFiling: { _, _ in
+            onRunIssueFiling: { _, _, _ in
                 try? await Task.sleep(for: .milliseconds(300))
                 return IssueFilingResult(number: 2, url: "https://github.com/o/r/issues/2")
             }
@@ -770,7 +770,7 @@ final class AppStateTests: XCTestCase {
             onStartRecording: { startCallCount += 1; return true },
             onStopRecording: {},
             onRunTranscription: { _ in "ptt transcript" },
-            onRunIssueFiling: { _, _ in
+            onRunIssueFiling: { _, _, _ in
                 try? await Task.sleep(for: .milliseconds(300))
                 return IssueFilingResult(number: 3, url: "https://github.com/o/r/issues/3")
             }
@@ -802,7 +802,7 @@ final class AppStateTests: XCTestCase {
                 defer { transcriptionCallCount += 1 }
                 return "transcript \(transcriptionCallCount + 1)"
             },
-            onRunIssueFiling: { _, _ in
+            onRunIssueFiling: { _, _, _ in
                 // Long sleep keeps both jobs in-flight simultaneously.
                 try? await Task.sleep(for: .milliseconds(500))
                 return IssueFilingResult(number: 1, url: "https://github.com/o/r/issues/1")
@@ -849,7 +849,7 @@ final class AppStateTests: XCTestCase {
                 defer { callIndex += 1 }
                 return expectedTranscripts[callIndex]
             },
-            onRunIssueFiling: { _, _ in
+            onRunIssueFiling: { _, _, _ in
                 try? await Task.sleep(for: .milliseconds(500))
                 return IssueFilingResult(number: 1, url: "https://github.com/o/r/issues/1")
             }
@@ -883,7 +883,7 @@ final class AppStateTests: XCTestCase {
             onStartRecording: { true },
             onStopRecording: {},
             onRunTranscription: { _ in "create issue" },
-            onRunIssueFiling: { _, _ in
+            onRunIssueFiling: { _, _, _ in
                 IssueFilingResult(number: 42, url: "https://github.com/owner/repo/issues/42")
             },
             onSpeak: { text in spokenTexts.append(text) }
@@ -917,7 +917,7 @@ final class AppStateTests: XCTestCase {
             onStartRecording: { true },
             onStopRecording: {},
             onRunTranscription: { _ in "create issue" },
-            onRunIssueFiling: { _, _ in throw IssueFilingError.timeout },
+            onRunIssueFiling: { _, _, _ in throw IssueFilingError.timeout },
             onSpeak: { text in spokenTexts.append(text) }
         )
         state.micPermissionGranted = true
@@ -945,7 +945,7 @@ final class AppStateTests: XCTestCase {
             onStartRecording: { true },
             onStopRecording: {},
             onRunTranscription: { _ in "deferred announcement transcript" },
-            onRunIssueFiling: { _, _ in
+            onRunIssueFiling: { _, _, _ in
                 // Short enough that the job completes while the second recording is active.
                 try? await Task.sleep(for: .milliseconds(100))
                 return IssueFilingResult(number: 10, url: "https://github.com/o/r/issues/10")
@@ -984,7 +984,7 @@ final class AppStateTests: XCTestCase {
             onStartRecording: { true },
             onStopRecording: {},
             onRunTranscription: { _ in "flush test transcript" },
-            onRunIssueFiling: { _, _ in
+            onRunIssueFiling: { _, _, _ in
                 try? await Task.sleep(for: .milliseconds(100))
                 return IssueFilingResult(number: 11, url: "https://github.com/o/r/issues/11")
             },
@@ -1030,7 +1030,7 @@ final class AppStateTests: XCTestCase {
             onStartRecording: { true },
             onStopRecording: {},
             onRunTranscription: { _ in "retained transcript" },
-            onRunIssueFiling: { _, _ in
+            onRunIssueFiling: { _, _, _ in
                 IssueFilingResult(number: 20, url: "https://github.com/o/r/issues/20")
             }
         )
@@ -1055,7 +1055,7 @@ final class AppStateTests: XCTestCase {
             onStartRecording: { true },
             onStopRecording: {},
             onRunTranscription: { _ in "failed transcript" },
-            onRunIssueFiling: { _, _ in throw IssueFilingError.timeout }
+            onRunIssueFiling: { _, _, _ in throw IssueFilingError.timeout }
         )
         state.micPermissionGranted = true
         state.startRecording()
@@ -1084,7 +1084,7 @@ final class AppStateTests: XCTestCase {
                 defer { transcriptionCallCount += 1 }
                 return "transcript \(transcriptionCallCount + 1)"
             },
-            onRunIssueFiling: { _, _ in
+            onRunIssueFiling: { _, _, _ in
                 // Each invocation captures its own issue number before suspending,
                 // proving the two concurrent tasks do not share per-invocation state.
                 filingCallCount += 1
@@ -1130,7 +1130,7 @@ final class AppStateTests: XCTestCase {
             onStartRecording: { true },
             onStopRecording: {},
             onRunTranscription: { _ in "a transcript" },
-            onRunIssueFiling: { _, _ in
+            onRunIssueFiling: { _, _, _ in
                 try? await Task.sleep(for: .milliseconds(300))
                 return IssueFilingResult(number: 7, url: "https://github.com/o/r/issues/7")
             }
@@ -1162,7 +1162,7 @@ final class AppStateTests: XCTestCase {
             onStartRecording: { true },
             onStopRecording: {},
             onRunTranscription: { _ in "create an issue" },
-            onRunIssueFiling: { _, _ in
+            onRunIssueFiling: { _, _, _ in
                 IssueFilingResult(number: 42, url: "https://github.com/o/r/issues/42")
             },
             onSpeak: { text in spokenText = text }
