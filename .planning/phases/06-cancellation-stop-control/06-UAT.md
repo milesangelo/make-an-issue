@@ -1,5 +1,5 @@
 ---
-status: complete
+status: diagnosed
 phase: 06-cancellation-stop-control
 source: [06-VERIFICATION.md]
 started: 2026-06-30T02:45:23Z
@@ -22,6 +22,9 @@ expected: Run the app, start a real filing, then quit mid-flight while the job i
 result: issue
 reported: "Quit while filing was in flight. claude subprocess (15665) gone and no github-mcp-server container — but a leftover MCP temp config file (make-an-issue-mcp-738D2182-...json, github docker launcher) remained in $TMPDIR after the app exited. sweepMCPTempFiles did not remove it on the .terminateLater quit path."
 severity: major
+resolution: fixed
+fix_commit: 30fd152
+fix_note: "Added synchronous Self.sweepMCPTempFiles() in applicationShouldTerminate before returning .terminateLater (AppDelegate.swift). Regression test testTerminateLaterSweepsMCPTempFileSynchronously verified red without fix, green with it; full suite 137 passing. Recommend re-running the manual ⌘Q-mid-flight gate to confirm in the real app."
 
 ## Summary
 
@@ -39,7 +42,12 @@ blocked: 0
   reason: "User reported: quit while filing in flight; claude subprocess and docker container were cleaned up, but a leftover make-an-issue-mcp-*.json temp config file remained in $TMPDIR after the app exited. sweepMCPTempFiles did not remove it on the .terminateLater quit path."
   severity: major
   test: 2
-  root_cause: ""
-  artifacts: []
-  missing: []
+  root_cause: "Confirmed via user: ⌘Q with a job actively in .filing state, so applicationShouldTerminate's slow path ran (cancelAll → .terminateLater → 2s grace → forceKillAllProcessTrees → sweepMCPTempFiles). Processes/container were cleaned (SIGTERM from cancelAll), but the MCP temp file survived. All cleanup is hung off an unstructured `Task { @MainActor in ... }` (AppDelegate.swift:25-30); sweepMCPTempFiles() is the LAST statement, after a 2s Task.sleep. During MenuBarExtra ⌘Q termination the process is reaped before that async Task resumes/completes its sweep — a timing race the unit test never exercises (it calls sweepMCPTempFiles(in:) directly, bypassing the quit Task). IssueFilingRunner's own `defer { removeItem }` (line 150) also did not win the race before teardown."
+  artifacts:
+    - path: "Sources/MakeAnIssue/AppDelegate.swift"
+      issue: "Quit-time MCP temp sweep only runs inside an async teardown Task after a 2s sleep; not guaranteed to complete before the app process is reaped on .terminateLater quit."
+  missing:
+    - "Run sweepMCPTempFiles() synchronously in applicationShouldTerminate before returning .terminateLater (immediate, race-free), keeping the post-grace sweep as a backstop."
+  status_after_fix: resolved
+  fix_commit: 30fd152
   debug_session: ""
