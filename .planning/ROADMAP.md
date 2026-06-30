@@ -90,7 +90,11 @@ editable prompt / jobs list`. No new third-party dependencies.
   3. While push-to-talk is held and recording is live, the menu-bar icon shows an active-recording indicator (tinted/highlighted button or recording symbol) visible with the popover closed, and reverts when recording stops.
   4. The global push-to-talk shortcut continues to fire reliably across popover/menu open-close cycles with another app focused.
 
-**Plans**: TBD
+**Plans**: 2 plans
+
+  - [ ] 07-01-PLAN.md — AppKit status-item shell (left-click popover / right-click Settings…/Quit), self-owned Settings window + relocated Recorder, recording indicator, MenuBarExtra→Settings{} scene swap (Wave 1)
+  - [ ] 07-02-PLAN.md — Popover cleanup: remove the relocated shortcut editor + the menu end-tracking workaround from MenuView; preserve CLI field + ShortcutPillView (Wave 2, depends on 07-01)
+
 **UI hint**: yes
 
 ### Phase 8: Editable System Prompt + FINDING-06 Cleanup
