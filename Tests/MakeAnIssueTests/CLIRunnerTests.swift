@@ -197,18 +197,73 @@ final class CLIRunnerTests: XCTestCase {
         )
     }
 
-    // MARK: - Cancel scaffolds (fleshed out in 06-02)
+    // MARK: - Cancel tests (06-02)
 
     func testCancelKillsProcessGroup() async throws {
-        // 06-02 will assert: cancelling the enclosing Task reaps the subprocess process
-        // group within the SIGTERM grace window (2s), with SIGKILL as fallback escalation.
-        throw XCTSkip("Pending — fleshed out in 06-02")
+        // Assert: cancelling the enclosing Task reaps the subprocess process group
+        // within the SIGTERM grace window (2s), with SIGKILL as fallback escalation.
+        // Uses onSpawn to capture the spawned pgid, then verifies kill(pgid,0) == ESRCH.
+
+        var capturedPGID: pid_t = 0
+
+        let task = Task {
+            await CLIRunner().run(
+                command: "sleep 30",
+                onSpawn: { pgid in capturedPGID = pgid }
+            )
+        }
+
+        // Wait for the process to start (pgid non-zero) before cancelling.
+        let waitDeadline = ContinuousClock.now + .seconds(3)
+        while capturedPGID == 0 && ContinuousClock.now < waitDeadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        let pgid = capturedPGID
+        XCTAssertGreaterThan(pgid, 0, "onSpawn must deliver a positive pgid; got 0 — did the spawn not happen?")
+
+        // Safety net: force-kill the group on any exit path (including assertion failure)
+        // so the 30-second sleep never lingers past this test.
+        defer { kill(-pgid, SIGKILL) }
+
+        // Cancel the task — this should trigger the onCancel handler → group SIGTERM.
+        task.cancel()
+
+        // Poll until kill(pgid, 0) returns ESRCH (process group no longer exists),
+        // with a bound slightly beyond the 2s grace window so the SIGKILL escalation
+        // can fire if SIGTERM is slow. 3s is generous for a plain `sleep` process.
+        let reapDeadline = ContinuousClock.now + .seconds(3)
+        var reaped = false
+        while ContinuousClock.now < reapDeadline {
+            if kill(pgid, 0) == -1 && errno == ESRCH {
+                reaped = true
+                break
+            }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+
+        XCTAssertTrue(
+            reaped,
+            "Process group \(pgid) was not reaped within 3s after Task.cancel(). " +
+            "withTaskCancellationHandler may not have sent the group SIGTERM."
+        )
     }
 
     func testCancelAndExitBoundaryResolvesExactlyOnce() async throws {
-        // 06-02 will assert: the cancel-vs-exit race resolves the CLIRunner continuation
-        // exactly once — no double-resume SWIFT TASK CONTINUATION MISUSE trap.
-        throw XCTSkip("Pending — fleshed out in 06-02")
+        // Stress the cancel-vs-natural-exit race: wrap each short-sleep run in a Task
+        // and cancel it near-immediately. A double-resume of the CheckedContinuation
+        // would trap with SWIFT TASK CONTINUATION MISUSE and crash this test process,
+        // so simply reaching the end of the loop proves the single-resume guard held
+        // under the cancel/exit race (SC-4 / onCancel never resumes the continuation).
+        for _ in 0..<40 {
+            let t = Task {
+                await CLIRunner().run(command: "sleep 0.05")
+            }
+            // Cancel near-immediately — races with the natural 50ms exit.
+            t.cancel()
+            // Await the task so any continuation-misuse trap surfaces in this test.
+            _ = await t.value
+        }
     }
 
     // MARK: - Working directory respected
