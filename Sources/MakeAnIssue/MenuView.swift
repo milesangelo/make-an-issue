@@ -61,16 +61,6 @@ struct MenuView: View {
             DisclosureGroup(isExpanded: $isSettingsExpanded) {
                 VStack(alignment: .leading, spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Push-to-Talk Shortcut")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.secondary)
-                        
-                        KeyboardShortcuts.Recorder("", name: .pushToTalk)
-                            .labelsHidden()
-                    }
-                    .padding(.top, 4)
-                    
-                    VStack(alignment: .leading, spacing: 4) {
                         Text("CLI Command")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(.secondary)
@@ -100,16 +90,6 @@ struct MenuView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
             updateShortcutText()
-        }
-        .onDisappear {
-            // KeyboardShortcuts pauses the global Carbon hotkey and falls back to a
-            // focus-only local key monitor whenever it believes a menu is open
-            // (HotKey `.menuOpen` mode). Opening this MenuBarExtra window fires
-            // NSMenu.didBeginTracking but no balanced didEndTracking on close, so
-            // `isMenuOpen` sticks true and push-to-talk stops firing while another
-            // app is focused. Post the end-tracking notification on close to restore
-            // global (.normal) mode.
-            NotificationCenter.default.post(name: NSMenu.didEndTrackingNotification, object: nil)
         }
     }
     
