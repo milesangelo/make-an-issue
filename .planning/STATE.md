@@ -5,10 +5,10 @@ milestone_name: Concurrent Filing & Control
 current_phase: 7
 current_phase_name: AppKit Status-Item UI + Settings Window Shell
 status: ready_to_plan
-stopped_at: Phase 06 complete (UAT + security verified) — ready to plan Phase 7
-last_updated: "2026-06-30T17:34:10.244Z"
+stopped_at: Phase 7 context gathered
+last_updated: "2026-06-30T18:15:46.573Z"
 last_activity: 2026-06-30
-last_activity_desc: Phase 06 verified (UAT 1 issue fixed, threats SECURED), transitioned to Phase 7
+last_activity_desc: Phase 06 verified & complete, transitioned to Phase 7
 progress:
   total_phases: 5
   completed_phases: 2
@@ -96,9 +96,9 @@ Open items carried into the v1.1 milestone:
 
 ## Session Continuity
 
-Last session: 2026-06-30
-Stopped at: Phase 06 verified & complete (UAT: 1 issue found+fixed; security SECURED 7/7) — ready to plan Phase 7
-Resume file: None
+Last session: 2026-06-30T18:15:46.569Z
+Stopped at: Phase 7 context gathered
+Resume file: .planning/phases/07-appkit-status-item-ui-settings-window-shell/07-CONTEXT.md
 Decision record: .planning/research/SUMMARY.md (v1.1 research)
 
 ## Performance Metrics
