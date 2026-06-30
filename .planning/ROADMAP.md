@@ -28,7 +28,7 @@ solved v1.0 architecture. The critical chain is `jobs model → cancellation →
 editable prompt / jobs list`. No new third-party dependencies.
 
 - [x] **Phase 5: Concurrent Filing Jobs Model** - Lift filing out of the single `captureState` enum so capture returns to idle immediately and filings run concurrently (completed 2026-06-29)
-- [ ] **Phase 6: Cancellation / Stop Control** - Abort an in-flight filing by terminating its full `claude → docker` process tree; clean up on quit
+- [x] **Phase 6: Cancellation / Stop Control** - Abort an in-flight filing by terminating its full `claude → docker` process tree; clean up on quit (completed 2026-06-30)
 - [ ] **Phase 7: AppKit Status-Item UI + Settings Window Shell** - Replace `MenuBarExtra` with `NSStatusItem` (left-click popover / right-click menu), self-owned Settings window, and a live recording indicator on the icon
 - [ ] **Phase 8: Editable System Prompt + FINDING-06 Cleanup** - Editable, persisted drafting instructions in Settings with an unbreakable enforced contract; resolve the orphaned "CLI Command" field
 - [ ] **Phase 9: Jobs List UI + Per-Job Stop + Surfaced Errors** - Render active jobs in the menu with per-row Stop and persistent, recoverable error rows (RESIL-01)
@@ -64,7 +64,7 @@ editable prompt / jobs list`. No new third-party dependencies.
   3. Quitting the app while filings are in flight terminates their subprocesses and removes their per-invocation MCP tempfiles, leaving no orphans.
   4. Cancelling or quitting never triggers a double-resume crash or a hung "Filing…" job — the single-resume continuation invariant holds.
 
-**Plans**: 3/4 plans executed
+**Plans**: 4/4 plans complete
 **Wave 1**
 
 - [x] 06-01-PLAN.md — Wave 0: empirical process-group gate (validate A1/A2) + cancel test scaffolds
@@ -76,7 +76,7 @@ editable prompt / jobs list`. No new third-party dependencies.
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 06-04-PLAN.md — Wave 3: AppDelegate quit teardown (applicationShouldTerminate + MCP tempfile sweep)
+- [x] 06-04-PLAN.md — Wave 3: AppDelegate quit teardown (applicationShouldTerminate + MCP tempfile sweep)
 
 ### Phase 7: AppKit Status-Item UI + Settings Window Shell
 
@@ -131,7 +131,7 @@ editable prompt / jobs list`. No new third-party dependencies.
 | 3. Local Transcription | v1.0 | 5/5 | Complete | 2026-06-26 |
 | 4. Voice → AI CLI Files Issue via MCP + Spoken Confirmation | v1.0 | 5/5 | Complete | 2026-06-26 |
 | 5. Concurrent Filing Jobs Model | v1.1 | 2/2 | Complete    | 2026-06-29 |
-| 6. Cancellation / Stop Control | v1.1 | 3/4 | In Progress|  |
+| 6. Cancellation / Stop Control | v1.1 | 4/4 | Complete   | 2026-06-30 |
 | 7. AppKit Status-Item UI + Settings Window Shell | v1.1 | 0/? | Not started | - |
 | 8. Editable System Prompt + FINDING-06 Cleanup | v1.1 | 0/? | Not started | - |
 | 9. Jobs List UI + Per-Job Stop + Surfaced Errors | v1.1 | 0/? | Not started | - |

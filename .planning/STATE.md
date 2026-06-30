@@ -4,17 +4,17 @@ milestone: v1.1
 milestone_name: Concurrent Filing & Control
 current_phase: 06
 current_phase_name: cancellation-stop-control
-status: executing
-stopped_at: Phase 6 context gathered
-last_updated: "2026-06-30T01:46:14.789Z"
+status: verifying
+stopped_at: Phase 06 complete — all 4 plans executed
+last_updated: "2026-06-30T02:25:47.191Z"
 last_activity: 2026-06-29
 last_activity_desc: Phase 06 execution started
 progress:
   total_phases: 5
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 6
-  completed_plans: 5
-  percent: 20
+  completed_plans: 6
+  percent: 40
 ---
 
 # Project State
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-06-28)
 
 Phase: 06 (cancellation-stop-control) — EXECUTING
 Plan: 4 of 4
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-06-29 — Phase 06 execution started
 
 ## Accumulated Context
@@ -69,6 +69,9 @@ Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecti
 - [Phase ?]: Phase 06-03: cancel(jobID:) only calls task?.cancel() — .cancelled state transition owned by CancellationError catch arm after process dead
 - [Phase ?]: Phase 06-03: CancellationError catch arm before IssueFilingError arm — CancellationError is not an IssueFilingError; generic catch would swallow it as failure
 - [Phase ?]: Phase 06-03: onRunIssueFiling seam gains @escaping @Sendable (pid_t)->Void 3rd param — @escaping required on inner closure type
+- [Phase ?]: Phase 06-04: sweepMCPTempFiles is static and parameterised for unit testability
+- [Phase ?]: Phase 06-04: cancelAll() before Task.sleep for correct SIGTERM-first D-04 ordering
+- [Phase ?]: Phase 06-04: defer NSApp.reply in teardown Task guarantees no Quit hang (SC-4)
 
 ### Pending Todos
 
@@ -93,9 +96,9 @@ Open items carried into the v1.1 milestone:
 
 ## Session Continuity
 
-Last session: 2026-06-30T01:21:31.112Z
-Stopped at: Phase 6 context gathered
-Resume file: .planning/phases/06-cancellation-stop-control/06-CONTEXT.md
+Last session: 2026-06-30T02:25:47.187Z
+Stopped at: Phase 06 complete — all 4 plans executed
+Resume file: None
 Decision record: .planning/research/SUMMARY.md (v1.1 research)
 
 ## Performance Metrics
@@ -119,6 +122,7 @@ Decision record: .planning/research/SUMMARY.md (v1.1 research)
 | Phase 06 P01 | 225s | 2 tasks | 2 files |
 | Phase 06 P02 | 660s | 3 tasks | 4 files |
 | Phase 06 P03 | 1080 | 3 tasks | 2 files |
+| Phase 06 P04 | 10m | 2 tasks | 2 files |
 
 ## Operator Next Steps
 
