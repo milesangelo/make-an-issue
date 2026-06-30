@@ -1,5 +1,6 @@
 import AVFoundation
 import Combine
+import Darwin
 import Foundation
 import KeyboardShortcuts
 
@@ -44,7 +45,8 @@ final class AppState: ObservableObject {
     /// Seam for transcription — the default wires the real Transcriber; tests inject a stub.
     private let onRunTranscription: (URL) async throws -> String
     /// Seam for issue filing — the default wires the real IssueFilingRunner; tests inject a stub.
-    private let onRunIssueFiling: (String, RepoBinding) async throws -> IssueFilingResult
+    /// The third parameter is a per-job process-started callback forwarded to IssueFilingRunner.file(onProcessStarted:).
+    private let onRunIssueFiling: (String, RepoBinding, @escaping @Sendable (pid_t) -> Void) async throws -> IssueFilingResult
     /// Stored AVSpeechSynthesizer — MUST be a stored property; a local variable is deallocated
     /// before speaking completes and produces no audio (Pitfall 1 in 04-RESEARCH.md).
     private let speechSynthesizer = AVSpeechSynthesizer()
@@ -102,8 +104,8 @@ final class AppState: ObservableObject {
         onRunTranscription: @escaping (URL) async throws -> String = { url in
             try await Transcriber.run(wavURL: url)
         },
-        onRunIssueFiling: @escaping (String, RepoBinding) async throws -> IssueFilingResult = { transcript, repo in
-            try await IssueFilingRunner.file(transcript: transcript, repo: repo, config: .claudeGitHub, ownerRepo: nil)
+        onRunIssueFiling: @escaping (String, RepoBinding, @escaping @Sendable (pid_t) -> Void) async throws -> IssueFilingResult = { transcript, repo, onStarted in
+            try await IssueFilingRunner.file(transcript: transcript, repo: repo, config: .claudeGitHub, ownerRepo: nil, onProcessStarted: onStarted)
         },
         onSpeak: ((String) -> Void)? = nil,
         onCheckMicAuthorization: @escaping () -> Bool = {
@@ -261,16 +263,34 @@ final class AppState: ObservableObject {
         let id = UUID()
         jobs.append(FilingJob(id: id, transcript: transcript, repo: repo, state: .filing))
 
+        // Build a @Sendable callback that hops to @MainActor before mutating jobs (the callback
+        // fires on CLIRunner's non-main executor). Captures [weak self, id] to avoid a retain cycle.
+        let onStarted: @Sendable (pid_t) -> Void = { [weak self, id] pgid in
+            Task { @MainActor in
+                guard let self else { return }
+                if let idx = self.jobs.firstIndex(where: { $0.id == id }) {
+                    self.jobs[idx].processGroupID = pgid
+                }
+            }
+        }
+
         let task = Task { [weak self, id, transcript, repo] in
             guard let self else { return }
             do {
-                let result = try await onRunIssueFiling(transcript, repo)
+                let result = try await onRunIssueFiling(transcript, repo, onStarted)
                 // @MainActor-inherited Task — no MainActor.run needed after await.
                 if let idx = self.jobs.firstIndex(where: { $0.id == id }) {
                     self.jobs[idx].state = .done
                     self.jobs[idx].result = result
                 }
                 self.announce("created issue #\(result.number)")   // D-01
+            } catch is CancellationError {
+                // State transitions to .cancelled here, after the process is dead — never in
+                // cancel(jobID:) which only calls task?.cancel() (D-02/D-03, avoids premature state).
+                if let idx = self.jobs.firstIndex(where: { $0.id == id }) {
+                    self.jobs[idx].state = .cancelled   // retain in jobs[], do NOT remove (D-02/D-03)
+                }
+                self.announce("filing cancelled")   // D-05: routes through defer-until-mic-idle queue
             } catch let filingError as IssueFilingError {
                 if let idx = self.jobs.firstIndex(where: { $0.id == id }) {
                     self.jobs[idx].state = .failed
@@ -285,9 +305,37 @@ final class AppState: ObservableObject {
             }
         }
 
-        // Store the task handle for Phase 6 cancellation (forward-prep).
+        // Store the task handle for cancellation.
         if let idx = jobs.firstIndex(where: { $0.id == id }) {
             jobs[idx].task = task
+        }
+    }
+
+    /// Cancel a single in-flight job by ID. No-ops for jobs not in .filing state.
+    ///
+    /// Only calls task?.cancel() — the .cancelled state transition is owned by the
+    /// CancellationError catch arm in spawnFilingJob, after the process is confirmed dead (D-02/D-03).
+    func cancel(jobID: UUID) {
+        guard let idx = jobs.firstIndex(where: { $0.id == jobID && $0.state == .filing }) else { return }
+        jobs[idx].task?.cancel()
+        // State transition to .cancelled happens in the CancellationError catch arm, not here.
+    }
+
+    /// Cancel every in-flight (.filing) job's Task. The quit-path graceful API (CANCEL-03).
+    func cancelAll() {
+        for job in jobs where job.state == .filing {
+            job.task?.cancel()
+        }
+    }
+
+    /// Send a group SIGKILL to every still-filing job that has a stored process group id.
+    /// Called by the quit path after SIGTERM grace expires (CANCEL-03 — sequenced in 06-04).
+    /// Guards pgid > 0 to prevent accidentally signalling the app's own process group.
+    func forceKillAllProcessTrees() {
+        for job in jobs where job.state == .filing {
+            if let pgid = job.processGroupID, pgid > 0 {
+                kill(-pgid, SIGKILL)   // negative pid = signal the process group
+            }
         }
     }
 
