@@ -21,7 +21,7 @@ Requirements for this milestone. Each maps to a roadmap phase. (v1.0 requirement
 
 ### Settings & Editable Prompt (SETTINGS)
 
-- [ ] **SETTINGS-01**: Right-clicking the menu-bar icon opens a menu with "Settings…" and "Quit"; left-click still opens the status popover.
+- [x] **SETTINGS-01**: Right-clicking the menu-bar icon opens a menu with "Settings…" and "Quit"; left-click still opens the status popover.
 - [ ] **SETTINGS-02**: A Settings window exposes an editable field for the LLM investigation/drafting **instructions**, persisted across launches.
 - [ ] **SETTINGS-03**: A "Reset to Default" control restores the shipped default prompt instructions.
 - [ ] **SETTINGS-04**: Editing the instructions can never remove the enforced contract — the app always appends the scoped tool grant and "Issue URL on the last line" instruction, so issue-number parsing and tool scoping cannot be broken by user edits.
@@ -38,7 +38,7 @@ Requirements for this milestone. Each maps to a roadmap phase. (v1.0 requirement
 
 ### Live Feedback (FEEDBACK)
 
-- [ ] **FEEDBACK-02**: While push-to-talk is held and recording is live, the menu-bar icon itself shows an active-recording indicator (e.g. tinted/highlighted button background or a recording symbol) — visible even when the popover is closed — and reverts when recording stops.
+- [x] **FEEDBACK-02**: While push-to-talk is held and recording is live, the menu-bar icon itself shows an active-recording indicator (e.g. tinted/highlighted button background or a recording symbol) — visible even when the popover is closed — and reverts when recording stops.
 
 ## Future Requirements
 
@@ -85,7 +85,7 @@ Which phases cover which requirements. Filled during roadmap creation.
 | CANCEL-01 | Phase 6 | Complete |
 | CANCEL-02 | Phase 6 | Complete |
 | CANCEL-03 | Phase 6 | Complete |
-| SETTINGS-01 | Phase 7 | Pending |
+| SETTINGS-01 | Phase 7 | Complete |
 | SETTINGS-02 | Phase 8 | Pending |
 | SETTINGS-03 | Phase 8 | Pending |
 | SETTINGS-04 | Phase 8 | Pending |
@@ -93,7 +93,7 @@ Which phases cover which requirements. Filled during roadmap creation.
 | JOBS-01 | Phase 9 | Pending |
 | JOBS-02 | Phase 9 | Pending |
 | RESIL-01 | Phase 9 | Pending |
-| FEEDBACK-02 | Phase 7 | Pending |
+| FEEDBACK-02 | Phase 7 | Complete |
 
 **Coverage:**
 

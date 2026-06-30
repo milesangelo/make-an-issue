@@ -90,10 +90,10 @@ editable prompt / jobs list`. No new third-party dependencies.
   3. While push-to-talk is held and recording is live, the menu-bar icon shows an active-recording indicator (tinted/highlighted button or recording symbol) visible with the popover closed, and reverts when recording stops.
   4. The global push-to-talk shortcut continues to fire reliably across popover/menu open-close cycles with another app focused.
 
-**Plans**: 2 plans
+**Plans**: 1/2 plans executed
 **Wave 1**
 
-  - [ ] 07-01-PLAN.md — AppKit status-item shell (left-click popover / right-click Settings…/Quit), self-owned Settings window + relocated Recorder, recording indicator, MenuBarExtra→Settings{} scene swap (Wave 1)
+  - [x] 07-01-PLAN.md — AppKit status-item shell (left-click popover / right-click Settings…/Quit), self-owned Settings window + relocated Recorder, recording indicator, MenuBarExtra→Settings{} scene swap (Wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -140,6 +140,6 @@ editable prompt / jobs list`. No new third-party dependencies.
 | 4. Voice → AI CLI Files Issue via MCP + Spoken Confirmation | v1.0 | 5/5 | Complete | 2026-06-26 |
 | 5. Concurrent Filing Jobs Model | v1.1 | 2/2 | Complete    | 2026-06-29 |
 | 6. Cancellation / Stop Control | v1.1 | 4/4 | Complete    | 2026-06-30 |
-| 7. AppKit Status-Item UI + Settings Window Shell | v1.1 | 0/? | Not started | - |
+| 7. AppKit Status-Item UI + Settings Window Shell | v1.1 | 1/2 | In Progress|  |
 | 8. Editable System Prompt + FINDING-06 Cleanup | v1.1 | 0/? | Not started | - |
 | 9. Jobs List UI + Per-Job Stop + Surfaced Errors | v1.1 | 0/? | Not started | - |

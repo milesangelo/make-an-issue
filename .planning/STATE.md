@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Concurrent Filing & Control
-current_phase: 7
+current_phase: 07
 current_phase_name: AppKit Status-Item UI + Settings Window Shell
 status: executing
-stopped_at: Phase 7 context gathered
-last_updated: "2026-06-30T18:49:25.155Z"
+stopped_at: Completed 07-01-PLAN.md
+last_updated: "2026-06-30T19:02:07.212Z"
 last_activity: 2026-06-30
-last_activity_desc: Phase 06 verified & complete, transitioned to Phase 7
+last_activity_desc: Phase 07 execution started
 progress:
   total_phases: 5
   completed_phases: 2
-  total_plans: 6
-  completed_plans: 6
+  total_plans: 8
+  completed_plans: 7
   percent: 40
 ---
 
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-06-28)
 
 ## Current Position
 
-Phase: 7 — AppKit Status-Item UI + Settings Window Shell
-Plan: Not started
+Phase: 07 (AppKit Status-Item UI + Settings Window Shell) — EXECUTING
+Plan: 2 of 2
 Status: Ready to execute
-Last activity: 2026-06-30 — Phase 06 verified & complete, transitioned to Phase 7
+Last activity: 2026-06-30 — Phase 07 execution started
 
 ## Accumulated Context
 
@@ -72,6 +72,7 @@ Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecti
 - [Phase ?]: Phase 06-04: sweepMCPTempFiles is static and parameterised for unit testability
 - [Phase ?]: Phase 06-04: cancelAll() before Task.sleep for correct SIGTERM-first D-04 ordering
 - [Phase ?]: Phase 06-04: defer NSApp.reply in teardown Task guarantees no Quit hang (SC-4)
+- [Phase ?]: AppKit shell via NSStatusItem replaces MenuBarExtra; indicator driven by layer backgroundColor (not contentTintColor); Settings window self-owned NSWindowController; assign-popUp-clear for right-click menu
 
 ### Pending Todos
 
@@ -96,8 +97,8 @@ Open items carried into the v1.1 milestone:
 
 ## Session Continuity
 
-Last session: 2026-06-30T18:15:46.569Z
-Stopped at: Phase 7 context gathered
+Last session: 2026-06-30T19:02:07.208Z
+Stopped at: Completed 07-01-PLAN.md
 Resume file: .planning/phases/07-appkit-status-item-ui-settings-window-shell/07-CONTEXT.md
 Decision record: .planning/research/SUMMARY.md (v1.1 research)
 
@@ -123,6 +124,7 @@ Decision record: .planning/research/SUMMARY.md (v1.1 research)
 | Phase 06 P02 | 660s | 3 tasks | 4 files |
 | Phase 06 P03 | 1080 | 3 tasks | 2 files |
 | Phase 06 P04 | 10m | 2 tasks | 2 files |
+| Phase 07 P01 | 4 minutes | 3 tasks | 4 files |
 
 ## Operator Next Steps
 
