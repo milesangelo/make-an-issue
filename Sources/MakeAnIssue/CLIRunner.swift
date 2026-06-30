@@ -164,23 +164,30 @@ struct CLIRunner {
                 // fire. If the process already exited, claim() returns nil and we
                 // leave the already-delivered result untouched.
                 guard state.claim() != nil else { return }
-                process.terminate()   // SIGTERM — ask the child to exit cleanly first.
+                // Send SIGTERM to the whole process tree (zsh → claude → docker run)
+                // via a group-directed signal (negative identifier). Using a single-PID
+                // kill would reach only zsh, orphaning claude and any docker container.
+                // Guard processIdentifier > 0 so a never-launched process (pid=0) cannot
+                // accidentally broadcast to the caller's own process group (T-6-01 /
+                // RESEARCH Discretion Item 1).
+                if process.processIdentifier > 0 {
+                    kill(-process.processIdentifier, SIGTERM)
+                }
                 stdoutPipe.fileHandleForReading.readabilityHandler = nil
                 stderrPipe.fileHandleForReading.readabilityHandler = nil
                 continuation.resume(returning: .timeout)
 
                 // Escalate to SIGKILL if the child ignores SIGTERM (or is
                 // mid-exec of a wrapper that re-spawns) and is still running
-                // after a short grace period, so it is reaped rather than
-                // lingering after `run` returns. The continuation is already
-                // resolved with .timeout; this only force-reaps the process.
-                // The bundled whisper-cli respects SIGTERM, but `run` is generic
-                // and also drives longer-running children (the AI-CLI filing
-                // path). (WR-05)
+                // after a short grace period, so the whole tree (zsh → claude →
+                // docker run) is reaped rather than lingering after `run` returns.
+                // The negative identifier broadcasts to the entire process group.
+                // The continuation is already resolved with .timeout; this only
+                // force-reaps the process tree. (WR-05 / RESEARCH Discretion Item 1)
                 Task {
                     try? await Task.sleep(for: .seconds(2))
-                    if process.isRunning {
-                        kill(process.processIdentifier, SIGKILL)
+                    if process.isRunning && process.processIdentifier > 0 {
+                        kill(-process.processIdentifier, SIGKILL)
                     }
                 }
             }
