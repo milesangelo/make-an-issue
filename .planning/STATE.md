@@ -4,9 +4,9 @@ milestone: v1.1
 milestone_name: Concurrent Filing & Control
 current_phase: 7
 current_phase_name: AppKit Status-Item UI + Settings Window Shell
-status: ready_to_plan
+status: executing
 stopped_at: Phase 7 context gathered
-last_updated: "2026-06-30T18:15:46.573Z"
+last_updated: "2026-06-30T18:49:25.155Z"
 last_activity: 2026-06-30
 last_activity_desc: Phase 06 verified & complete, transitioned to Phase 7
 progress:
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-06-28)
 
 Phase: 7 — AppKit Status-Item UI + Settings Window Shell
 Plan: Not started
-Status: Ready to plan
+Status: Ready to execute
 Last activity: 2026-06-30 — Phase 06 verified & complete, transitioned to Phase 7
 
 ## Accumulated Context
