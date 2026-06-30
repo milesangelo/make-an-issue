@@ -1,30 +1,26 @@
 ---
 phase: 06-cancellation-stop-control
 verified: 2026-06-29T20:45:00Z
-status: human_needed
-score: 2/4 must-haves verified
-behavior_unverified: 1
+status: verified
+resolved_at: 2026-06-30
+score: 4/4 must-haves verified
+behavior_unverified: 0
 overrides_applied: 0
-behavior_unverified_items:
-  - truth: "Quitting with in-flight filings calls cancelAll() (SIGTERM via bridge), waits 2s grace, force-kills survivors via forceKillAllProcessTrees() (SIGKILL), sweeps MCP tempfiles, and guarantees NSApp.reply — the .terminateLater path (SC-3 / CANCEL-03)"
-    test: "Run the app, start a real filing, then quit mid-flight while the job is in .filing state; observe process state and tempfiles within 2s"
-    expected: "cancelAll() sends group SIGTERM; after 2s grace forceKillAllProcessTrees() sends group SIGKILL to any survivor; sweepMCPTempFiles() removes make-an-issue-mcp-*.json; NSApp.reply(toApplicationShouldTerminate: true) fires; pgrep -f claude and docker ps return empty; no tempfile remains"
-    why_human: "forceKillAllProcessTrees() is never invoked by any automated test. The entire .terminateLater branch of applicationShouldTerminate has no test. Only the fast path (.terminateNow) and the sweep filter have unit coverage. WR-06 from the code review explicitly flags this gap. Requires real docker+claude to exercise."
-human_verification:
+resolution_note: "All human-verification items resolved via 06-UAT.md (2026-06-30). SC-2 semantic accepted by user (retain .cancelled in jobs[]). SC-3 .terminateLater quit path: UAT found a real orphan (leftover MCP tempfile), fixed in commit 30fd152 with a synchronous sweep + new regression test testTerminateLaterSweepsMCPTempFileSynchronously (drives the .terminateLater branch; red→green). Manual real-docker gate waived by user on the unit-test proof. Threats verified SECURED 7/7 in 06-SECURITY.md (commit 49cd188)."
+behavior_unverified_items: []   # resolved — see resolution_note
+human_verification:   # all resolved 2026-06-30 via 06-UAT.md
   - test: "Confirm whether retaining cancelled jobs in jobs[] with state .cancelled satisfies ROADMAP SC-2 / REQUIREMENTS.md CANCEL-02 'removes the job'"
-    expected: "Either the implementation (retain with .cancelled state, do NOT delete from jobs[]) is accepted as satisfying 'removes the job' (interpreted as 'removes from the in-flight/.filing set'), or SC-2/CANCEL-02 needs to be re-evaluated to require actual array deletion"
-    why_human: "ROADMAP SC-2 and REQUIREMENTS.md CANCEL-02 both say 'removes the job'. The implementation retains every cancelled job in jobs[] with state .cancelled (never deletes it). The plan (06-03-PLAN.md prohibitions) deliberately chose this: 'roadmap removes the job means removes from the in-flight/.filing set, not deletion' (D-02/D-03). The test testCancelledJobRetainedInJobsList asserts jobs.count == 1 (retained). This is a semantic deviation that requires a human accept/reject decision."
-  - test: "Run the app, start a real filing, quit mid-flight; within the 2s grace verify pgrep -f claude, docker ps (no github-mcp-server container), and ls $TMPDIR/make-an-issue-mcp-*.json all return empty"
-    expected: "No orphaned claude process, no leaked docker container, no leaked MCP tempfile after the 2s grace window"
-    why_human: "The .terminateLater quit path (cancelAll + 2s grace + forceKillAllProcessTrees + sweep + NSApp.reply) has no automated test coverage. forceKillAllProcessTrees() is never invoked in any unit test. The manual gate from the plan is the required CANCEL-03 acceptance check for the in-flight-filings quit path."
+    resolution: "ACCEPTED by user (2026-06-30). Retaining the cancelled job in jobs[] with state .cancelled satisfies 'removes the job' = removes from the in-flight/.filing set (D-02/D-03). No code change."
+  - test: "Run the app, start a real filing, quit mid-flight; verify no orphaned claude process, no docker container, no MCP tempfile"
+    resolution: "RESOLVED via UAT (2026-06-30). Real ⌘Q-mid-flight test found a leftover make-an-issue-mcp-*.json (processes/container were clean). Root cause: quit-time sweep ran only inside the async teardown Task and lost a race on MenuBarExtra quit. Fixed (commit 30fd152) by adding a synchronous Self.sweepMCPTempFiles() before returning .terminateLater; regression test testTerminateLaterSweepsMCPTempFileSynchronously verified red→green; full suite 137 passing. Manual real-docker re-run waived by user."
 ---
 
 # Phase 6: Cancellation / Stop Control — Verification Report
 
 **Phase Goal:** Abort an in-flight filing by terminating its full `claude → docker` process tree; clean up on quit.
-**Verified:** 2026-06-29T20:45:00Z
-**Status:** human_needed
-**Re-verification:** No — initial verification
+**Verified:** 2026-06-29T20:45:00Z (human items resolved 2026-06-30 via 06-UAT.md)
+**Status:** verified
+**Re-verification:** Human-verification items resolved 2026-06-30 — see frontmatter resolution_note
 
 ## Goal Achievement
 
@@ -33,11 +29,11 @@ human_verification:
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
 | SC-1 | Stopping an in-flight filing terminates the full `claude → docker` process tree — no orphaned process, no leaked `--rm` container | VERIFIED | `kill(-pgid, SIGTERM/SIGKILL)` on both timeout and cancel paths. Positive-PID guards on every kill site. Empirical gate tests A1/A2 pass. `testCancelKillsProcessGroup` passes (process group reaped within 3s). |
-| SC-2 | A cancelled filing surfaces "filing cancelled" (spoken + status), removes the job, and files no issue | UNCERTAIN | "filing cancelled" spoken and `result == nil` verified by `testCancelJobIdTransitionsToCancel`. BUT: ROADMAP/REQUIREMENTS say "removes the job" — code retains the job in `jobs[]` with `.cancelled` state (D-02/D-03 deliberate design decision). Needs human decision — see Human Verification #1. |
-| SC-3 | Quitting with filings in flight terminates subprocesses and removes per-invocation MCP tempfiles, leaving no orphans | PRESENT_BEHAVIOR_UNVERIFIED | Fast path (.terminateNow + sweep on no-filing): VERIFIED by `testTerminateNowWhenNoFilingJobs` + `testSweepRemovesOnlyMCPTempFiles`. Slow path (.terminateLater + cancelAll + 2s grace + forceKill + sweep + reply): code is present and wired, but `forceKillAllProcessTrees()` is never invoked in any test and the .terminateLater branch has no automated coverage (WR-06). |
+| SC-2 | A cancelled filing surfaces "filing cancelled" (spoken + status), removes the job, and files no issue | VERIFIED | "filing cancelled" spoken and `result == nil` verified by `testCancelJobIdTransitionsToCancel`. "Removes the job" semantic ACCEPTED by user (2026-06-30, 06-UAT.md): retain in `jobs[]` with `.cancelled` = removes from the in-flight/.filing set (D-02/D-03). |
+| SC-3 | Quitting with filings in flight terminates subprocesses and removes per-invocation MCP tempfiles, leaving no orphans | VERIFIED | Fast path: `testTerminateNowWhenNoFilingJobs` + `testSweepRemovesOnlyMCPTempFiles`. Slow path (.terminateLater): UAT (2026-06-30) found a real leftover MCP tempfile on ⌘Q-mid-flight; fixed (commit 30fd152) with a synchronous sweep before returning .terminateLater. New `testTerminateLaterSweepsMCPTempFileSynchronously` drives the .terminateLater branch and asserts the file is swept (verified red→green). Manual real-docker re-run waived by user on the unit-test proof. |
 | SC-4 | Cancelling or quitting never triggers a double-resume crash or hung "Filing..." job | VERIFIED | `testCancelAndExitBoundaryResolvesExactlyOnce` survives 40 cancel/exit races without continuation-misuse trap. Source inspection confirms `onCancel` sends signals only (no `state.claim()`, no `continuation.resume`). `defer { NSApp.reply(...) }` guarantees quit reply. |
 
-**Score:** 2/4 truths verified (1 uncertain, 1 present-but-behavior-unverified)
+**Score:** 4/4 truths verified (SC-2 + SC-3 human items resolved 2026-06-30 via 06-UAT.md)
 
 ### CANCEL-02 Deviation Detail
 
