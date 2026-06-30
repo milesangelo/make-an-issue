@@ -4,17 +4,17 @@ milestone: v1.1
 milestone_name: Concurrent Filing & Control
 current_phase: 07
 current_phase_name: AppKit Status-Item UI + Settings Window Shell
-status: executing
+status: verifying
 stopped_at: Completed 07-01-PLAN.md
-last_updated: "2026-06-30T19:02:07.212Z"
+last_updated: "2026-06-30T19:06:45.839Z"
 last_activity: 2026-06-30
 last_activity_desc: Phase 07 execution started
 progress:
   total_phases: 5
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 8
-  completed_plans: 7
-  percent: 40
+  completed_plans: 8
+  percent: 60
 ---
 
 # Project State
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-06-28)
 
 Phase: 07 (AppKit Status-Item UI + Settings Window Shell) — EXECUTING
 Plan: 2 of 2
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-06-30 — Phase 07 execution started
 
 ## Accumulated Context
@@ -97,7 +97,7 @@ Open items carried into the v1.1 milestone:
 
 ## Session Continuity
 
-Last session: 2026-06-30T19:02:07.208Z
+Last session: 2026-06-30T19:06:37.517Z
 Stopped at: Completed 07-01-PLAN.md
 Resume file: .planning/phases/07-appkit-status-item-ui-settings-window-shell/07-CONTEXT.md
 Decision record: .planning/research/SUMMARY.md (v1.1 research)
@@ -125,6 +125,7 @@ Decision record: .planning/research/SUMMARY.md (v1.1 research)
 | Phase 06 P03 | 1080 | 3 tasks | 2 files |
 | Phase 06 P04 | 10m | 2 tasks | 2 files |
 | Phase 07 P01 | 4 minutes | 3 tasks | 4 files |
+| Phase 07 P02 | 2m | 1 tasks | 0 files |
 
 ## Operator Next Steps
 
