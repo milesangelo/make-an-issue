@@ -51,4 +51,38 @@ final class AppDelegateTests: XCTestCase {
 
         XCTAssertEqual(reply, .terminateNow, "no filing jobs → fast path must return .terminateNow")
     }
+
+    // MARK: - Slow-path synchronous sweep regression (CANCEL-03 / SC-3, UAT phase 6 test 2)
+
+    /// Quit-mid-flight must sweep the MCP temp file synchronously — not solely inside the
+    /// post-grace async Task, which can be reaped before it runs on MenuBarExtra ⌘Q quit.
+    func testTerminateLaterSweepsMCPTempFileSynchronously() {
+        let delegate = AppDelegate()
+        // Drive the slow path: one job in .filing state.
+        let binding = RepoBinding(
+            rootURL: URL(fileURLWithPath: "/tmp/test-repo"),
+            displayName: "test-repo",
+            displayPath: "/tmp/test-repo"
+        )
+        delegate.appState.jobs = [
+            FilingJob(id: UUID(), transcript: "x", repo: binding, state: .filing)
+        ]
+
+        // A matching temp file in the REAL temp dir the sweep targets.
+        let tempFile = FileManager.default.temporaryDirectory
+            .appendingPathComponent("make-an-issue-mcp-\(UUID().uuidString).json")
+        try? "x".write(to: tempFile, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: tempFile) }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: tempFile.path), "precondition: temp file exists")
+
+        let reply = delegate.applicationShouldTerminate(NSApplication.shared)
+
+        // Slow path taken, and the file is gone immediately on return — before the 2s async
+        // Task could possibly have run. A leftover here is the SC-3 orphan regression.
+        XCTAssertEqual(reply, .terminateLater, "a .filing job → slow path must return .terminateLater")
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: tempFile.path),
+            "MCP temp file must be swept synchronously on quit, not only by the post-grace Task"
+        )
+    }
 }

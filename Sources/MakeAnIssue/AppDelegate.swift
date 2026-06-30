@@ -22,11 +22,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return .terminateNow
         }
         appState.cancelAll()   // SIGTERM to all in-flight process groups immediately (D-04)
+        // Sweep synchronously here too — the async teardown Task below may not finish its
+        // sweep before the process is reaped on .terminateLater quit (the MCP config is
+        // already loaded by the spawned process, so deleting it during teardown is safe).
+        Self.sweepMCPTempFiles()
         Task { @MainActor in
             defer { NSApp.reply(toApplicationShouldTerminate: true) }   // guarantee reply on every exit path (SC-4)
             try? await Task.sleep(for: .seconds(2))   // 2s grace for docker --rm cleanup (D-04)
             appState.forceKillAllProcessTrees()        // SIGKILL any SIGTERM survivors
-            Self.sweepMCPTempFiles()
+            Self.sweepMCPTempFiles()                   // backstop for any file written after the synchronous sweep
         }
         return .terminateLater
     }
