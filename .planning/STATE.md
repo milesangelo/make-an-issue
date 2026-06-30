@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Concurrent Filing & Control
-current_phase: 06
-current_phase_name: cancellation-stop-control
-status: verifying
-stopped_at: Phase 06 complete — all 4 plans executed
-last_updated: "2026-06-30T02:25:47.191Z"
-last_activity: 2026-06-29
-last_activity_desc: Phase 06 execution started
+current_phase: 7
+current_phase_name: AppKit Status-Item UI + Settings Window Shell
+status: ready_to_plan
+stopped_at: Phase 06 complete (UAT + security verified) — ready to plan Phase 7
+last_updated: "2026-06-30T17:34:10.244Z"
+last_activity: 2026-06-30
+last_activity_desc: Phase 06 verified (UAT 1 issue fixed, threats SECURED), transitioned to Phase 7
 progress:
   total_phases: 5
   completed_phases: 2
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-28)
 
 **Core value:** Capture a repo-aware tracker issue (GitHub or Jira) by voice in seconds — spoken word to filed issue, end to end.
-**Current focus:** Phase 06 — cancellation-stop-control
+**Current focus:** Phase 07 — AppKit Status-Item UI + Settings Window Shell
 
 ## Current Position
 
-Phase: 06 (cancellation-stop-control) — EXECUTING
-Plan: 4 of 4
-Status: Phase complete — ready for verification
-Last activity: 2026-06-29 — Phase 06 execution started
+Phase: 7 — AppKit Status-Item UI + Settings Window Shell
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-06-30 — Phase 06 verified & complete, transitioned to Phase 7
 
 ## Accumulated Context
 
@@ -81,7 +81,7 @@ Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecti
 
 Open items carried into the v1.1 milestone:
 
-- **Cancellation correctness (Phase 6 — highest risk):** `Process.terminate()` only signals the direct `/bin/zsh -lc` child; the real tree is `zsh → claude → docker run --rm`. Must kill the whole **process group** (SIGTERM + grace → SIGKILL) and sweep `make-an-issue-mcp-*.json` tempfiles on launch + quit, or Docker `--rm` containers leak. Open implementation choice: `setsid`/`exec` prefix vs `posix_spawn` wrapper; SIGTERM vs SIGINT for `claude` — resolve with a leak-check spike during Phase 6 planning.
+- ~~**Cancellation correctness (Phase 6):**~~ RESOLVED in Phase 6 — process-group SIGTERM→2s grace→SIGKILL on cancel and quit paths; `make-an-issue-mcp-*.json` swept on quit (synchronous sweep fix, commit 30fd152). UAT verified, threats SECURED (06-SECURITY.md).
 - **KeyboardShortcuts under NSPopover/NSMenu (Phase 7):** the `MenuBarExtra` `.onDisappear` hotkey workaround may fire spuriously or be unneeded once on `NSStatusItem` — re-validate empirically, do not blindly carry over.
 - **Editable-prompt parse safety (Phase 8):** keep the editable field instructions-only; the enforced contract (scoped `--allowedTools`, `method=create`, "Issue URL on last line") is appended by `buildPrompt` and the CLI flags live in `assembleCommand`. Harden `IssueResultParser` prose fallback to match the **last** URL/line, not the first occurrence anywhere, or user edits produce false "created #N".
 - **Distribution gap (carried):** bundled `whisper-cli` is only ad-hoc signed for local use. Developer-ID signing + hardened-runtime notarization required before clean-machine distribution (deferred — DIST-01; see 03-CONTEXT.md D-04/D-05).
@@ -96,8 +96,8 @@ Open items carried into the v1.1 milestone:
 
 ## Session Continuity
 
-Last session: 2026-06-30T02:25:47.187Z
-Stopped at: Phase 06 complete — all 4 plans executed
+Last session: 2026-06-30
+Stopped at: Phase 06 verified & complete (UAT: 1 issue found+fixed; security SECURED 7/7) — ready to plan Phase 7
 Resume file: None
 Decision record: .planning/research/SUMMARY.md (v1.1 research)
 
@@ -126,4 +126,5 @@ Decision record: .planning/research/SUMMARY.md (v1.1 research)
 
 ## Operator Next Steps
 
-- Plan Phase 5 (Concurrent Filing Jobs Model) with /gsd-plan-phase 5
+- Plan Phase 7 (AppKit Status-Item UI + Settings Window Shell) with /gsd-plan-phase 7
+- Phase 9 follow-up captured: add an in-flight "Filing issue…" indicator (no UI feedback during background investigation today) — see 06-UAT.md follow-up
