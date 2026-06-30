@@ -64,7 +64,7 @@ editable prompt / jobs list`. No new third-party dependencies.
   3. Quitting the app while filings are in flight terminates their subprocesses and removes their per-invocation MCP tempfiles, leaving no orphans.
   4. Cancelling or quitting never triggers a double-resume crash or a hung "Filing…" job — the single-resume continuation invariant holds.
 
-**Plans**: 2/4 plans executed
+**Plans**: 3/4 plans executed
 **Wave 1**
 
 - [x] 06-01-PLAN.md — Wave 0: empirical process-group gate (validate A1/A2) + cancel test scaffolds
@@ -72,7 +72,7 @@ editable prompt / jobs list`. No new third-party dependencies.
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 06-03-PLAN.md — Wave 2: AppState cancel surface (cancel/cancelAll/forceKillAllProcessTrees + CancellationError catch) + AppStateTests
+- [x] 06-03-PLAN.md — Wave 2: AppState cancel surface (cancel/cancelAll/forceKillAllProcessTrees + CancellationError catch) + AppStateTests
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -131,7 +131,7 @@ editable prompt / jobs list`. No new third-party dependencies.
 | 3. Local Transcription | v1.0 | 5/5 | Complete | 2026-06-26 |
 | 4. Voice → AI CLI Files Issue via MCP + Spoken Confirmation | v1.0 | 5/5 | Complete | 2026-06-26 |
 | 5. Concurrent Filing Jobs Model | v1.1 | 2/2 | Complete    | 2026-06-29 |
-| 6. Cancellation / Stop Control | v1.1 | 2/4 | In Progress|  |
+| 6. Cancellation / Stop Control | v1.1 | 3/4 | In Progress|  |
 | 7. AppKit Status-Item UI + Settings Window Shell | v1.1 | 0/? | Not started | - |
 | 8. Editable System Prompt + FINDING-06 Cleanup | v1.1 | 0/? | Not started | - |
 | 9. Jobs List UI + Per-Job Stop + Surfaced Errors | v1.1 | 0/? | Not started | - |
