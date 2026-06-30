@@ -1183,26 +1183,160 @@ final class AppStateTests: XCTestCase {
     // MARK: - Cancel scaffolds (fleshed out in 06-03)
 
     func testCancelJobIdTransitionsToCancel() async throws {
-        // 06-03 will assert: cancelling one job by ID drives its state to .cancelled
-        // and speaks the cancelled phrase via the onSpeak seam (D-05).
-        throw XCTSkip("Pending — fleshed out in 06-03")
+        // CANCEL-01 / CANCEL-02 / SC-1 / SC-2: cancelling one job by ID drives its state to
+        // .cancelled and speaks "filing cancelled" via onSpeak seam (D-05); result is nil.
+        let repoURL = try makeRepo(named: "cancel-job-id-repo")
+        let binding = RepoBinding(rootURL: repoURL, displayName: "cancel-job-id-repo", displayPath: repoURL.path)
+        var spokenTexts: [String] = []
+        let state = AppState(
+            boundRepo: binding,
+            boundRepoDisplayText: "cancel-job-id-repo",
+            onStartRecording: { true },
+            onStopRecording: {},
+            onRunTranscription: { _ in "cancel me" },
+            onRunIssueFiling: { _, _, _ in
+                // Task.sleep throws CancellationError when the enclosing Task is cancelled.
+                try await Task.sleep(for: .seconds(60))
+                return IssueFilingResult(number: 1, url: "https://github.com/o/r/issues/1")
+            },
+            onSpeak: { text in spokenTexts.append(text) }
+        )
+        state.micPermissionGranted = true
+        state.startRecording()
+        state.stopRecording()
+
+        // Wait for the job to be in-flight.
+        await waitUntil { state.jobs.count == 1 && state.jobs[0].state == .filing }
+
+        // Cancel by job ID.
+        state.cancel(jobID: state.jobs[0].id)
+
+        // Wait for CancellationError catch arm to run.
+        await waitUntil { state.jobs[0].state == .cancelled }
+
+        XCTAssertEqual(state.jobs[0].state, .cancelled, "cancelled job must reach .cancelled (CANCEL-01)")
+        XCTAssertEqual(spokenTexts.first, "filing cancelled", "cancelled job must speak 'filing cancelled' (CANCEL-02/D-05)")
+        XCTAssertNil(state.jobs[0].result, "cancelled job must have no result — no issue filed (CANCEL-02)")
     }
 
     func testCancelAnnouncementDeferredDuringRecording() async throws {
-        // 06-03 will assert: the cancelled announcement is deferred while the mic is
-        // recording and flushed after stopRecording() drains pendingAnnouncements (D-05).
-        throw XCTSkip("Pending — fleshed out in 06-03")
+        // D-02 / D-03 / D-05: while captureState == .recording, the cancelled announcement
+        // is deferred to pendingAnnouncements and flushed after stopRecording() is called.
+        let repoURL = try makeRepo(named: "cancel-deferred-repo")
+        let binding = RepoBinding(rootURL: repoURL, displayName: "cancel-deferred-repo", displayPath: repoURL.path)
+        var spokenTexts: [String] = []
+        let state = AppState(
+            boundRepo: binding,
+            boundRepoDisplayText: "cancel-deferred-repo",
+            onStartRecording: { true },
+            onStopRecording: {},
+            onRunTranscription: { _ in "cancel deferred" },
+            onRunIssueFiling: { _, _, _ in
+                try await Task.sleep(for: .seconds(60))
+                return IssueFilingResult(number: 1, url: "https://github.com/o/r/issues/1")
+            },
+            onSpeak: { text in spokenTexts.append(text) }
+        )
+        state.micPermissionGranted = true
+
+        // First cycle — spawns a sleeping filing job.
+        state.startRecording()
+        state.stopRecording()
+        await waitUntil { state.jobs.count == 1 && state.jobs[0].state == .filing }
+
+        // Start a second recording so captureState == .recording (announce will defer).
+        state.startRecording()
+        XCTAssertEqual(state.captureState, .recording, "precondition: captureState must be .recording")
+
+        // Cancel the first job while the second recording is active.
+        state.cancel(jobID: state.jobs[0].id)
+
+        // Wait for the CancellationError catch arm to store .cancelled.
+        await waitUntil { state.jobs[0].state == .cancelled }
+
+        // D-02: announcement was deferred because captureState == .recording.
+        XCTAssertTrue(spokenTexts.isEmpty, "onSpeak must NOT be called while captureState == .recording (D-02)")
+
+        // Stop the second recording — flushPendingAnnouncements() fires inside beginTranscription().
+        state.stopRecording()
+
+        // D-03: deferred "filing cancelled" announcement flushed after recording stops.
+        await waitUntil { !spokenTexts.isEmpty }
+        XCTAssertEqual(spokenTexts.first, "filing cancelled",
+            "deferred cancel announcement must be flushed when recording stops (D-03), got: \(spokenTexts.first ?? "nil")")
     }
 
     func testCancelAllCancelsEveryInFlightJob() async throws {
-        // 06-03 will assert: cancelAll() transitions every in-flight (.filing) job to
-        // .cancelled — no in-flight job is left running after the call completes.
-        throw XCTSkip("Pending — fleshed out in 06-03")
+        // CANCEL-03 prep: cancelAll() drives every in-flight (.filing) job to .cancelled.
+        let repoURL = try makeRepo(named: "cancel-all-repo")
+        let binding = RepoBinding(rootURL: repoURL, displayName: "cancel-all-repo", displayPath: repoURL.path)
+        var transcriptIdx = 0
+        let state = AppState(
+            boundRepo: binding,
+            boundRepoDisplayText: "cancel-all-repo",
+            onStartRecording: { true },
+            onStopRecording: {},
+            onRunTranscription: { _ in
+                defer { transcriptIdx += 1 }
+                return "transcript \(transcriptIdx + 1)"
+            },
+            onRunIssueFiling: { _, _, _ in
+                try await Task.sleep(for: .seconds(60))
+                return IssueFilingResult(number: 1, url: "https://github.com/o/r/issues/1")
+            }
+        )
+        state.micPermissionGranted = true
+
+        // First cycle — spawns a sleeping job.
+        state.startRecording()
+        state.stopRecording()
+        await waitUntil { state.jobs.count == 1 && state.captureState == .idle }
+
+        // Second cycle while first job is still in-flight.
+        state.startRecording()
+        state.stopRecording()
+        await waitUntil { state.jobs.count == 2 }
+
+        // Both jobs must be .filing before cancelAll().
+        await waitUntil { state.jobs.filter { $0.state == .filing }.count == 2 }
+
+        state.cancelAll()
+
+        // Both must reach .cancelled.
+        await waitUntil { state.jobs.filter { $0.state == .cancelled }.count == 2 }
+
+        XCTAssertEqual(state.jobs[0].state, .cancelled, "jobs[0] must be .cancelled after cancelAll()")
+        XCTAssertEqual(state.jobs[1].state, .cancelled, "jobs[1] must be .cancelled after cancelAll()")
     }
 
     func testCancelledJobRetainedInJobsList() async throws {
-        // 06-03 will assert: a cancelled job is retained in state.jobs (D-02/D-03),
-        // not deleted — jobs.count stays at 1 and jobs[0].state == .cancelled.
-        throw XCTSkip("Pending — fleshed out in 06-03")
+        // D-02 / D-03: a cancelled job is retained in state.jobs, not deleted —
+        // jobs.count stays at 1 and jobs[0].state == .cancelled.
+        let repoURL = try makeRepo(named: "cancel-retained-repo")
+        let binding = RepoBinding(rootURL: repoURL, displayName: "cancel-retained-repo", displayPath: repoURL.path)
+        let state = AppState(
+            boundRepo: binding,
+            boundRepoDisplayText: "cancel-retained-repo",
+            onStartRecording: { true },
+            onStopRecording: {},
+            onRunTranscription: { _ in "retained cancel" },
+            onRunIssueFiling: { _, _, _ in
+                try await Task.sleep(for: .seconds(60))
+                return IssueFilingResult(number: 1, url: "https://github.com/o/r/issues/1")
+            }
+        )
+        state.micPermissionGranted = true
+        state.startRecording()
+        state.stopRecording()
+
+        await waitUntil { state.jobs.count == 1 && state.jobs[0].state == .filing }
+
+        state.cancel(jobID: state.jobs[0].id)
+
+        await waitUntil { state.jobs[0].state == .cancelled }
+
+        // D-02/D-03: retained in jobs[], not deleted.
+        XCTAssertEqual(state.jobs.count, 1, "cancelled job must be retained in jobs[] (D-02/D-03)")
+        XCTAssertEqual(state.jobs[0].state, .cancelled, "retained job state must be .cancelled")
     }
 }
