@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Concurrent Filing & Control
-current_phase: 08
-current_phase_name: editable-system-prompt-finding-06-cleanup
+current_phase: 9
+current_phase_name: Jobs List UI + Per-Job Stop + Surfaced Errors
 status: verifying
 stopped_at: Completed 08-03-PLAN.md
-last_updated: "2026-07-01T20:14:23.112Z"
+last_updated: "2026-07-01T20:30:35.182Z"
 last_activity: 2026-07-01
-last_activity_desc: Phase 08 execution started
+last_activity_desc: Phase 08 complete, transitioned to Phase 9
 progress:
   total_phases: 5
   completed_phases: 4
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-06-28)
 
 ## Current Position
 
-Phase: 08 (editable-system-prompt-finding-06-cleanup) — EXECUTING
-Plan: 3 of 3
+Phase: 9 — Jobs List UI + Per-Job Stop + Surfaced Errors
+Plan: Not started
 Status: Phase complete — ready for verification
-Last activity: 2026-07-01 — Phase 08 execution started
+Last activity: 2026-07-01 — Phase 08 complete, transitioned to Phase 9
 
 ## Accumulated Context
 
