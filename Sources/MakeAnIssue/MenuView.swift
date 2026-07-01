@@ -5,9 +5,6 @@ import SwiftUI
 struct MenuView: View {
     @EnvironmentObject private var appState: AppState
 
-    @AppStorage(AppState.cliCommandKey) private var cliCommand: String = "claude"
-
-    @State private var isSettingsExpanded = false
     @State private var shortcutText = ""
 
     var body: some View {
@@ -54,34 +51,6 @@ struct MenuView: View {
             if let transcript = appState.transcript {
                 TranscriptCard(transcript: transcript)
             }
-            
-            // Collapsible configuration/settings area
-            Divider()
-            
-            DisclosureGroup(isExpanded: $isSettingsExpanded) {
-                VStack(alignment: .leading, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("CLI Command")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.secondary)
-                        
-                        TextField("e.g. claude", text: $cliCommand)
-                            .textFieldStyle(.roundedBorder)
-                    }
-                }
-                .padding(.bottom, 4)
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "gearshape.fill")
-                        .font(.system(size: 12))
-                    Text("Settings")
-                        .font(.system(size: 12, weight: .medium))
-                    Spacer()
-                }
-                .foregroundColor(.secondary)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
         }
         .padding(16)
         .frame(width: 320)
