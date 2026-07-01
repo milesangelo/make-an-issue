@@ -42,15 +42,14 @@ opening a browser — the full path from spoken word to filed issue must work en
 - ✓ Background/concurrent issue filing — capture returns to idle the instant transcription completes; multiple filings run concurrently as independent jobs, each speaking its own outcome — v1.1 (Phase 5; CONCUR-01/02/03)
 - ✓ Right-click menu-bar icon opens a Settings…/Quit menu; left-click keeps the status popover; the Settings window is a focusable, single-instance AppKit shell hosting the push-to-talk Recorder — v1.1 (Phase 7; SETTINGS-01 shell, editable system-prompt tab pending Phase 8)
 - ✓ Menu-bar icon shows a live red recording indicator while push-to-talk is held; reverts the instant recording stops — v1.1 (Phase 7; FEEDBACK-02)
+- ✓ Editable, persisted drafting-instructions tab in Settings, with an app-owned **unbreakable enforced contract** (issue-URL trailer + scoped tool grant survive any user edit) shown read-only; removed the orphaned dead "CLI Command" field — v1.1 (Phase 8; SETTINGS-02/03/04/05, FINDING-06)
 
 ### Active
 
 <!-- Next-milestone candidates (from REQUIREMENTS.md v2). Formalized when /gsd-new-milestone defines the next milestone's requirements. -->
 
-- [ ] Editable system-prompt tab in the Settings window (v1.1 — Phase 8; right-click Settings window shell shipped Phase 7)
 - [ ] Stop/Cancel an in-flight filing (v1.1)
 - [ ] Surfaced, recoverable errors for missing binding / failed filing (v1.1 RESIL-01)
-- [ ] Resolve FINDING-06 orphaned "CLI Command" field (v1.1)
 - [ ] Review/edit the drafted title & body before filing (REVIEW-01 — deferred)
 - [ ] View and switch the bound repository from the menu (MULTI-01 — deferred)
 - [ ] Developer-ID signing + notarization of the bundled whisper binary for clean-machine distribution (deferred from v1.0)
@@ -128,4 +127,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-01 — Phase 7 (AppKit Status-Item UI + Settings Window Shell) complete: right-click Settings…/Quit menu, focusable single-instance Settings window hosting the push-to-talk Recorder, and live recording indicator delivered (SETTINGS-01 shell, FEEDBACK-02), UAT 6/6 passed, threats SECURED (07-SECURITY.md). v1.1 continues with the editable system-prompt tab + FINDING-06 cleanup (Phase 8). v1.0 MVP shipped (4 phases, 15 plans).*
+*Last updated: 2026-07-01 — Phase 8 (Editable System Prompt + FINDING-06 Cleanup) complete: a two-tab Settings window with an editable, persisted drafting-instructions field, a Reset control, and a read-only display of the app-owned enforced contract (issue-URL trailer + scoped tool grant) that no user edit can strip; the orphaned dead "CLI Command" field was removed (SETTINGS-02/03/04/05, FINDING-06). Verification 14/14, 145 tests green. v1.1 continues with Phase 9 (jobs list UI + per-job stop + surfaced errors). v1.0 MVP shipped (4 phases, 15 plans).*
