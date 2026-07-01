@@ -1,9 +1,10 @@
 ---
 phase: 07-appkit-status-item-ui-settings-window-shell
 verified: 2026-06-30T00:00:00Z
-status: human_needed
-score: 3/7 must-haves verified
-behavior_unverified: 4
+status: verified
+score: 7/7 must-haves verified
+behavior_unverified: 0
+uat_closed: 2026-07-01 — 07-UAT.md, 6/6 human checks passed
 overrides_applied: 0
 behavior_unverified_items:
   - truth: "Right-clicking or Control-clicking the menu-bar icon opens a menu containing exactly Settings… and Quit; left-clicking opens the status popover hosting MenuView"
@@ -46,8 +47,8 @@ human_verification:
 # Phase 7: AppKit Status-Item UI + Settings Window Shell — Verification Report
 
 **Phase Goal:** Right-clicking the menu-bar icon opens a Settings/Quit menu while left-click keeps the status popover, and the icon itself shows a live recording indicator — all on a self-owned AppKit shell that works across macOS 13–15.
-**Verified:** 2026-06-30
-**Status:** human_needed
+**Verified:** 2026-06-30 (code) · 2026-07-01 (human UAT)
+**Status:** verified — all 4 behavior-unverified truths confirmed by 07-UAT.md (6/6 human checks passed)
 **Re-verification:** No — initial verification
 
 ---
