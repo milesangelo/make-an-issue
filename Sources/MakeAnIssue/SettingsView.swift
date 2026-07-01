@@ -51,7 +51,7 @@ struct SettingsView: View {
             .formStyle(.grouped)
             .tabItem { Text("Instructions") }
         }
-        .frame(width: 360)
+        .frame(width: 360, height: 460)
         .padding()
     }
 }
