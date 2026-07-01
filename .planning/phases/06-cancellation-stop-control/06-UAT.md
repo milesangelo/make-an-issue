@@ -1,5 +1,5 @@
 ---
-status: diagnosed
+status: complete
 phase: 06-cancellation-stop-control
 source: [06-VERIFICATION.md]
 started: 2026-06-30T02:45:23Z
@@ -24,7 +24,7 @@ reported: "Quit while filing was in flight. claude subprocess (15665) gone and n
 severity: major
 resolution: fixed
 fix_commit: 30fd152
-fix_note: "Added synchronous Self.sweepMCPTempFiles() in applicationShouldTerminate before returning .terminateLater (AppDelegate.swift). Regression test testTerminateLaterSweepsMCPTempFileSynchronously verified red without fix, green with it; full suite 137 passing. Recommend re-running the manual ⌘Q-mid-flight gate to confirm in the real app."
+fix_note: "Added synchronous Self.sweepMCPTempFiles() in applicationShouldTerminate before returning .terminateLater (AppDelegate.swift). Regression test testTerminateLaterSweepsMCPTempFileSynchronously verified red without fix, green with it; full suite 137 passing. Manual quit-mid-flight gate WAIVED by user decision (2026-06-30), accepted on the deterministic unit-test proof. Original wording: re-run the manual ⌘Q-mid-flight gate to confirm in the real app."
 
 ## Summary
 
@@ -51,3 +51,10 @@ blocked: 0
   status_after_fix: resolved
   fix_commit: 30fd152
   debug_session: ""
+
+## Follow-up (deferred — Phase 9 / JOBS-01)
+
+- observation: "After recording, the menu returns to idle with no visible sign the background filing/investigation is running. captureState only has idle/recording/transcribing (D-08 moved filing state into FilingJob.state); MenuView never renders jobs[]. spawnFilingJob (AppState.swift:262) sets no statusText at start — only spoken announcements fire on completion."
+  not_a_bug: "Visual jobs list is deliberately deferred to Phase 9 (JOBS-01), confirmed by the FilingJob.swift ForEach comment."
+  minimal_option: "statusText = 'Filing issue…' while any job is .filing, cleared on done/cancel/fail."
+  workaround: "pgrep -fl 'make-an-issue-mcp' detects an in-flight filing (the claude subprocess runs with --mcp-config .../make-an-issue-mcp-<uuid>.json)."
