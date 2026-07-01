@@ -22,9 +22,9 @@ Requirements for this milestone. Each maps to a roadmap phase. (v1.0 requirement
 ### Settings & Editable Prompt (SETTINGS)
 
 - [x] **SETTINGS-01**: Right-clicking the menu-bar icon opens a menu with "Settings…" and "Quit"; left-click still opens the status popover.
-- [ ] **SETTINGS-02**: A Settings window exposes an editable field for the LLM investigation/drafting **instructions**, persisted across launches.
+- [x] **SETTINGS-02**: A Settings window exposes an editable field for the LLM investigation/drafting **instructions**, persisted across launches.
 - [ ] **SETTINGS-03**: A "Reset to Default" control restores the shipped default prompt instructions.
-- [ ] **SETTINGS-04**: Editing the instructions can never remove the enforced contract — the app always appends the scoped tool grant and "Issue URL on the last line" instruction, so issue-number parsing and tool scoping cannot be broken by user edits.
+- [x] **SETTINGS-04**: Editing the instructions can never remove the enforced contract — the app always appends the scoped tool grant and "Issue URL on the last line" instruction, so issue-number parsing and tool scoping cannot be broken by user edits.
 - [x] **SETTINGS-05**: The orphaned "CLI Command" field (FINDING-06) is resolved — relocated into Settings (wired or removed), with no false affordance left in the menu.
 
 ### Jobs Visibility & Control (JOBS)
@@ -86,9 +86,9 @@ Which phases cover which requirements. Filled during roadmap creation.
 | CANCEL-02 | Phase 6 | Complete |
 | CANCEL-03 | Phase 6 | Complete |
 | SETTINGS-01 | Phase 7 | Complete |
-| SETTINGS-02 | Phase 8 | Pending |
+| SETTINGS-02 | Phase 8 | Complete |
 | SETTINGS-03 | Phase 8 | Pending |
-| SETTINGS-04 | Phase 8 | Pending |
+| SETTINGS-04 | Phase 8 | Complete |
 | SETTINGS-05 | Phase 8 | Complete |
 | JOBS-01 | Phase 9 | Pending |
 | JOBS-02 | Phase 9 | Pending |

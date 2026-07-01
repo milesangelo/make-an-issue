@@ -113,7 +113,7 @@ editable prompt / jobs list`. No new third-party dependencies.
   3. No matter what the user types, the app still appends the scoped `--allowedTools` grant and the "Issue URL on the last line" instruction — so issue-number parsing and tool scoping cannot be broken by edits (the editable field is instructions-only; flags and the enforced trailer live outside it).
   4. The orphaned "CLI Command" field (FINDING-06) is relocated into Settings (wired or removed), with no false affordance left in the menu.
 
-**Plans**: 1/3 plans executed
+**Plans**: 2/3 plans executed
 
 **Wave 1**
 
@@ -121,7 +121,7 @@ editable prompt / jobs list`. No new third-party dependencies.
 
 **Wave 2** *(depends on 08-01)*
 
-  - [ ] 08-02-PLAN.md — Enforced-contract core: `defaultInstructions` + `enforcedTrailer`, restructure `buildPrompt(instructions:)` with D-08 blank-fallback, thread instructions through `file()` read fresh per invocation (SETTINGS-04, SETTINGS-02)
+  - [x] 08-02-PLAN.md — Enforced-contract core: `defaultInstructions` + `enforcedTrailer`, restructure `buildPrompt(instructions:)` with D-08 blank-fallback, thread instructions through `file()` read fresh per invocation (SETTINGS-04, SETTINGS-02)
 
 **Wave 3** *(depends on 08-02)*
 
@@ -154,5 +154,5 @@ editable prompt / jobs list`. No new third-party dependencies.
 | 5. Concurrent Filing Jobs Model | v1.1 | 2/2 | Complete    | 2026-06-29 |
 | 6. Cancellation / Stop Control | v1.1 | 4/4 | Complete    | 2026-06-30 |
 | 7. AppKit Status-Item UI + Settings Window Shell | v1.1 | 2/2 | Complete    | 2026-06-30 |
-| 8. Editable System Prompt + FINDING-06 Cleanup | v1.1 | 1/3 | In Progress|  |
+| 8. Editable System Prompt + FINDING-06 Cleanup | v1.1 | 2/3 | In Progress|  |
 | 9. Jobs List UI + Per-Job Stop + Surfaced Errors | v1.1 | 0/? | Not started | - |
