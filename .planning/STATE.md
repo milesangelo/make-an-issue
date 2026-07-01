@@ -4,17 +4,17 @@ milestone: v1.1
 milestone_name: Concurrent Filing & Control
 current_phase: 08
 current_phase_name: editable-system-prompt-finding-06-cleanup
-status: executing
-stopped_at: Completed 08-02-PLAN.md
-last_updated: "2026-07-01T20:02:21.950Z"
+status: verifying
+stopped_at: Completed 08-03-PLAN.md
+last_updated: "2026-07-01T20:14:23.112Z"
 last_activity: 2026-07-01
 last_activity_desc: Phase 08 execution started
 progress:
   total_phases: 5
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 11
-  completed_plans: 10
-  percent: 60
+  completed_plans: 11
+  percent: 80
 ---
 
 # Project State
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-06-28)
 
 Phase: 08 (editable-system-prompt-finding-06-cleanup) — EXECUTING
 Plan: 3 of 3
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-07-01 — Phase 08 execution started
 
 ## Accumulated Context
@@ -75,6 +75,7 @@ Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecti
 - [Phase ?]: AppKit shell via NSStatusItem replaces MenuBarExtra; indicator driven by layer backgroundColor (not contentTintColor); Settings window self-owned NSWindowController; assign-popUp-clear for right-click menu
 - [Phase 08]: instructionsKey = "instructions" added to AppState, mirroring the removed cliCommandKey template (D-05) — Follows existing @AppStorage cross-reference doc-comment convention; single source of truth for Plan 03's SettingsView binding
 - [Phase 08]: enforcedTrailer lives on IssueFilingRunner (not IssueFilingConfig) — provider-agnostic prose, mirrors shellEscape's standalone pure static helper pattern — buildPrompt/file()/AppState default closure now assemble the prompt so the app-owned URL trailer + file-it directive always come after user-editable instructions, and AppState reads UserDefaults fresh per invocation (not cached) to preserve concurrent-filing isolation (D-02/D-03/D-06/D-08/SETTINGS-04)
+- [Phase 08]: Phase 8: Explicit window height (460) added to Settings TabView after human-verify showed width-only frame collapsed content height to ~zero
 
 ### Pending Todos
 
@@ -99,8 +100,8 @@ Open items carried into the v1.1 milestone:
 
 ## Session Continuity
 
-Last session: 2026-07-01T20:02:21.947Z
-Stopped at: Completed 08-02-PLAN.md
+Last session: 2026-07-01T20:14:23.109Z
+Stopped at: Completed 08-03-PLAN.md
 Resume file: None
 Decision record: .planning/research/SUMMARY.md (v1.1 research)
 
@@ -130,6 +131,7 @@ Decision record: .planning/research/SUMMARY.md (v1.1 research)
 | Phase 07 P02 | 2m | 1 tasks | 0 files |
 | Phase 08 P01 | 8min | 2 tasks | 2 files |
 | Phase 08 P02 | 7min | 2 tasks | 5 files |
+| Phase 08 P03 | 12min | 2 tasks | 1 files |
 
 ## Operator Next Steps
 

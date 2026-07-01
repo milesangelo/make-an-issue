@@ -30,7 +30,7 @@ editable prompt / jobs list`. No new third-party dependencies.
 - [x] **Phase 5: Concurrent Filing Jobs Model** - Lift filing out of the single `captureState` enum so capture returns to idle immediately and filings run concurrently (completed 2026-06-29)
 - [x] **Phase 6: Cancellation / Stop Control** - Abort an in-flight filing by terminating its full `claude → docker` process tree; clean up on quit (completed 2026-06-30)
 - [x] **Phase 7: AppKit Status-Item UI + Settings Window Shell** - Replace `MenuBarExtra` with `NSStatusItem` (left-click popover / right-click menu), self-owned Settings window, and a live recording indicator on the icon (completed 2026-06-30)
-- [ ] **Phase 8: Editable System Prompt + FINDING-06 Cleanup** - Editable, persisted drafting instructions in Settings with an unbreakable enforced contract; resolve the orphaned "CLI Command" field
+- [x] **Phase 8: Editable System Prompt + FINDING-06 Cleanup** - Editable, persisted drafting instructions in Settings with an unbreakable enforced contract; resolve the orphaned "CLI Command" field (completed 2026-07-01)
 - [ ] **Phase 9: Jobs List UI + Per-Job Stop + Surfaced Errors** - Render active jobs in the menu with per-row Stop and persistent, recoverable error rows (RESIL-01)
 
 ## Phase Details
@@ -113,7 +113,7 @@ editable prompt / jobs list`. No new third-party dependencies.
   3. No matter what the user types, the app still appends the scoped `--allowedTools` grant and the "Issue URL on the last line" instruction — so issue-number parsing and tool scoping cannot be broken by edits (the editable field is instructions-only; flags and the enforced trailer live outside it).
   4. The orphaned "CLI Command" field (FINDING-06) is relocated into Settings (wired or removed), with no false affordance left in the menu.
 
-**Plans**: 2/3 plans executed
+**Plans**: 3/3 plans complete
 
 **Wave 1**
 
@@ -125,7 +125,7 @@ editable prompt / jobs list`. No new third-party dependencies.
 
 **Wave 3** *(depends on 08-02)*
 
-  - [ ] 08-03-PLAN.md — Settings Instructions UI: TabView (Shortcut/Instructions), `@AppStorage(instructionsKey)` editor, Reset-to-Default, read-only enforced-contract display (SETTINGS-02, SETTINGS-03)
+  - [x] 08-03-PLAN.md — Settings Instructions UI: TabView (Shortcut/Instructions), `@AppStorage(instructionsKey)` editor, Reset-to-Default, read-only enforced-contract display (SETTINGS-02, SETTINGS-03)
 
 **UI hint**: yes
 
@@ -154,5 +154,5 @@ editable prompt / jobs list`. No new third-party dependencies.
 | 5. Concurrent Filing Jobs Model | v1.1 | 2/2 | Complete    | 2026-06-29 |
 | 6. Cancellation / Stop Control | v1.1 | 4/4 | Complete    | 2026-06-30 |
 | 7. AppKit Status-Item UI + Settings Window Shell | v1.1 | 2/2 | Complete    | 2026-06-30 |
-| 8. Editable System Prompt + FINDING-06 Cleanup | v1.1 | 2/3 | In Progress|  |
+| 8. Editable System Prompt + FINDING-06 Cleanup | v1.1 | 3/3 | Complete   | 2026-07-01 |
 | 9. Jobs List UI + Per-Job Stop + Surfaced Errors | v1.1 | 0/? | Not started | - |
