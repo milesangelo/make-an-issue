@@ -106,7 +106,11 @@ final class AppState: ObservableObject {
             try await Transcriber.run(wavURL: url)
         },
         onRunIssueFiling: @escaping (String, RepoBinding, @escaping @Sendable (pid_t) -> Void) async throws -> IssueFilingResult = { transcript, repo, onStarted in
-            try await IssueFilingRunner.file(transcript: transcript, repo: repo, config: .claudeGitHub, ownerRepo: nil, onProcessStarted: onStarted)
+            // Read the persisted drafting instructions fresh at invocation time — never cached
+            // on self/@Published — so concurrent filings each see the current value with no
+            // staleness across in-flight jobs (D-02/SETTINGS-02).
+            let instructions = UserDefaults.standard.string(forKey: AppState.instructionsKey) ?? ""
+            return try await IssueFilingRunner.file(transcript: transcript, repo: repo, config: .claudeGitHub, ownerRepo: nil, instructions: instructions, onProcessStarted: onStarted)
         },
         onSpeak: ((String) -> Void)? = nil,
         onCheckMicAuthorization: @escaping () -> Bool = {

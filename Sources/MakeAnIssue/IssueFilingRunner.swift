@@ -139,6 +139,7 @@ struct IssueFilingRunner {
         repo: RepoBinding,
         config: IssueFilingConfig = .claudeGitHub,
         ownerRepo: String? = nil,
+        instructions: String = "",
         onProcessStarted: (@Sendable (pid_t) -> Void)? = nil
     ) async throws -> IssueFilingResult {
 
@@ -174,7 +175,9 @@ struct IssueFilingRunner {
         defer { try? FileManager.default.removeItem(at: tempURL) }
 
         // Step 3: Assemble command.
-        let prompt = buildPrompt(transcript: transcript, ownerRepo: ownerRepo, config: config)
+        // instructions (D-02/SETTINGS-02) is threaded through from the caller — AppState's
+        // default filing closure reads it fresh from UserDefaults per invocation.
+        let prompt = buildPrompt(transcript: transcript, ownerRepo: ownerRepo, instructions: instructions, config: config)
         let command = assembleCommand(
             prompt: prompt,
             mcpConfigPath: tempURL.path,
