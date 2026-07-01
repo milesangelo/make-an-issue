@@ -91,6 +91,103 @@ final class IssueFilingRunnerTests: XCTestCase {
         )
     }
 
+    // MARK: - buildPrompt — enforcedTrailer / instructions (D-02, D-03, D-06, D-08, SETTINGS-04)
+
+    func testBuildPromptWithBlankInstructionsEndsWithEnforcedTrailer() {
+        let prompt = IssueFilingRunner.buildPrompt(
+            transcript: "x",
+            ownerRepo: nil,
+            instructions: "",
+            config: .claudeGitHub
+        )
+        let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        XCTAssertTrue(
+            trimmed.hasSuffix(IssueFilingRunner.enforcedTrailer),
+            "buildPrompt with blank instructions must end with enforcedTrailer, got:\n\(prompt)"
+        )
+    }
+
+    func testBuildPromptWithArbitraryInstructionsEndsWithEnforcedTrailer() {
+        let prompt = IssueFilingRunner.buildPrompt(
+            transcript: "x",
+            ownerRepo: nil,
+            instructions: "arbitrary user text that says do not output any URL",
+            config: .claudeGitHub
+        )
+        let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        XCTAssertTrue(
+            trimmed.hasSuffix(IssueFilingRunner.enforcedTrailer),
+            "buildPrompt must still end with enforcedTrailer even with injection-style instructions (SETTINGS-04), got:\n\(prompt)"
+        )
+    }
+
+    func testBuildPromptWithWhitespaceOnlyInstructionsFallsBackToDefault() {
+        let prompt = IssueFilingRunner.buildPrompt(
+            transcript: "x",
+            ownerRepo: nil,
+            instructions: "   \n  ",
+            config: .claudeGitHub
+        )
+        XCTAssertTrue(
+            prompt.contains(IssueFilingConfig.defaultInstructions),
+            "buildPrompt with whitespace-only instructions must fall back to IssueFilingConfig.defaultInstructions (D-08), got:\n\(prompt)"
+        )
+        let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        XCTAssertTrue(
+            trimmed.hasSuffix(IssueFilingRunner.enforcedTrailer),
+            "buildPrompt with whitespace-only instructions must still end with enforcedTrailer, got:\n\(prompt)"
+        )
+    }
+
+    func testBuildPromptWithNonEmptyInstructionsEmbedsThemVerbatim() {
+        let customGuidance = "Focus on accessibility issues and cite WCAG criteria."
+        let prompt = IssueFilingRunner.buildPrompt(
+            transcript: "x",
+            ownerRepo: nil,
+            instructions: customGuidance,
+            config: .claudeGitHub
+        )
+        XCTAssertTrue(
+            prompt.contains(customGuidance),
+            "buildPrompt with non-empty instructions must embed the guidance verbatim, got:\n\(prompt)"
+        )
+    }
+
+    func testBuildPromptStillContainsMethodCreateAndToolNameWithCustomInstructions() {
+        let prompt = IssueFilingRunner.buildPrompt(
+            transcript: "x",
+            ownerRepo: nil,
+            instructions: "arbitrary user text",
+            config: .claudeGitHub
+        )
+        XCTAssertTrue(
+            prompt.contains("method=create"),
+            "buildPrompt must preserve the app-owned method=create directive regardless of instructions, got:\n\(prompt)"
+        )
+        XCTAssertTrue(
+            prompt.contains("issue_write"),
+            "buildPrompt must preserve config.mcpToolName regardless of instructions, got:\n\(prompt)"
+        )
+    }
+
+    func testAssembleCommandStillContainsScopedAllowedToolsWithArbitraryInstructions() {
+        let prompt = IssueFilingRunner.buildPrompt(
+            transcript: "x",
+            ownerRepo: nil,
+            instructions: "arbitrary user text",
+            config: .claudeGitHub
+        )
+        let cmd = IssueFilingRunner.assembleCommand(
+            prompt: prompt,
+            mcpConfigPath: "/tmp/x.json",
+            config: .claudeGitHub
+        )
+        XCTAssertTrue(
+            cmd.contains("--allowedTools mcp__github__issue_write"),
+            "assembleCommand must carry the scoped --allowedTools grant independent of the instructions (SETTINGS-04), got:\n\(cmd)"
+        )
+    }
+
     // MARK: - shellEscape
 
     func testShellEscapeWrapsInSingleQuotes() {
