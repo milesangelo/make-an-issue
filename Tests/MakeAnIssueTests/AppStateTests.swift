@@ -1339,4 +1339,33 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(state.jobs.count, 1, "cancelled job must be retained in jobs[] (D-02/D-03)")
         XCTAssertEqual(state.jobs[0].state, .cancelled, "retained job state must be .cancelled")
     }
+
+    // MARK: - D-02 concurrency-freshness (SETTINGS-02)
+
+    /// Exercises the REAL read path used by AppState's default `onRunIssueFiling` closure
+    /// (`AppState.currentPersistedInstructions`) rather than a stub, proving instructions are
+    /// read fresh from UserDefaults at each invocation with no caching — so a mid-flight edit
+    /// is picked up by the next concurrent filing (D-02/SETTINGS-02).
+    func testCurrentPersistedInstructionsReadsFreshPerInvocation() throws {
+        let suiteName = "make-an-issue.instructions-freshness.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        // Unset → blank (buildPrompt's D-08 blank-fallback then substitutes the default).
+        defaults.removeObject(forKey: AppState.instructionsKey)
+        XCTAssertEqual(
+            AppState.currentPersistedInstructions(defaults), "",
+            "missing key must read as blank so buildPrompt can apply the default fallback")
+
+        // First value is read fresh.
+        defaults.set("first guidance", forKey: AppState.instructionsKey)
+        XCTAssertEqual(AppState.currentPersistedInstructions(defaults), "first guidance")
+
+        // Mutate BETWEEN invocations — a cached read would still return the old value here.
+        // A fresh per-invocation read returns the new value (the no-staleness guarantee).
+        defaults.set("second guidance", forKey: AppState.instructionsKey)
+        XCTAssertEqual(
+            AppState.currentPersistedInstructions(defaults), "second guidance",
+            "each invocation must re-read UserDefaults — no per-instance caching (D-02)")
+    }
 }

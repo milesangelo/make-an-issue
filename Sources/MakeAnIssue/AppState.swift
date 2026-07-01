@@ -20,7 +20,17 @@ extension KeyboardShortcuts.Name {
 final class AppState: ObservableObject {
     /// Shared UserDefaults key for the editable drafting-instructions field — must match
     /// @AppStorage in SettingsView (Pitfall 5 pattern, mirrors former cliCommandKey). (D-05)
-    static let instructionsKey = "instructions"
+    nonisolated static let instructionsKey = "instructions"
+
+    /// Reads the persisted drafting instructions fresh from UserDefaults at call time — never
+    /// cached on `self`/`@Published` — so each concurrent filing sees the current value with no
+    /// staleness across in-flight jobs (D-02/SETTINGS-02). `nonisolated` so the async filing
+    /// closure can call it without hopping the main actor; parameterized on `defaults` for tests.
+    nonisolated static func currentPersistedInstructions(
+        _ defaults: UserDefaults = .standard
+    ) -> String {
+        defaults.string(forKey: AppState.instructionsKey) ?? ""
+    }
 
     @Published var statusText: String
     @Published var launchCWD: String?
@@ -109,7 +119,7 @@ final class AppState: ObservableObject {
             // Read the persisted drafting instructions fresh at invocation time — never cached
             // on self/@Published — so concurrent filings each see the current value with no
             // staleness across in-flight jobs (D-02/SETTINGS-02).
-            let instructions = UserDefaults.standard.string(forKey: AppState.instructionsKey) ?? ""
+            let instructions = AppState.currentPersistedInstructions()
             return try await IssueFilingRunner.file(transcript: transcript, repo: repo, config: .claudeGitHub, ownerRepo: nil, instructions: instructions, onProcessStarted: onStarted)
         },
         onSpeak: ((String) -> Void)? = nil,
