@@ -1368,4 +1368,11 @@ final class AppStateTests: XCTestCase {
             AppState.currentPersistedInstructions(defaults), "second guidance",
             "each invocation must re-read UserDefaults — no per-instance caching (D-02)")
     }
+
+    /// Pins the literal UserDefaults key string, not just the symbol. Renaming this string
+    /// would silently orphan users' previously persisted instructions across app upgrades —
+    /// existing values written under the old key would become invisible (SETTINGS-02/SETTINGS-05, D-05).
+    func testInstructionsKeyIsStableLiteral() {
+        XCTAssertEqual(AppState.instructionsKey, "instructions")
+    }
 }
