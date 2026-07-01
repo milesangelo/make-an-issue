@@ -418,7 +418,7 @@ final class AppState: ObservableObject {
         case .cliFailed(let exitCode, _):
             return "AI CLI failed (exit \(exitCode)) — see log"
         case .permissionDenied:
-            return "Issue tool not granted — check CLI Command config"
+            return "Issue tool not granted — the AI CLI denied issue-write permission"
         case .parseFailed:
             return "Couldn't confirm an issue was filed — check GitHub (is Docker running?)"
         }
