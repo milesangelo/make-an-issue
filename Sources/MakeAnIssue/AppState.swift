@@ -18,8 +18,9 @@ extension KeyboardShortcuts.Name {
 
 @MainActor
 final class AppState: ObservableObject {
-    /// Shared UserDefaults key for the CLI command — must match @AppStorage in MenuView (Pitfall 5).
-    static let cliCommandKey = "cliCommand"
+    /// Shared UserDefaults key for the editable drafting-instructions field — must match
+    /// @AppStorage in SettingsView (Pitfall 5 pattern, mirrors former cliCommandKey). (D-05)
+    static let instructionsKey = "instructions"
 
     @Published var statusText: String
     @Published var launchCWD: String?
