@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Concurrent Filing & Control
-current_phase: 07
-current_phase_name: AppKit Status-Item UI + Settings Window Shell
+current_phase: 8
+current_phase_name: Editable System Prompt + FINDING-06 Cleanup
 status: verifying
 stopped_at: Completed 07-01-PLAN.md
-last_updated: "2026-06-30T19:06:45.839Z"
-last_activity: 2026-06-30
-last_activity_desc: Phase 07 execution started
+last_updated: "2026-07-01T18:48:19.756Z"
+last_activity: 2026-07-01
+last_activity_desc: Phase 07 complete, transitioned to Phase 8
 progress:
   total_phases: 5
   completed_phases: 3
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-06-28)
 
 ## Current Position
 
-Phase: 07 (AppKit Status-Item UI + Settings Window Shell) — EXECUTING
-Plan: 2 of 2
-Status: Phase complete — ready for verification
-Last activity: 2026-06-30 — Phase 07 execution started
+Phase: 8 — Editable System Prompt + FINDING-06 Cleanup
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-07-01 — Phase 07 complete, transitioned to Phase 8
 
 ## Accumulated Context
 
@@ -83,7 +83,7 @@ Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecti
 Open items carried into the v1.1 milestone:
 
 - ~~**Cancellation correctness (Phase 6):**~~ RESOLVED in Phase 6 — process-group SIGTERM→2s grace→SIGKILL on cancel and quit paths; `make-an-issue-mcp-*.json` swept on quit (synchronous sweep fix, commit 30fd152). UAT verified, threats SECURED (06-SECURITY.md).
-- **KeyboardShortcuts under NSPopover/NSMenu (Phase 7):** the `MenuBarExtra` `.onDisappear` hotkey workaround may fire spuriously or be unneeded once on `NSStatusItem` — re-validate empirically, do not blindly carry over.
+- ~~**KeyboardShortcuts under NSPopover/NSMenu (Phase 7):**~~ RESOLVED in Phase 7 — the `MenuBarExtra` `.onDisappear` end-tracking workaround was removed; UAT Test 6 (2026-07-01) confirmed push-to-talk fires across popover/menu open-close cycles and while the popover is open (A4 closed). Threats SECURED (07-SECURITY.md).
 - **Editable-prompt parse safety (Phase 8):** keep the editable field instructions-only; the enforced contract (scoped `--allowedTools`, `method=create`, "Issue URL on last line") is appended by `buildPrompt` and the CLI flags live in `assembleCommand`. Harden `IssueResultParser` prose fallback to match the **last** URL/line, not the first occurrence anywhere, or user edits produce false "created #N".
 - **Distribution gap (carried):** bundled `whisper-cli` is only ad-hoc signed for local use. Developer-ID signing + hardened-runtime notarization required before clean-machine distribution (deferred — DIST-01; see 03-CONTEXT.md D-04/D-05).
 - **Provider breadth deferred (carried):** `codex exec` non-interactive MCP writes broken upstream; Atlassian/Jira zero-token non-interactive write may be infeasible. v1 proven leg = `claude -p` + GitHub remote MCP. Re-spike before promising non-Claude/Jira providers (PROVIDER-01).
@@ -97,9 +97,9 @@ Open items carried into the v1.1 milestone:
 
 ## Session Continuity
 
-Last session: 2026-06-30T19:06:37.517Z
-Stopped at: Completed 07-01-PLAN.md
-Resume file: .planning/phases/07-appkit-status-item-ui-settings-window-shell/07-CONTEXT.md
+Last session: 2026-07-01
+Stopped at: Phase 07 complete (UAT 6/6 passed, threats SECURED) — ready to plan Phase 08
+Resume file: None
 Decision record: .planning/research/SUMMARY.md (v1.1 research)
 
 ## Performance Metrics
@@ -129,5 +129,5 @@ Decision record: .planning/research/SUMMARY.md (v1.1 research)
 
 ## Operator Next Steps
 
-- Plan Phase 7 (AppKit Status-Item UI + Settings Window Shell) with /gsd-plan-phase 7
+- Plan Phase 8 (Editable System Prompt + FINDING-06 Cleanup) with /gsd-plan-phase 8
 - Phase 9 follow-up captured: add an in-flight "Filing issue…" indicator (no UI feedback during background investigation today) — see 06-UAT.md follow-up

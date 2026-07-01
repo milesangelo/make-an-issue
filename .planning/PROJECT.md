@@ -40,12 +40,14 @@ opening a browser — the full path from spoken word to filed issue must work en
 - ✓ The created issue number/URL is parsed from the CLI output and spoken aloud ("created issue #N") — v1.0 (Phase 4)
 - ✓ Backend is provider-agnostic via a configurable command seam (`IssueFilingConfig`) — v1.0 (Phase 4; claude + GitHub proven, `codex` + Jira explicitly deferred)
 - ✓ Background/concurrent issue filing — capture returns to idle the instant transcription completes; multiple filings run concurrently as independent jobs, each speaking its own outcome — v1.1 (Phase 5; CONCUR-01/02/03)
+- ✓ Right-click menu-bar icon opens a Settings…/Quit menu; left-click keeps the status popover; the Settings window is a focusable, single-instance AppKit shell hosting the push-to-talk Recorder — v1.1 (Phase 7; SETTINGS-01 shell, editable system-prompt tab pending Phase 8)
+- ✓ Menu-bar icon shows a live red recording indicator while push-to-talk is held; reverts the instant recording stops — v1.1 (Phase 7; FEEDBACK-02)
 
 ### Active
 
 <!-- Next-milestone candidates (from REQUIREMENTS.md v2). Formalized when /gsd-new-milestone defines the next milestone's requirements. -->
 
-- [ ] Right-click Settings window with an editable system-prompt tab (v1.1)
+- [ ] Editable system-prompt tab in the Settings window (v1.1 — Phase 8; right-click Settings window shell shipped Phase 7)
 - [ ] Stop/Cancel an in-flight filing (v1.1)
 - [ ] Surfaced, recoverable errors for missing binding / failed filing (v1.1 RESIL-01)
 - [ ] Resolve FINDING-06 orphaned "CLI Command" field (v1.1)
@@ -126,4 +128,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-29 — Phase 5 (Concurrent Filing Jobs Model) complete: background/concurrent filing delivered (CONCUR-01/02/03). v1.1 (Concurrent Filing & Control) continues with right-click Settings + editable system prompt, Stop/Cancel, recoverable errors (RESIL-01), and FINDING-06 cleanup. v1.0 MVP shipped (4 phases, 15 plans).*
+*Last updated: 2026-07-01 — Phase 7 (AppKit Status-Item UI + Settings Window Shell) complete: right-click Settings…/Quit menu, focusable single-instance Settings window hosting the push-to-talk Recorder, and live recording indicator delivered (SETTINGS-01 shell, FEEDBACK-02), UAT 6/6 passed, threats SECURED (07-SECURITY.md). v1.1 continues with the editable system-prompt tab + FINDING-06 cleanup (Phase 8). v1.0 MVP shipped (4 phases, 15 plans).*
