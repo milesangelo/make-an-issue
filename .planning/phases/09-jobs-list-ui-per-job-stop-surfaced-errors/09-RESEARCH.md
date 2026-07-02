@@ -506,9 +506,11 @@ this same project, Phases 1–8) and remain the correct patterns to extend.
 
 **If this table is empty:** N/A — two low-risk assumptions logged above; neither blocks planning.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Exact `.frame(maxHeight:)` value for the jobs `ScrollView`**
+Both questions below are non-blocking and carry a recommendation adopted by the plans; neither gates planning or execution.
+
+1. **Exact `.frame(maxHeight:)` value for the jobs `ScrollView`** — RESOLVED: start at `180` as a UAT-tunable constant (adopted in Plan 09-02 Task 2); not a locked decision.
    - What we know: `TranscriptCard` uses `maxHeight: 100` for single-block transcript text; job
      rows are shorter/denser (one line + optional snippet) so more rows fit per point of height.
    - What's unclear: The ideal value depends on how tall a single `JobRow` renders once built —
@@ -516,7 +518,7 @@ this same project, Phases 1–8) and remain the correct patterns to extend.
    - Recommendation: Start around `160–200`, treat as a UAT-tunable constant, not a locked
      decision — CONTEXT.md leaves exact spacing/sizing to discretion.
 
-2. **Whether `.filing` rows need an icon at all, or the `ActivitySpinner` alone suffices as JOBS-01's "activity indicator"**
+2. **Whether `.filing` rows need an icon at all, or the `ActivitySpinner` alone suffices as JOBS-01's "activity indicator"** — RESOLVED: spinner-only for `.filing` (adopted in Plan 09-02 Task 1); satisfies JOBS-01 literally and is the minimum code.
    - What we know: JOBS-01 requires "an activity indicator" — `ActivitySpinner` alone satisfies
      the literal requirement.
    - What's unclear: Whether a static SF Symbol icon should also appear alongside the spinner for
