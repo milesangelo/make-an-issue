@@ -31,7 +31,7 @@ editable prompt / jobs list`. No new third-party dependencies.
 - [x] **Phase 6: Cancellation / Stop Control** - Abort an in-flight filing by terminating its full `claude → docker` process tree; clean up on quit (completed 2026-06-30)
 - [x] **Phase 7: AppKit Status-Item UI + Settings Window Shell** - Replace `MenuBarExtra` with `NSStatusItem` (left-click popover / right-click menu), self-owned Settings window, and a live recording indicator on the icon (completed 2026-06-30)
 - [x] **Phase 8: Editable System Prompt + FINDING-06 Cleanup** - Editable, persisted drafting instructions in Settings with an unbreakable enforced contract; resolve the orphaned "CLI Command" field (completed 2026-07-01)
-- [ ] **Phase 9: Jobs List UI + Per-Job Stop + Surfaced Errors** - Render active jobs in the menu with per-row Stop and persistent, recoverable error rows (RESIL-01)
+- [x] **Phase 9: Jobs List UI + Per-Job Stop + Surfaced Errors** - Render active jobs in the menu with per-row Stop and persistent, recoverable error rows (RESIL-01) (completed 2026-07-02)
 
 ## Phase Details
 
@@ -140,7 +140,7 @@ editable prompt / jobs list`. No new third-party dependencies.
   2. Each active job row has a Stop control that cancels that specific job (the UI surface for CANCEL-01).
   3. A failed filing surfaces a recoverable error — spoken (the popover is usually closed) and shown as a persistent job row with the message and originating transcript — that remains until the user dismisses it.
 
-**Plans**: 1/2 plans executed
+**Plans**: 2/2 plans complete
 
 **Wave 1**
 
@@ -148,7 +148,7 @@ editable prompt / jobs list`. No new third-party dependencies.
 
 **Wave 2** *(depends on 09-01)*
 
-  - [ ] 09-02-PLAN.md — Jobs list UI: `JobsSection` + `JobRow` (+ Stop/✕/Clear-all/transcript-snippet) inserted after `TranscriptCard`, per-row Stop→`cancel(jobID:)`, done-row `#N`→validated issue URL (JOBS-01, JOBS-02, RESIL-01); human-verify UAT
+  - [x] 09-02-PLAN.md — Jobs list UI: `JobsSection` + `JobRow` (+ Stop/✕/Clear-all/transcript-snippet) inserted after `TranscriptCard`, per-row Stop→`cancel(jobID:)`, done-row `#N`→validated issue URL (JOBS-01, JOBS-02, RESIL-01); human-verify UAT
 
 **UI hint**: yes
 
@@ -164,4 +164,4 @@ editable prompt / jobs list`. No new third-party dependencies.
 | 6. Cancellation / Stop Control | v1.1 | 4/4 | Complete    | 2026-06-30 |
 | 7. AppKit Status-Item UI + Settings Window Shell | v1.1 | 2/2 | Complete    | 2026-06-30 |
 | 8. Editable System Prompt + FINDING-06 Cleanup | v1.1 | 3/3 | Complete    | 2026-07-01 |
-| 9. Jobs List UI + Per-Job Stop + Surfaced Errors | v1.1 | 1/2 | In Progress|  |
+| 9. Jobs List UI + Per-Job Stop + Surfaced Errors | v1.1 | 2/2 | Complete   | 2026-07-02 |

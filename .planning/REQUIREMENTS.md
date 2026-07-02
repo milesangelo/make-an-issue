@@ -30,7 +30,7 @@ Requirements for this milestone. Each maps to a roadmap phase. (v1.0 requirement
 ### Jobs Visibility & Control (JOBS)
 
 - [x] **JOBS-01**: The menu shows a list of active filing jobs, each with its state (filing / done / failed / cancelled) and an activity indicator.
-- [ ] **JOBS-02**: Each active job row has a Stop control that cancels that specific job (the UI surface for CANCEL-01).
+- [x] **JOBS-02**: Each active job row has a Stop control that cancels that specific job (the UI surface for CANCEL-01).
 
 ### Recoverable Errors (RESIL)
 
@@ -91,7 +91,7 @@ Which phases cover which requirements. Filled during roadmap creation.
 | SETTINGS-04 | Phase 8 | Complete |
 | SETTINGS-05 | Phase 8 | Complete |
 | JOBS-01 | Phase 9 | Complete |
-| JOBS-02 | Phase 9 | Pending |
+| JOBS-02 | Phase 9 | Complete |
 | RESIL-01 | Phase 9 | Complete |
 | FEEDBACK-02 | Phase 7 | Complete |
 
