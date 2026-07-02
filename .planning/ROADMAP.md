@@ -164,4 +164,4 @@ editable prompt / jobs list`. No new third-party dependencies.
 | 6. Cancellation / Stop Control | v1.1 | 4/4 | Complete    | 2026-06-30 |
 | 7. AppKit Status-Item UI + Settings Window Shell | v1.1 | 2/2 | Complete    | 2026-06-30 |
 | 8. Editable System Prompt + FINDING-06 Cleanup | v1.1 | 3/3 | Complete    | 2026-07-01 |
-| 9. Jobs List UI + Per-Job Stop + Surfaced Errors | v1.1 | 2/2 | Complete   | 2026-07-02 |
+| 9. Jobs List UI + Per-Job Stop + Surfaced Errors | v1.1 | 2/2 | Complete    | 2026-07-02 |
