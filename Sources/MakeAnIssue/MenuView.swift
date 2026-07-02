@@ -51,6 +51,9 @@ struct MenuView: View {
             if let transcript = appState.transcript {
                 TranscriptCard(transcript: transcript)
             }
+
+            // Filing Jobs List (JOBS-01/JOBS-02/RESIL-01, D-11) — hidden entirely when empty (D-12)
+            JobsSection(appState: appState)
         }
         .padding(16)
         .frame(width: 320)
@@ -451,6 +454,57 @@ struct TranscriptCard: View {
             RoundedRectangle(cornerRadius: 8)
                 .stroke(Color.primary.opacity(0.06), lineWidth: 1)
         )
+    }
+}
+
+struct ClearAllButton: View {
+    @ObservedObject var appState: AppState
+
+    var body: some View {
+        Button(action: {
+            appState.clearFinished()
+        }) {
+            Text("Clear all")
+                .font(.system(size: 10, weight: .medium))
+        }
+        .buttonStyle(.plain)
+        .foregroundColor(.secondary)
+    }
+}
+
+struct JobsSection: View {
+    @ObservedObject var appState: AppState
+
+    var body: some View {
+        if !appState.jobs.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("FILING JOBS (\(appState.jobs.count))")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    if appState.jobs.contains(where: { $0.state != .filing }) {
+                        ClearAllButton(appState: appState)
+                    }
+                }
+
+                ScrollView {
+                    VStack(spacing: 8) {
+                        ForEach(appState.jobs.reversed()) { job in
+                            JobRow(job: job, appState: appState)
+                        }
+                    }
+                }
+                .frame(maxHeight: 180)
+            }
+            .padding(10)
+            .background(Color.primary.opacity(0.02))
+            .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+            )
+        }
     }
 }
 
