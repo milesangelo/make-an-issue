@@ -1375,4 +1375,63 @@ final class AppStateTests: XCTestCase {
     func testInstructionsKeyIsStableLiteral() {
         XCTAssertEqual(AppState.instructionsKey, "instructions")
     }
+
+    // MARK: - dismiss(jobID:) / clearFinished() (Phase 9, JOBS-01/RESIL-01, D-05/D-06)
+
+    func testDismissJobRemovesTerminalJob() throws {
+        let repoURL = try makeRepo(named: "dismiss-terminal-repo")
+        let binding = RepoBinding(rootURL: repoURL, displayName: "dismiss-terminal-repo", displayPath: repoURL.path)
+        let state = AppState(boundRepo: binding, onStartRecording: { true }, onStopRecording: {})
+        let job = FilingJob(id: UUID(), transcript: "x", repo: binding, state: .done)
+        state.jobs = [job]
+
+        state.dismiss(jobID: job.id)
+
+        XCTAssertTrue(state.jobs.isEmpty, "dismiss(jobID:) must remove a terminal (.done) job")
+    }
+
+    func testDismissJobIsNoOpForFilingJob() throws {
+        let repoURL = try makeRepo(named: "dismiss-filing-repo")
+        let binding = RepoBinding(rootURL: repoURL, displayName: "dismiss-filing-repo", displayPath: repoURL.path)
+        let state = AppState(boundRepo: binding, onStartRecording: { true }, onStopRecording: {})
+        let job = FilingJob(id: UUID(), transcript: "x", repo: binding, state: .filing)
+        state.jobs = [job]
+
+        state.dismiss(jobID: job.id)
+
+        XCTAssertEqual(state.jobs.count, 1, "dismiss(jobID:) must no-op for a .filing job (D-05/D-06)")
+        XCTAssertEqual(state.jobs[0].state, .filing)
+    }
+
+    func testClearFinishedRemovesAllTerminalJobs() throws {
+        let repoURL = try makeRepo(named: "clear-finished-repo")
+        let binding = RepoBinding(rootURL: repoURL, displayName: "clear-finished-repo", displayPath: repoURL.path)
+        let state = AppState(boundRepo: binding, onStartRecording: { true }, onStopRecording: {})
+        state.jobs = [
+            FilingJob(id: UUID(), transcript: "a", repo: binding, state: .done),
+            FilingJob(id: UUID(), transcript: "b", repo: binding, state: .failed),
+            FilingJob(id: UUID(), transcript: "c", repo: binding, state: .cancelled),
+        ]
+
+        state.clearFinished()
+
+        XCTAssertTrue(state.jobs.isEmpty, "clearFinished() must remove every terminal job")
+    }
+
+    func testClearFinishedPreservesFilingJobs() throws {
+        let repoURL = try makeRepo(named: "clear-finished-preserve-repo")
+        let binding = RepoBinding(rootURL: repoURL, displayName: "clear-finished-preserve-repo", displayPath: repoURL.path)
+        let state = AppState(boundRepo: binding, onStartRecording: { true }, onStopRecording: {})
+        let filingJob = FilingJob(id: UUID(), transcript: "in-flight", repo: binding, state: .filing)
+        state.jobs = [
+            filingJob,
+            FilingJob(id: UUID(), transcript: "done", repo: binding, state: .done),
+        ]
+
+        state.clearFinished()
+
+        XCTAssertEqual(state.jobs.count, 1, "clearFinished() must preserve .filing jobs (D-05)")
+        XCTAssertEqual(state.jobs[0].id, filingJob.id)
+        XCTAssertEqual(state.jobs[0].state, .filing)
+    }
 }

@@ -354,6 +354,20 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// Dismiss a single terminal job by ID, removing it from `jobs[]`. No-ops for a job that is
+    /// still `.filing` — dismissal is not cancellation (D-05/D-06). Callers wanting to abort an
+    /// in-flight job must use `cancel(jobID:)`; this method never calls `task?.cancel()`.
+    func dismiss(jobID: UUID) {
+        jobs.removeAll { $0.id == jobID && $0.state != .filing }
+    }
+
+    /// Remove every terminal (non-`.filing`) job from `jobs[]`. Active `.filing` jobs are left
+    /// untouched (D-05). Uses the explicit `$0.state != .filing` predicate — not a negated
+    /// "is terminal" helper — so a future 5th `FilingJobState` case can never be silently swept.
+    func clearFinished() {
+        jobs.removeAll { $0.state != .filing }
+    }
+
     /// Speak text now if mic is not active; defer to `pendingAnnouncements` if recording (D-02/D-03).
     private func announce(_ text: String) {
         if captureState == .recording {
