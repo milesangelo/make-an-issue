@@ -1434,4 +1434,24 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(state.jobs[0].id, filingJob.id)
         XCTAssertEqual(state.jobs[0].state, .filing)
     }
+
+    // MARK: - message(for: IssueFilingError) (Phase 9, D-09, RESIL-01)
+
+    func testMessageForIssueFilingErrorCases() {
+        XCTAssertEqual(
+            AppState.message(for: .tokenAcquisitionFailed),
+            "Sign in to GitHub first: gh auth login")
+        XCTAssertEqual(
+            AppState.message(for: .timeout),
+            "AI CLI timed out — check your internet connection")
+        XCTAssertEqual(
+            AppState.message(for: .cliFailed(exitCode: 1, stderr: "boom")),
+            "AI CLI failed (exit 1) — see log")
+        XCTAssertEqual(
+            AppState.message(for: .permissionDenied(tools: ["mcp__github__issue_write"])),
+            "Issue tool not granted — the AI CLI denied issue-write permission")
+        XCTAssertEqual(
+            AppState.message(for: .parseFailed),
+            "Couldn't confirm an issue was filed — check GitHub (is Docker running?)")
+    }
 }

@@ -423,7 +423,7 @@ final class AppState: ObservableObject {
     /// Map an `IssueFilingError` to a short user-facing message.
     ///
     /// Only the success path speaks (v1 contract); failures surface as status text only.
-    private static func message(for error: IssueFilingError) -> String {
+    static func message(for error: IssueFilingError) -> String {
         switch error {
         case .tokenAcquisitionFailed:
             return "Sign in to GitHub first: gh auth login"
