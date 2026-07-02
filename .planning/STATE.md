@@ -4,9 +4,9 @@ milestone: v1.1
 milestone_name: Concurrent Filing & Control
 current_phase: 9
 current_phase_name: Jobs List UI + Per-Job Stop + Surfaced Errors
-status: verifying
+status: executing
 stopped_at: Phase 9 context gathered
-last_updated: "2026-07-02T01:19:08.915Z"
+last_updated: "2026-07-02T01:48:09.970Z"
 last_activity: 2026-07-01
 last_activity_desc: Phase 08 complete, transitioned to Phase 9
 progress:
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-06-28)
 
 Phase: 9 — Jobs List UI + Per-Job Stop + Surfaced Errors
 Plan: Not started
-Status: Phase complete — ready for verification
+Status: Ready to execute
 Last activity: 2026-07-01 — Phase 08 complete, transitioned to Phase 9
 
 ## Accumulated Context
