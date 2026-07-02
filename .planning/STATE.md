@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Concurrent Filing & Control
-current_phase: 9
-current_phase_name: Jobs List UI + Per-Job Stop + Surfaced Errors
+current_phase: 09
+current_phase_name: jobs-list-ui-per-job-stop-surfaced-errors
 status: executing
-stopped_at: Phase 9 context gathered
-last_updated: "2026-07-02T01:48:09.970Z"
-last_activity: 2026-07-01
-last_activity_desc: Phase 08 complete, transitioned to Phase 9
+stopped_at: Completed 09-01-PLAN.md
+last_updated: "2026-07-02T02:09:23.044Z"
+last_activity: 2026-07-02
+last_activity_desc: Phase 09 execution started
 progress:
   total_phases: 5
   completed_phases: 4
-  total_plans: 11
-  completed_plans: 11
+  total_plans: 13
+  completed_plans: 12
   percent: 80
 ---
 
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-28)
 
 **Core value:** Capture a repo-aware tracker issue (GitHub or Jira) by voice in seconds — spoken word to filed issue, end to end.
-**Current focus:** Phase 08 — editable-system-prompt-finding-06-cleanup
+**Current focus:** Phase 09 — jobs-list-ui-per-job-stop-surfaced-errors
 
 ## Current Position
 
-Phase: 9 — Jobs List UI + Per-Job Stop + Surfaced Errors
-Plan: Not started
+Phase: 09 (jobs-list-ui-per-job-stop-surfaced-errors) — EXECUTING
+Plan: 2 of 2
 Status: Ready to execute
-Last activity: 2026-07-01 — Phase 08 complete, transitioned to Phase 9
+Last activity: 2026-07-02 — Phase 09 execution started
 
 ## Accumulated Context
 
@@ -76,6 +76,9 @@ Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecti
 - [Phase 08]: instructionsKey = "instructions" added to AppState, mirroring the removed cliCommandKey template (D-05) — Follows existing @AppStorage cross-reference doc-comment convention; single source of truth for Plan 03's SettingsView binding
 - [Phase 08]: enforcedTrailer lives on IssueFilingRunner (not IssueFilingConfig) — provider-agnostic prose, mirrors shellEscape's standalone pure static helper pattern — buildPrompt/file()/AppState default closure now assemble the prompt so the app-owned URL trailer + file-it directive always come after user-editable instructions, and AppState reads UserDefaults fresh per invocation (not cached) to preserve concurrent-filing isolation (D-02/D-03/D-06/D-08/SETTINGS-04)
 - [Phase 08]: Phase 8: Explicit window height (460) added to Settings TabView after human-verify showed width-only frame collapsed content height to ~zero
+- [Phase ?]: Phase 09-01: dismiss(jobID:)/clearFinished() are terminal-only jobs[] mutations — never call task?.cancel(); dismissal is not cancellation (D-05/D-06)
+- [Phase ?]: Phase 09-01: JobRowStyle is a plain non-@MainActor namespace enum so icon/color/openableIssueURL statics are unit-testable without a rendered-view harness
+- [Phase ?]: Phase 09-01: openableIssueURL admits only https-scheme URLs (case-insensitive) — defense-in-depth guard on AI-CLI-stdout-derived issue URLs ahead of Plan 09-02's NSWorkspace.shared.open
 
 ### Pending Todos
 
@@ -100,9 +103,9 @@ Open items carried into the v1.1 milestone:
 
 ## Session Continuity
 
-Last session: 2026-07-02T01:19:08.911Z
-Stopped at: Phase 9 context gathered
-Resume file: .planning/phases/09-jobs-list-ui-per-job-stop-surfaced-errors/09-CONTEXT.md
+Last session: 2026-07-02T02:09:23.040Z
+Stopped at: Completed 09-01-PLAN.md
+Resume file: None
 Decision record: .planning/research/SUMMARY.md (v1.1 research)
 
 ## Performance Metrics
@@ -132,6 +135,7 @@ Decision record: .planning/research/SUMMARY.md (v1.1 research)
 | Phase 08 P01 | 8min | 2 tasks | 2 files |
 | Phase 08 P02 | 7min | 2 tasks | 5 files |
 | Phase 08 P03 | 12min | 2 tasks | 1 files |
+| Phase Phase 09 PP01 | 8min | 3 tasks | 4 files |
 
 ## Operator Next Steps
 

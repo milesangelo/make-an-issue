@@ -140,11 +140,11 @@ editable prompt / jobs list`. No new third-party dependencies.
   2. Each active job row has a Stop control that cancels that specific job (the UI surface for CANCEL-01).
   3. A failed filing surfaces a recoverable error — spoken (the popover is usually closed) and shown as a persistent job row with the message and originating transcript — that remains until the user dismisses it.
 
-**Plans**: 2 plans
+**Plans**: 1/2 plans executed
 
 **Wave 1**
 
-  - [ ] 09-01-PLAN.md — AppState jobs-lifecycle surface: `dismiss(jobID:)` + `clearFinished()` (D-06), expose `message(for: IssueFilingError)` (D-09), pure `JobRowStyle` icon/color/https-URL-guard mapper (JOBS-01, RESIL-01); Wave 0 unit tests
+  - [x] 09-01-PLAN.md — AppState jobs-lifecycle surface: `dismiss(jobID:)` + `clearFinished()` (D-06), expose `message(for: IssueFilingError)` (D-09), pure `JobRowStyle` icon/color/https-URL-guard mapper (JOBS-01, RESIL-01); Wave 0 unit tests
 
 **Wave 2** *(depends on 09-01)*
 
@@ -164,4 +164,4 @@ editable prompt / jobs list`. No new third-party dependencies.
 | 6. Cancellation / Stop Control | v1.1 | 4/4 | Complete    | 2026-06-30 |
 | 7. AppKit Status-Item UI + Settings Window Shell | v1.1 | 2/2 | Complete    | 2026-06-30 |
 | 8. Editable System Prompt + FINDING-06 Cleanup | v1.1 | 3/3 | Complete    | 2026-07-01 |
-| 9. Jobs List UI + Per-Job Stop + Surfaced Errors | v1.1 | 0/2 | Planned | - |
+| 9. Jobs List UI + Per-Job Stop + Surfaced Errors | v1.1 | 1/2 | In Progress|  |
