@@ -43,13 +43,12 @@ opening a browser — the full path from spoken word to filed issue must work en
 - ✓ Right-click menu-bar icon opens a Settings…/Quit menu; left-click keeps the status popover; the Settings window is a focusable, single-instance AppKit shell hosting the push-to-talk Recorder — v1.1 (Phase 7; SETTINGS-01 shell, editable system-prompt tab pending Phase 8)
 - ✓ Menu-bar icon shows a live red recording indicator while push-to-talk is held; reverts the instant recording stops — v1.1 (Phase 7; FEEDBACK-02)
 - ✓ Editable, persisted drafting-instructions tab in Settings, with an app-owned **unbreakable enforced contract** (issue-URL trailer + scoped tool grant survive any user edit) shown read-only; removed the orphaned dead "CLI Command" field — v1.1 (Phase 8; SETTINGS-02/03/04/05, FINDING-06)
+- ✓ Live "Filing Jobs" popover list — per-state rows (filing/done/failed/cancelled) with a per-job Stop on active rows, persistent dismissable error rows surfacing the mapped message + expandable transcript, an https-guarded clickable done-row issue link, and a Clear-all that removes only terminal jobs — v1.1 (Phase 9; JOBS-01/JOBS-02/RESIL-01)
 
 ### Active
 
 <!-- Next-milestone candidates (from REQUIREMENTS.md v2). Formalized when /gsd-new-milestone defines the next milestone's requirements. -->
 
-- [ ] Stop/Cancel an in-flight filing (v1.1)
-- [ ] Surfaced, recoverable errors for missing binding / failed filing (v1.1 RESIL-01)
 - [ ] Review/edit the drafted title & body before filing (REVIEW-01 — deferred)
 - [ ] View and switch the bound repository from the menu (MULTI-01 — deferred)
 - [ ] Developer-ID signing + notarization of the bundled whisper binary for clean-machine distribution (deferred from v1.0)
@@ -70,6 +69,7 @@ opening a browser — the full path from spoken word to filed issue must work en
 
 - **Shipped v1.0 MVP on 2026-06-28** — full voice → filed-issue → spoken-confirmation happy path,
   proven end-to-end with real GitHub issues filed via `claude` + MCP.
+- **v1.1 "Concurrent Filing & Control" feature-complete on 2026-07-02** — all 5 phases done (concurrent jobs model, stop/cancel, AppKit status-item + Settings shell, editable drafting-instructions, and the Phase 9 live jobs-list UI with per-job Stop + surfaced recoverable errors). Ready for `/gsd-complete-milestone`.
 - Codebase: ~3,660 LOC Swift across 23 files. Tech stack: Swift 6 / SwiftUI `MenuBarExtra` + AppKit,
   AVFoundation (capture + TTS), KeyboardShortcuts (global hotkey), bundled `whisper.cpp` (`whisper-cli` +
   SHA-pinned `small.en` model), plus `fetch-whisper.sh` / `build-app.sh` for vendoring + `.app` assembly.
