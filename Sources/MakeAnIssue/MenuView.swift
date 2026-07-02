@@ -454,6 +454,112 @@ struct TranscriptCard: View {
     }
 }
 
+struct DismissButton: View {
+    @ObservedObject var appState: AppState
+    let jobID: UUID
+
+    var body: some View {
+        Button(action: {
+            appState.dismiss(jobID: jobID)
+        }) {
+            Image(systemName: "xmark")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(.secondary)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct TranscriptSnippet: View {
+    let transcript: String
+    @State private var isExpanded = false
+
+    var body: some View {
+        Text(transcript)
+            .font(.system(size: 11))
+            .foregroundColor(.secondary)
+            .lineLimit(isExpanded ? nil : 2)
+            .textSelection(.enabled)
+            .onTapGesture {
+                withAnimation {
+                    isExpanded.toggle()
+                }
+            }
+    }
+}
+
+struct JobRow: View {
+    let job: FilingJob
+    @ObservedObject var appState: AppState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            switch job.state {
+            case .filing:
+                HStack(spacing: 8) {
+                    ActivitySpinner(color: .blue)
+                        .frame(width: 16, height: 16)
+                    Text("Filing…")
+                        .font(.system(size: 12))
+                    Spacer()
+                    Button("Stop") {
+                        appState.cancel(jobID: job.id)
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 11, weight: .medium))
+                }
+
+            case .done:
+                HStack(spacing: 8) {
+                    Image(systemName: JobRowStyle.iconName(for: .done))
+                        .foregroundColor(JobRowStyle.tintColor(for: .done))
+                    if let result = job.result {
+                        Button(action: {
+                            if let url = JobRowStyle.openableIssueURL(result.url) {
+                                NSWorkspace.shared.open(url)
+                            }
+                        }) {
+                            Text("Issue #\(result.number) filed")
+                                .font(.system(size: 12))
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        Text("Issue filed")
+                            .font(.system(size: 12))
+                    }
+                    Spacer()
+                    DismissButton(appState: appState, jobID: job.id)
+                }
+
+            case .failed:
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        Image(systemName: JobRowStyle.iconName(for: .failed))
+                            .foregroundColor(JobRowStyle.tintColor(for: .failed))
+                        Text(job.error.map(AppState.message(for:)) ?? "Issue filing failed")
+                            .font(.system(size: 12))
+                        Spacer()
+                        DismissButton(appState: appState, jobID: job.id)
+                    }
+                    TranscriptSnippet(transcript: job.transcript)
+                }
+
+            case .cancelled:
+                HStack(spacing: 8) {
+                    Image(systemName: JobRowStyle.iconName(for: .cancelled))
+                        .foregroundColor(JobRowStyle.tintColor(for: .cancelled))
+                    Text("Filing cancelled")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    DismissButton(appState: appState, jobID: job.id)
+                }
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
 struct CopyButton: View {
     let text: String
     @State private var isCopied = false
