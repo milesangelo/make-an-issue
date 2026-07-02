@@ -5,8 +5,8 @@ milestone_name: Concurrent Filing & Control
 current_phase: 9
 current_phase_name: Jobs List UI + Per-Job Stop + Surfaced Errors
 status: verifying
-stopped_at: Completed 08-03-PLAN.md
-last_updated: "2026-07-01T20:30:35.182Z"
+stopped_at: Phase 9 context gathered
+last_updated: "2026-07-02T01:19:08.915Z"
 last_activity: 2026-07-01
 last_activity_desc: Phase 08 complete, transitioned to Phase 9
 progress:
@@ -100,9 +100,9 @@ Open items carried into the v1.1 milestone:
 
 ## Session Continuity
 
-Last session: 2026-07-01T20:14:23.109Z
-Stopped at: Completed 08-03-PLAN.md
-Resume file: None
+Last session: 2026-07-02T01:19:08.911Z
+Stopped at: Phase 9 context gathered
+Resume file: .planning/phases/09-jobs-list-ui-per-job-stop-surfaced-errors/09-CONTEXT.md
 Decision record: .planning/research/SUMMARY.md (v1.1 research)
 
 ## Performance Metrics
