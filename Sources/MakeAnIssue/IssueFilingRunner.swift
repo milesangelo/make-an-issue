@@ -34,6 +34,19 @@ struct IssueFilingRunner {
         return "'\(escaped)'"
     }
 
+    /// App-owned, non-editable trailer appended to every prompt regardless of the user's
+    /// drafting instructions (D-02/D-03/SETTINGS-04). Carries the "Issue URL on the LAST line"
+    /// output-format contract that `IssueResultParser`'s prose fallback depends on, plus the
+    /// no-confirmation directive. Extracted out of the editable prompt body so no user edit —
+    /// including adversarial/injection-style guidance — can suppress it; `buildPrompt` always
+    /// appends this last.
+    static let enforcedTrailer = """
+        On the LAST line of your response, output ONLY the new issue URL in this exact format:
+        Issue URL: https://github.com/<owner>/<repo>/issues/<NUMBER>
+
+        Do not ask for confirmation; file it directly.
+        """
+
     /// Build the prompt that instructs the AI CLI to investigate the repo and file the issue.
     ///
     /// The prompt embeds the transcript shell-escaped within the text body (the transcript is
@@ -42,12 +55,20 @@ struct IssueFilingRunner {
     /// nil the prompt says "the repository in the current working directory" so the model can
     /// discover the owner/repo from the cwd `.git/config` (v1 assumption — Open Q1).
     ///
-    /// Output format instruction: "Issue URL: https://…/issues/N" on the last line provides
-    /// a reliable prose fallback for `IssueResultParser` when the structured tool_result parse
-    /// fails (Pattern 6 in 04-RESEARCH.md).
+    /// `instructions` (D-02) is the user-editable drafting guidance persisted via
+    /// `AppState.instructionsKey`. Blank/whitespace-only input falls back to
+    /// `IssueFilingConfig.defaultInstructions` (D-08). The prompt is assembled as four ordered
+    /// segments — app framing + transcript, then the guidance, then the app-owned file-it
+    /// directive (interpolates `config.mcpToolName`), then `enforcedTrailer` last — so the
+    /// enforced contract always survives arbitrary edits to `instructions` (SETTINGS-04).
+    ///
+    /// Output format instruction: "Issue URL: https://…/issues/N" on the last line (now part of
+    /// `enforcedTrailer`) provides a reliable prose fallback for `IssueResultParser` when the
+    /// structured tool_result parse fails (Pattern 6 in 04-RESEARCH.md).
     static func buildPrompt(
         transcript: String,
         ownerRepo: String?,
+        instructions: String = "",
         config: IssueFilingConfig
     ) -> String {
         let repoRef: String
@@ -57,18 +78,21 @@ struct IssueFilingRunner {
             repoRef = "the repository in the current working directory"
         }
 
+        // D-08: blank/whitespace-only instructions fall back to the single canonical default.
+        let guidance = instructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? IssueFilingConfig.defaultInstructions
+            : instructions
+
         return """
         You are make-an-issue: you turn a developer's spoken thought into a GitHub issue for \(repoRef).
 
         Spoken transcript: "\(transcript)"
 
-        Steps:
-        1. Briefly investigate the repo (README, relevant source files) to write a specific, accurate issue.
-        2. File the issue using the \(config.mcpToolName) tool with method=create.
-        3. On the LAST line of your response, output ONLY the new issue URL in this exact format:
-           Issue URL: https://github.com/<owner>/<repo>/issues/<NUMBER>
+        \(guidance)
 
-        Do not ask for confirmation; file it directly.
+        File the issue using the \(config.mcpToolName) tool with method=create.
+
+        \(enforcedTrailer)
         """
     }
 
@@ -108,11 +132,15 @@ struct IssueFilingRunner {
     ///   - `.cliFailed(exitCode:stderr:)` — AI CLI exited non-zero.
     ///   - `.permissionDenied(tools:)` — exit 0 but `permission_denials` non-empty.
     ///   - `.parseFailed` — AI CLI exited 0 but no parseable issue URL found.
+    ///   - `CancellationError` — the enclosing Task was cancelled; the MCP tempfile
+    ///     is still removed by the existing `defer` on this throw path (CANCEL-02).
     static func file(
         transcript: String,
         repo: RepoBinding,
         config: IssueFilingConfig = .claudeGitHub,
-        ownerRepo: String? = nil
+        ownerRepo: String? = nil,
+        instructions: String = "",
+        onProcessStarted: (@Sendable (pid_t) -> Void)? = nil
     ) async throws -> IssueFilingResult {
 
         // Step 1: Acquire token — env-var-first (Open Q3 / AUTH-01).
@@ -147,7 +175,9 @@ struct IssueFilingRunner {
         defer { try? FileManager.default.removeItem(at: tempURL) }
 
         // Step 3: Assemble command.
-        let prompt = buildPrompt(transcript: transcript, ownerRepo: ownerRepo, config: config)
+        // instructions (D-02/SETTINGS-02) is threaded through from the caller — AppState's
+        // default filing closure reads it fresh from UserDefaults per invocation.
+        let prompt = buildPrompt(transcript: transcript, ownerRepo: ownerRepo, instructions: instructions, config: config)
         let command = assembleCommand(
             prompt: prompt,
             mcpConfigPath: tempURL.path,
@@ -158,12 +188,22 @@ struct IssueFilingRunner {
         // - cwd = repo.rootURL (ANALYZE-01 — model investigates real code).
         // - Token in environment, never in the command string (AUTH-01 / Pitfall 2).
         // - 300s timeout (Pitfall 7 — AI-CLI path is far slower than transcription).
+        // - onSpawn forwarded so the caller can store the pgid for quit-time SIGKILL (CANCEL-03).
         let result = await CLIRunner().run(
             command: command,
             workingDirectory: repo.rootURL,
             environment: [config.tokenEnvKey: token],
-            timeout: .seconds(300)
+            timeout: .seconds(300),
+            onSpawn: onProcessStarted
         )
+
+        // Surface CancellationError before interpreting the CLI result. If the enclosing
+        // Task was cancelled, CLIRunner's onCancel will have sent SIGTERM to the process
+        // group; the process exits and terminationHandler delivers a .failed result. We
+        // throw CancellationError here instead of treating the forced-exit as a real
+        // filing outcome. The defer { removeItem(tempURL) } above still runs on this
+        // throw path, so the MCP tempfile is cleaned up on cancel (CANCEL-02).
+        try Task.checkCancellation()
 
         // Step 5: Map CLIResult → IssueFilingResult (mirrors Transcriber.run switch shape).
         switch result {

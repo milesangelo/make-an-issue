@@ -1,20 +1,20 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: MVP
-current_phase: 0
-status: Awaiting next milestone
-stopped_at: Phase 3 context reworked (bundled whisper)
-last_updated: "2026-06-28T06:09:51.705Z"
-last_activity: 2026-06-28
-last_activity_desc: Milestone v1.0 completed and archived
+milestone: v1.1
+milestone_name: Concurrent Filing & Control
+current_phase: 09
+status: verifying
+stopped_at: Completed 09-01-PLAN.md
+last_updated: "2026-07-02T13:44:25.836Z"
+last_activity: 2026-07-02
+last_activity_desc: Phase 09 complete
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 15
-  completed_plans: 15
+  total_phases: 5
+  completed_phases: 5
+  total_plans: 13
+  completed_plans: 13
   percent: 100
-current_phase_name: voice-ai-cli-drafts-files-issue-via-mcp-spoken-confirmation
+current_phase_name: jobs-list-ui-per-job-stop-surfaced-errors
 ---
 
 # Project State
@@ -24,14 +24,14 @@ current_phase_name: voice-ai-cli-drafts-files-issue-via-mcp-spoken-confirmation
 See: .planning/PROJECT.md (updated 2026-06-28)
 
 **Core value:** Capture a repo-aware tracker issue (GitHub or Jira) by voice in seconds — spoken word to filed issue, end to end.
-**Current focus:** Planning next milestone (v1.0 MVP shipped 2026-06-28)
+**Current focus:** Phase 09 — jobs-list-ui-per-job-stop-surfaced-errors
 
 ## Current Position
 
-Phase: Milestone v1.0 complete
-Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-06-28 — Milestone v1.0 completed and archived
+Phase: 09
+Plan: Not started
+Status: Phase complete — ready for verification
+Last activity: 2026-07-02 — Phase 09 complete
 
 ## Accumulated Context
 
@@ -62,6 +62,26 @@ Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecti
 - [Phase ?]: Phase 03-03: vendor/ added to .gitignore so ~466 MB binary + model never enter git history (D-03)
 - [Phase ?]: Phase 03-05: MODEL_SHA256 pinned to content digest c6138d6d...1e5d
 - [Phase ?]: Phase 03-05: install_name_tool reads LC_RPATH dynamically via otool/awk (no hardcoded home path)
+- [Phase ?]: jobs model
+- [Phase 06]: A1 confirmed: Foundation.Process spawns /bin/zsh children as their own process-group leaders — kill(-pgid) approach is safe
+- [Phase 06]: A2 confirmed: spawned child group is distinct from app group — group-directed signal stays in child tree
+- [Phase 06]: Negative-PID reap confirmed: kill(-pid, SIGTERM) reaps the spawned process group on macOS within 3s
+- [Phase ?]: Phase 06-03: cancel(jobID:) only calls task?.cancel() — .cancelled state transition owned by CancellationError catch arm after process dead
+- [Phase ?]: Phase 06-03: CancellationError catch arm before IssueFilingError arm — CancellationError is not an IssueFilingError; generic catch would swallow it as failure
+- [Phase ?]: Phase 06-03: onRunIssueFiling seam gains @escaping @Sendable (pid_t)->Void 3rd param — @escaping required on inner closure type
+- [Phase ?]: Phase 06-04: sweepMCPTempFiles is static and parameterised for unit testability
+- [Phase ?]: Phase 06-04: cancelAll() before Task.sleep for correct SIGTERM-first D-04 ordering
+- [Phase ?]: Phase 06-04: defer NSApp.reply in teardown Task guarantees no Quit hang (SC-4)
+- [Phase ?]: AppKit shell via NSStatusItem replaces MenuBarExtra; indicator driven by layer backgroundColor (not contentTintColor); Settings window self-owned NSWindowController; assign-popUp-clear for right-click menu
+- [Phase 08]: instructionsKey = "instructions" added to AppState, mirroring the removed cliCommandKey template (D-05) — Follows existing @AppStorage cross-reference doc-comment convention; single source of truth for Plan 03's SettingsView binding
+- [Phase 08]: enforcedTrailer lives on IssueFilingRunner (not IssueFilingConfig) — provider-agnostic prose, mirrors shellEscape's standalone pure static helper pattern — buildPrompt/file()/AppState default closure now assemble the prompt so the app-owned URL trailer + file-it directive always come after user-editable instructions, and AppState reads UserDefaults fresh per invocation (not cached) to preserve concurrent-filing isolation (D-02/D-03/D-06/D-08/SETTINGS-04)
+- [Phase 08]: Phase 8: Explicit window height (460) added to Settings TabView after human-verify showed width-only frame collapsed content height to ~zero
+- [Phase ?]: Phase 09-01: dismiss(jobID:)/clearFinished() are terminal-only jobs[] mutations — never call task?.cancel(); dismissal is not cancellation (D-05/D-06)
+- [Phase ?]: Phase 09-01: JobRowStyle is a plain non-@MainActor namespace enum so icon/color/openableIssueURL statics are unit-testable without a rendered-view harness
+- [Phase ?]: Phase 09-01: openableIssueURL admits only https-scheme URLs (case-insensitive) — defense-in-depth guard on AI-CLI-stdout-derived issue URLs ahead of Plan 09-02's NSWorkspace.shared.open
+- [Phase 09]: Phase 09-02: JobsSection ScrollView fixed at 180pt max-height per 09-RESEARCH Open Question 1 -- confirmed correct via UAT, no adjustment needed
+- [Phase 09]: Phase 09-02: Clear-all only renders when a non-.filing job exists in appState.jobs, avoiding a no-op control when only in-flight jobs are present
+- [Phase 09]: Phase 09-02: No automated rendered-view tests added (no ViewInspector/SnapshotTesting in project) -- JobsSection/JobRow verified via human-verify UAT checkpoint, approved by operator
 
 ### Pending Todos
 
@@ -69,12 +89,14 @@ Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecti
 
 ### Blockers/Concerns
 
-Open items carried into the next milestone:
+Open items carried into the v1.1 milestone:
 
-- **Distribution gap:** bundled `whisper-cli` is only ad-hoc signed for local use. Developer-ID signing + hardened-runtime notarization is required before clean-machine distribution (deferred — see 03-CONTEXT.md D-04/D-05).
-- **Provider breadth deferred:** `codex exec` non-interactive MCP writes are broken upstream (stdin-EOF auto-cancel); Atlassian/Jira zero-token non-interactive write may be infeasible. v1 proven leg = `claude -p` + GitHub remote MCP. Re-spike before promising non-Claude/Jira providers.
-- **Tech debt (from v1.0 audit):** orphaned "CLI Command" UI field (FINDING-06); incomplete Nyquist/VALIDATION paperwork on Phases 1–3.
-- AI-CLI output parsing is non-deterministic — instruct "issue URL on the last line" + regex extract; budget seconds-to-a-minute latency in the spoken-confirmation UX.
+- ~~**Cancellation correctness (Phase 6):**~~ RESOLVED in Phase 6 — process-group SIGTERM→2s grace→SIGKILL on cancel and quit paths; `make-an-issue-mcp-*.json` swept on quit (synchronous sweep fix, commit 30fd152). UAT verified, threats SECURED (06-SECURITY.md).
+- ~~**KeyboardShortcuts under NSPopover/NSMenu (Phase 7):**~~ RESOLVED in Phase 7 — the `MenuBarExtra` `.onDisappear` end-tracking workaround was removed; UAT Test 6 (2026-07-01) confirmed push-to-talk fires across popover/menu open-close cycles and while the popover is open (A4 closed). Threats SECURED (07-SECURITY.md).
+- **Editable-prompt parse safety (Phase 8):** keep the editable field instructions-only; the enforced contract (scoped `--allowedTools`, `method=create`, "Issue URL on last line") is appended by `buildPrompt` and the CLI flags live in `assembleCommand`. Harden `IssueResultParser` prose fallback to match the **last** URL/line, not the first occurrence anywhere, or user edits produce false "created #N".
+- **Distribution gap (carried):** bundled `whisper-cli` is only ad-hoc signed for local use. Developer-ID signing + hardened-runtime notarization required before clean-machine distribution (deferred — DIST-01; see 03-CONTEXT.md D-04/D-05).
+- **Provider breadth deferred (carried):** `codex exec` non-interactive MCP writes broken upstream; Atlassian/Jira zero-token non-interactive write may be infeasible. v1 proven leg = `claude -p` + GitHub remote MCP. Re-spike before promising non-Claude/Jira providers (PROVIDER-01).
+- **Migration cost (Phase 5):** the jobs-model refactor intentionally rewrites serial-filing AppStateTests (`testFilingEntersFilingState`, `testPushToTalkDuringFilingIsIgnored` — re-press during filing is now *allowed*, the feature; `testStartRecordingAfterFilingReturnsToIdle`; `.filing` assertions in `testSuccessfulTranscriptionStoresText`).
 
 ## Deferred Items
 
@@ -84,10 +106,10 @@ Open items carried into the next milestone:
 
 ## Session Continuity
 
-Last session: 2026-06-26T06:38:33.202Z
-Stopped at: Phase 3 context reworked (bundled whisper)
-Resume file: .planning/phases/03-local-transcription/03-CONTEXT.md
-Decision record: .planning/notes/v1-realign-bundled-whisper-ai-cli-mcp.md
+Last session: 2026-07-02T13:32:41.174Z
+Stopped at: Completed 09-01-PLAN.md
+Resume file: None
+Decision record: .planning/research/SUMMARY.md (v1.1 research)
 
 ## Performance Metrics
 
@@ -105,7 +127,21 @@ Decision record: .planning/notes/v1-realign-bundled-whisper-ai-cli-mcp.md
 | Phase 03 P04 | 15m | 3 tasks | 5 files |
 | Phase 03 P05 | 99s | 2 tasks | 2 files |
 | Phase 04 P05 | 4m | 3 tasks | 2 files |
+| Phase 05 P01 | 549s | 3 tasks | 5 files |
+| Phase 05 P02 | 845 | 3 tasks | 1 files |
+| Phase 06 P01 | 225s | 2 tasks | 2 files |
+| Phase 06 P02 | 660s | 3 tasks | 4 files |
+| Phase 06 P03 | 1080 | 3 tasks | 2 files |
+| Phase 06 P04 | 10m | 2 tasks | 2 files |
+| Phase 07 P01 | 4 minutes | 3 tasks | 4 files |
+| Phase 07 P02 | 2m | 1 tasks | 0 files |
+| Phase 08 P01 | 8min | 2 tasks | 2 files |
+| Phase 08 P02 | 7min | 2 tasks | 5 files |
+| Phase 08 P03 | 12min | 2 tasks | 1 files |
+| Phase Phase 09 PP01 | 8min | 3 tasks | 4 files |
+| Phase 09 P02 | 15min | 2 tasks | 1 files |
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Plan Phase 8 (Editable System Prompt + FINDING-06 Cleanup) with /gsd-plan-phase 8
+- Phase 9 follow-up captured: add an in-flight "Filing issue…" indicator (no UI feedback during background investigation today) — see 06-UAT.md follow-up

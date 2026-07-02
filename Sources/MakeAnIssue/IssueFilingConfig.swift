@@ -87,6 +87,19 @@ struct IssueFilingConfig: Equatable {
         {"command":"docker","args":["run","-i","--rm","-e","GITHUB_PERSONAL_ACCESS_TOKEN","-e","GITHUB_TOOLSETS=issues","ghcr.io/github/github-mcp-server"]}
         """
     )
+
+    // MARK: - Default drafting instructions (D-06)
+
+    /// The single canonical default drafting-guidance text: the persona/investigation prose
+    /// extracted from `IssueFilingRunner.buildPrompt()`'s original step 1. This is the ONE
+    /// source of truth for both the initial `@AppStorage` default in SettingsView's Instructions
+    /// tab and the "Reset to Default" button (D-07), and the value `buildPrompt` substitutes
+    /// when the persisted instructions are blank/whitespace-only (D-08).
+    ///
+    /// Deliberately excludes the app-owned `method=create` directive (interpolates
+    /// `config.mcpToolName`, not user-editable) and the URL trailer (owned by
+    /// `IssueFilingRunner.enforcedTrailer`, D-02/D-03) — those stay structural, not guidance.
+    static let defaultInstructions = "Briefly investigate the repo (README, relevant source files) to write a specific, accurate issue."
 }
 
 // MARK: - IssueFilingError

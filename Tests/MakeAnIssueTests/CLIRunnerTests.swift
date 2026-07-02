@@ -1,4 +1,5 @@
 import XCTest
+import Darwin
 @testable import MakeAnIssue
 
 /// Functional tests for CLIRunner using real system binaries (/bin/echo, /bin/sh).
@@ -114,6 +115,155 @@ final class CLIRunnerTests: XCTestCase {
         }
         XCTAssertTrue(stdout.contains("ok"), "Inherited env (PATH) must still resolve in merged env")
         XCTAssertTrue(stdout.contains("merge-value"), "Custom env var must appear in merged env")
+    }
+
+    // MARK: - Process-group gate (A1/A2 empirical validation — Phase 6 foundation)
+
+    func testSpawnedChildIsProcessGroupLeader() async throws {
+        // Gate: validates Assumptions A1/A2 from Phase-6 RESEARCH.md before any
+        // kill(-pgid, …) code is written. If either assertion fails, the negated-PID
+        // group-kill approach assumed by 06-02/03/04 is UNSAFE — halt Phase 6 and replan.
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        process.arguments = ["-lc", "sleep 30"]
+
+        // Suppress output — we only care about process identity.
+        process.standardOutput = Pipe()
+        process.standardError  = Pipe()
+
+        try process.run()
+        let pid = process.processIdentifier
+
+        // Always force-reap so the 30-second sleep never lingers, even on assertion failure.
+        defer { kill(-pid, SIGKILL) }
+
+        let childGroup = getpgid(pid)
+
+        // A1: The spawned child is its own process-group leader (getpgid(child) == child).
+        XCTAssertEqual(
+            childGroup, pid,
+            "A1 FAILED: getpgid(child) \(childGroup) ≠ child pid \(pid). " +
+            "Foundation.Process no longer places children in their own group — " +
+            "kill(-pgid, …) is UNSAFE. Halt Phase 6 and replan."
+        )
+
+        // A2: The child's process group is distinct from the test process's group
+        //     (kill(-pgid, …) will NOT signal the app/test harness).
+        XCTAssertNotEqual(
+            childGroup, getpgrp(),
+            "A2 FAILED: child's process group (\(childGroup)) equals the test process " +
+            "group (\(getpgrp())). kill(-pgid, …) would signal the test harness — UNSAFE. " +
+            "Halt Phase 6 and replan."
+        )
+    }
+
+    func testNegativePIDSignalReapsProcessGroup() async throws {
+        // Validates that kill(-pid, SIGTERM) reaps the spawned process group.
+        // If this test fails, the group-directed signal does not work as expected
+        // on this system and the kill(-pgid, …) mechanism is invalid.
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        process.arguments = ["-lc", "sleep 30"]
+
+        process.standardOutput = Pipe()
+        process.standardError  = Pipe()
+
+        try process.run()
+        let pid = process.processIdentifier
+
+        // Safety net: force-kill the group on any exit path so the sleep never lingers.
+        defer { kill(-pid, SIGKILL) }
+
+        // Send a group-directed terminate signal.
+        kill(-pid, SIGTERM)
+
+        // Poll until the group leader is gone (ESRCH), with a generous bound for CI load.
+        let deadline = ContinuousClock.now + .seconds(3)
+        var reaped = false
+        while ContinuousClock.now < deadline {
+            if kill(pid, 0) == -1 && errno == ESRCH {
+                reaped = true
+                break
+            }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+
+        XCTAssertTrue(
+            reaped,
+            "kill(-pid, SIGTERM) did not reap the process group within 3s. " +
+            "The group-directed signal mechanism may not work as expected on this system."
+        )
+    }
+
+    // MARK: - Cancel tests (06-02)
+
+    func testCancelKillsProcessGroup() async throws {
+        // Assert: cancelling the enclosing Task reaps the subprocess process group
+        // within the SIGTERM grace window (2s), with SIGKILL as fallback escalation.
+        // Uses onSpawn to capture the spawned pgid, then verifies kill(pgid,0) == ESRCH.
+
+        var capturedPGID: pid_t = 0
+
+        let task = Task {
+            await CLIRunner().run(
+                command: "sleep 30",
+                onSpawn: { pgid in capturedPGID = pgid }
+            )
+        }
+
+        // Wait for the process to start (pgid non-zero) before cancelling.
+        let waitDeadline = ContinuousClock.now + .seconds(3)
+        while capturedPGID == 0 && ContinuousClock.now < waitDeadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        let pgid = capturedPGID
+        XCTAssertGreaterThan(pgid, 0, "onSpawn must deliver a positive pgid; got 0 — did the spawn not happen?")
+
+        // Safety net: force-kill the group on any exit path (including assertion failure)
+        // so the 30-second sleep never lingers past this test.
+        defer { kill(-pgid, SIGKILL) }
+
+        // Cancel the task — this should trigger the onCancel handler → group SIGTERM.
+        task.cancel()
+
+        // Poll until kill(pgid, 0) returns ESRCH (process group no longer exists),
+        // with a bound slightly beyond the 2s grace window so the SIGKILL escalation
+        // can fire if SIGTERM is slow. 3s is generous for a plain `sleep` process.
+        let reapDeadline = ContinuousClock.now + .seconds(3)
+        var reaped = false
+        while ContinuousClock.now < reapDeadline {
+            if kill(pgid, 0) == -1 && errno == ESRCH {
+                reaped = true
+                break
+            }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+
+        XCTAssertTrue(
+            reaped,
+            "Process group \(pgid) was not reaped within 3s after Task.cancel(). " +
+            "withTaskCancellationHandler may not have sent the group SIGTERM."
+        )
+    }
+
+    func testCancelAndExitBoundaryResolvesExactlyOnce() async throws {
+        // Stress the cancel-vs-natural-exit race: wrap each short-sleep run in a Task
+        // and cancel it near-immediately. A double-resume of the CheckedContinuation
+        // would trap with SWIFT TASK CONTINUATION MISUSE and crash this test process,
+        // so simply reaching the end of the loop proves the single-resume guard held
+        // under the cancel/exit race (SC-4 / onCancel never resumes the continuation).
+        for _ in 0..<40 {
+            let t = Task {
+                await CLIRunner().run(command: "sleep 0.05")
+            }
+            // Cancel near-immediately — races with the natural 50ms exit.
+            t.cancel()
+            // Await the task so any continuation-misuse trap surfaces in this test.
+            _ = await t.value
+        }
     }
 
     // MARK: - Working directory respected

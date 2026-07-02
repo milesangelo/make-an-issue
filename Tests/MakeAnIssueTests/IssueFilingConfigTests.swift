@@ -89,6 +89,15 @@ final class IssueFilingConfigTests: XCTestCase {
         )
     }
 
+    // MARK: - defaultInstructions (D-06)
+
+    func testDefaultInstructionsIsNonEmpty() {
+        XCTAssertFalse(
+            IssueFilingConfig.defaultInstructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            "IssueFilingConfig.defaultInstructions must be non-empty"
+        )
+    }
+
     // MARK: - Equatable
 
     func testConfigEquatableToItself() {

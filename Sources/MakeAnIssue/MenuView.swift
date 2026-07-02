@@ -5,9 +5,6 @@ import SwiftUI
 struct MenuView: View {
     @EnvironmentObject private var appState: AppState
 
-    @AppStorage(AppState.cliCommandKey) private var cliCommand: String = "claude"
-
-    @State private var isSettingsExpanded = false
     @State private var shortcutText = ""
 
     var body: some View {
@@ -54,44 +51,9 @@ struct MenuView: View {
             if let transcript = appState.transcript {
                 TranscriptCard(transcript: transcript)
             }
-            
-            // Collapsible configuration/settings area
-            Divider()
-            
-            DisclosureGroup(isExpanded: $isSettingsExpanded) {
-                VStack(alignment: .leading, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Push-to-Talk Shortcut")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.secondary)
-                        
-                        KeyboardShortcuts.Recorder("", name: .pushToTalk)
-                            .labelsHidden()
-                    }
-                    .padding(.top, 4)
-                    
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("CLI Command")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.secondary)
-                        
-                        TextField("e.g. claude", text: $cliCommand)
-                            .textFieldStyle(.roundedBorder)
-                    }
-                }
-                .padding(.bottom, 4)
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "gearshape.fill")
-                        .font(.system(size: 12))
-                    Text("Settings")
-                        .font(.system(size: 12, weight: .medium))
-                    Spacer()
-                }
-                .foregroundColor(.secondary)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
+
+            // Filing Jobs List (JOBS-01/JOBS-02/RESIL-01, D-11) — hidden entirely when empty (D-12)
+            JobsSection(appState: appState)
         }
         .padding(16)
         .frame(width: 320)
@@ -100,16 +62,6 @@ struct MenuView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
             updateShortcutText()
-        }
-        .onDisappear {
-            // KeyboardShortcuts pauses the global Carbon hotkey and falls back to a
-            // focus-only local key monitor whenever it believes a menu is open
-            // (HotKey `.menuOpen` mode). Opening this MenuBarExtra window fires
-            // NSMenu.didBeginTracking but no balanced didEndTracking on close, so
-            // `isMenuOpen` sticks true and push-to-talk stops firing while another
-            // app is focused. Post the end-tracking notification on close to restore
-            // global (.normal) mode.
-            NotificationCenter.default.post(name: NSMenu.didEndTrackingNotification, object: nil)
         }
     }
     
@@ -147,18 +99,14 @@ struct StateBadge: View {
         case .idle:          return "IDLE"
         case .recording:     return "RECORDING"
         case .transcribing:  return "ASR"
-        case .finished:      return "DONE"
-        case .filing:        return "FILING"
         }
     }
-    
+
     private var backgroundColor: Color {
         switch state {
         case .idle:          return .secondary
         case .recording:     return .red
         case .transcribing:  return .orange
-        case .finished:      return .green
-        case .filing:        return .purple
         }
     }
 }
@@ -289,43 +237,6 @@ struct ActionCard: View {
                 }
                 .padding(.vertical, 4)
                 
-            case .finished:
-                HStack(spacing: 14) {
-                    ZStack {
-                        Circle()
-                            .fill(Color.green.opacity(0.15))
-                            .frame(width: 32, height: 32)
-                        Image(systemName: "checkmark")
-                            .foregroundColor(.green)
-                            .font(.system(size: 14, weight: .bold))
-                    }
-                    
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Transcription Done")
-                            .font(.system(size: 13, weight: .semibold))
-                        Text("Filing issue next...")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                    }
-                    Spacer()
-                }
-                .padding(.vertical, 4)
-                
-            case .filing:
-                HStack(spacing: 14) {
-                    ActivitySpinner(color: .purple)
-                    
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Filing Issue")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(.purple)
-                        Text("Investigating repo & creating...")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                    }
-                    Spacer()
-                }
-                .padding(.vertical, 4)
             }
         }
         .padding(12)
@@ -543,6 +454,163 @@ struct TranscriptCard: View {
             RoundedRectangle(cornerRadius: 8)
                 .stroke(Color.primary.opacity(0.06), lineWidth: 1)
         )
+    }
+}
+
+struct ClearAllButton: View {
+    @ObservedObject var appState: AppState
+
+    var body: some View {
+        Button(action: {
+            appState.clearFinished()
+        }) {
+            Text("Clear all")
+                .font(.system(size: 10, weight: .medium))
+        }
+        .buttonStyle(.plain)
+        .foregroundColor(.secondary)
+    }
+}
+
+struct JobsSection: View {
+    @ObservedObject var appState: AppState
+
+    var body: some View {
+        if !appState.jobs.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("FILING JOBS (\(appState.jobs.count))")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    if appState.jobs.contains(where: { $0.state != .filing }) {
+                        ClearAllButton(appState: appState)
+                    }
+                }
+
+                ScrollView {
+                    VStack(spacing: 8) {
+                        ForEach(appState.jobs.reversed()) { job in
+                            JobRow(job: job, appState: appState)
+                        }
+                    }
+                }
+                .frame(maxHeight: 180)
+            }
+            .padding(10)
+            .background(Color.primary.opacity(0.02))
+            .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+            )
+        }
+    }
+}
+
+struct DismissButton: View {
+    @ObservedObject var appState: AppState
+    let jobID: UUID
+
+    var body: some View {
+        Button(action: {
+            appState.dismiss(jobID: jobID)
+        }) {
+            Image(systemName: "xmark")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(.secondary)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct TranscriptSnippet: View {
+    let transcript: String
+    @State private var isExpanded = false
+
+    var body: some View {
+        Text(transcript)
+            .font(.system(size: 11))
+            .foregroundColor(.secondary)
+            .lineLimit(isExpanded ? nil : 2)
+            .textSelection(.enabled)
+            .onTapGesture {
+                withAnimation {
+                    isExpanded.toggle()
+                }
+            }
+    }
+}
+
+struct JobRow: View {
+    let job: FilingJob
+    @ObservedObject var appState: AppState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            switch job.state {
+            case .filing:
+                HStack(spacing: 8) {
+                    ActivitySpinner(color: .blue)
+                        .frame(width: 16, height: 16)
+                    Text("Filing…")
+                        .font(.system(size: 12))
+                    Spacer()
+                    Button("Stop") {
+                        appState.cancel(jobID: job.id)
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 11, weight: .medium))
+                }
+
+            case .done:
+                HStack(spacing: 8) {
+                    Image(systemName: JobRowStyle.iconName(for: .done))
+                        .foregroundColor(JobRowStyle.tintColor(for: .done))
+                    if let result = job.result {
+                        Button(action: {
+                            if let url = JobRowStyle.openableIssueURL(result.url) {
+                                NSWorkspace.shared.open(url)
+                            }
+                        }) {
+                            Text("Issue #\(result.number) filed")
+                                .font(.system(size: 12))
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        Text("Issue filed")
+                            .font(.system(size: 12))
+                    }
+                    Spacer()
+                    DismissButton(appState: appState, jobID: job.id)
+                }
+
+            case .failed:
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        Image(systemName: JobRowStyle.iconName(for: .failed))
+                            .foregroundColor(JobRowStyle.tintColor(for: .failed))
+                        Text(job.error.map(AppState.message(for:)) ?? "Issue filing failed")
+                            .font(.system(size: 12))
+                        Spacer()
+                        DismissButton(appState: appState, jobID: job.id)
+                    }
+                    TranscriptSnippet(transcript: job.transcript)
+                }
+
+            case .cancelled:
+                HStack(spacing: 8) {
+                    Image(systemName: JobRowStyle.iconName(for: .cancelled))
+                        .foregroundColor(JobRowStyle.tintColor(for: .cancelled))
+                    Text("Filing cancelled")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    DismissButton(appState: appState, jobID: job.id)
+                }
+            }
+        }
+        .padding(.vertical, 4)
     }
 }
 

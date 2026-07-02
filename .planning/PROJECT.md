@@ -16,6 +16,17 @@ existing auth.
 Capture a repo-aware GitHub issue by voice in seconds, without leaving the keyboard or
 opening a browser — the full path from spoken word to filed issue must work end to end.
 
+## Current Milestone: v1.1 Concurrent Filing & Control
+
+**Goal:** Remove the serial filing bottleneck and give the user control over filing and the LLM prompt — so a developer can fire off issues back-to-back, cancel a bad one, and tune how the AI drafts them.
+
+**Target features:**
+- Background/concurrent issue filing — after transcription the app returns to idle immediately and files in the background; multiple filings run at once, each speaking its own confirmation
+- Right-click menu-bar Settings window with an editable **system-prompt** tab (instructions only; the app keeps enforcing the scoped tool grant + "Issue URL on last line" contract)
+- Stop/Cancel control to abort an in-flight filing (terminates its `claude` subprocess)
+- Surfaced, recoverable errors for failed filing (RESIL-01) — complements the new jobs/cancel UI
+- Resolve FINDING-06: the orphaned "CLI Command" field (relocate into Settings; wire or remove)
+
 ## Requirements
 
 ### Validated
@@ -28,14 +39,18 @@ opening a browser — the full path from spoken word to filed issue must work en
 - ✓ The user's AI CLI, run in the bound repo, **drafts and files** the issue via its own MCP — no `gh`, no API token — v1.0 (Phase 4; GitHub via `claude -p` proven end-to-end + UAT)
 - ✓ The created issue number/URL is parsed from the CLI output and spoken aloud ("created issue #N") — v1.0 (Phase 4)
 - ✓ Backend is provider-agnostic via a configurable command seam (`IssueFilingConfig`) — v1.0 (Phase 4; claude + GitHub proven, `codex` + Jira explicitly deferred)
+- ✓ Background/concurrent issue filing — capture returns to idle the instant transcription completes; multiple filings run concurrently as independent jobs, each speaking its own outcome — v1.1 (Phase 5; CONCUR-01/02/03)
+- ✓ Right-click menu-bar icon opens a Settings…/Quit menu; left-click keeps the status popover; the Settings window is a focusable, single-instance AppKit shell hosting the push-to-talk Recorder — v1.1 (Phase 7; SETTINGS-01 shell, editable system-prompt tab pending Phase 8)
+- ✓ Menu-bar icon shows a live red recording indicator while push-to-talk is held; reverts the instant recording stops — v1.1 (Phase 7; FEEDBACK-02)
+- ✓ Editable, persisted drafting-instructions tab in Settings, with an app-owned **unbreakable enforced contract** (issue-URL trailer + scoped tool grant survive any user edit) shown read-only; removed the orphaned dead "CLI Command" field — v1.1 (Phase 8; SETTINGS-02/03/04/05, FINDING-06)
+- ✓ Live "Filing Jobs" popover list — per-state rows (filing/done/failed/cancelled) with a per-job Stop on active rows, persistent dismissable error rows surfacing the mapped message + expandable transcript, an https-guarded clickable done-row issue link, and a Clear-all that removes only terminal jobs — v1.1 (Phase 9; JOBS-01/JOBS-02/RESIL-01)
 
 ### Active
 
 <!-- Next-milestone candidates (from REQUIREMENTS.md v2). Formalized when /gsd-new-milestone defines the next milestone's requirements. -->
 
-- [ ] Review/edit the drafted title & body before filing (v2 REVIEW-01)
-- [ ] Surfaced, recoverable errors for missing binding / failed filing (v2 RESIL-01)
-- [ ] View and switch the bound repository from the menu (v2 MULTI-01)
+- [ ] Review/edit the drafted title & body before filing (REVIEW-01 — deferred)
+- [ ] View and switch the bound repository from the menu (MULTI-01 — deferred)
 - [ ] Developer-ID signing + notarization of the bundled whisper binary for clean-machine distribution (deferred from v1.0)
 - [ ] Prove/wire non-Claude providers — `codex` + Atlassian/Jira (gated by upstream MCP-write feasibility)
 
@@ -54,6 +69,7 @@ opening a browser — the full path from spoken word to filed issue must work en
 
 - **Shipped v1.0 MVP on 2026-06-28** — full voice → filed-issue → spoken-confirmation happy path,
   proven end-to-end with real GitHub issues filed via `claude` + MCP.
+- **v1.1 "Concurrent Filing & Control" feature-complete on 2026-07-02** — all 5 phases done (concurrent jobs model, stop/cancel, AppKit status-item + Settings shell, editable drafting-instructions, and the Phase 9 live jobs-list UI with per-job Stop + surfaced recoverable errors). Ready for `/gsd-complete-milestone`.
 - Codebase: ~3,660 LOC Swift across 23 files. Tech stack: Swift 6 / SwiftUI `MenuBarExtra` + AppKit,
   AVFoundation (capture + TTS), KeyboardShortcuts (global hotkey), bundled `whisper.cpp` (`whisper-cli` +
   SHA-pinned `small.en` model), plus `fetch-whisper.sh` / `build-app.sh` for vendoring + `.app` assembly.
@@ -93,5 +109,22 @@ opening a browser — the full path from spoken word to filed issue must work en
 | Issue creation via `gh issue create` | Uses existing auth; no GitHub API client needed | **Retired 2026-06-25** — replaced by AI-CLI-files-via-MCP (no `gh`, supports Jira, no API token) |
 | v1 build runs non-sandboxed | App Sandbox blocks external CLI execution | ✓ Good — shipped v1.0 non-sandboxed; revisit if distributing via App Store |
 
+## Evolution
+
+This document evolves at phase transitions and milestone boundaries.
+
+**After each phase transition** (via `/gsd-transition`):
+1. Requirements invalidated? → Move to Out of Scope with reason
+2. Requirements validated? → Move to Validated with phase reference
+3. New requirements emerged? → Add to Active
+4. Decisions to log? → Add to Key Decisions
+5. "What This Is" still accurate? → Update if drifted
+
+**After each milestone** (via `/gsd-complete-milestone`):
+1. Full review of all sections
+2. Core Value check — still the right priority?
+3. Audit Out of Scope — reasons still valid?
+4. Update Context with current state
+
 ---
-*Last updated: 2026-06-28 after v1.0 MVP milestone — shipped the full voice → filed-issue → spoken-confirmation happy path (4 phases, 15 plans). Requirements moved to Validated; Active now holds v2 candidates.*
+*Last updated: 2026-07-01 — Phase 8 (Editable System Prompt + FINDING-06 Cleanup) complete: a two-tab Settings window with an editable, persisted drafting-instructions field, a Reset control, and a read-only display of the app-owned enforced contract (issue-URL trailer + scoped tool grant) that no user edit can strip; the orphaned dead "CLI Command" field was removed (SETTINGS-02/03/04/05, FINDING-06). Verification 14/14, 145 tests green. v1.1 continues with Phase 9 (jobs list UI + per-job stop + surfaced errors). v1.0 MVP shipped (4 phases, 15 plans).*
