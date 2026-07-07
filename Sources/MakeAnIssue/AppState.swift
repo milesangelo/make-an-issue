@@ -22,6 +22,14 @@ final class AppState: ObservableObject {
     /// @AppStorage in SettingsView (Pitfall 5 pattern, mirrors former cliCommandKey). (D-05)
     nonisolated static let instructionsKey = "instructions"
 
+    /// UserDefaults key for the JSON-encoded list of known repos (MULTI-01). Persists the
+    /// accumulated repo list across relaunches, mirroring the `instructionsKey` convention.
+    nonisolated static let knownReposKey = "knownRepos"
+
+    /// UserDefaults key for the active repo's root path (MULTI-01). Selects which entry in the
+    /// restored `knownRepos` list is the active bound repo after a relaunch.
+    nonisolated static let activeRepoKey = "activeRepoRootPath"
+
     /// Reads the persisted drafting instructions fresh from UserDefaults at call time — never
     /// cached on `self`/`@Published` — so each concurrent filing sees the current value with no
     /// staleness across in-flight jobs (D-02/SETTINGS-02). `nonisolated` so the async filing
@@ -34,7 +42,13 @@ final class AppState: ObservableObject {
 
     @Published var statusText: String
     @Published var launchCWD: String?
+    /// The active bound repo — the target for the next dictation's filing. One of `knownRepos`
+    /// (or nil when none are known). Kept as a stored property so the filing pipeline's by-value
+    /// capture and every existing seam are unchanged (MULTI-01).
     @Published var boundRepo: RepoBinding?
+    /// Every repo the app has seen this session or restored from persistence, most-recent first.
+    /// The menu lists these and lets the user switch which one is active (MULTI-01).
+    @Published var knownRepos: [RepoBinding] = []
     @Published var boundRepoDisplayText: String
     @Published var captureState: CaptureState = .idle
     @Published var micPermissionGranted: Bool = false
@@ -69,6 +83,10 @@ final class AppState: ObservableObject {
     /// deterministic value so the result does not depend on the host's TCC state. (WR-03)
     private let onCheckMicAuthorization: () -> Bool
 
+    /// UserDefaults used to persist the known-repo list and active selection (MULTI-01).
+    /// Injected in tests (following the `instructions` suite-injection pattern); `.standard` in the app.
+    private let repoDefaults: UserDefaults
+
     /// Maximum recording duration. If a key-up event is missed (focus change while
     /// held, dropped system event, menu-mode flapping), this caps the stuck
     /// "Recording…" state and auto-stops so the feature can recover. (WR-04)
@@ -80,7 +98,8 @@ final class AppState: ObservableObject {
         statusText: String = "Ready",
         launchCWD: String? = nil,
         boundRepo: RepoBinding? = nil,
-        boundRepoDisplayText: String = "No repository bound"
+        boundRepoDisplayText: String = "No repository bound",
+        defaults: UserDefaults = .standard
     ) {
         let recorder = AudioRecorder()
         self.init(
@@ -90,7 +109,8 @@ final class AppState: ObservableObject {
             boundRepoDisplayText: boundRepoDisplayText,
             onStartRecording: recorder.start,
             onStopRecording: recorder.stop,
-            audioRecorder: recorder
+            audioRecorder: recorder,
+            defaults: defaults
         )
     }
 
@@ -125,12 +145,16 @@ final class AppState: ObservableObject {
         onSpeak: ((String) -> Void)? = nil,
         onCheckMicAuthorization: @escaping () -> Bool = {
             AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
-        }
+        },
+        defaults: UserDefaults = .standard
     ) {
         self.statusText = statusText
         self.launchCWD = launchCWD
         self.boundRepo = boundRepo
+        // Keep the invariant that the active repo is always a member of knownRepos (MULTI-01).
+        self.knownRepos = boundRepo.map { [$0] } ?? []
         self.boundRepoDisplayText = boundRepoDisplayText
+        self.repoDefaults = defaults
         self.audioRecorder = audioRecorder
         self.onStartRecording = onStartRecording
         self.onStopRecording = onStopRecording
@@ -474,11 +498,79 @@ final class AppState: ObservableObject {
     func handleLaunchRequest(_ request: LaunchRequest) {
         launchCWD = request.cwd
         if let binding = RepoBinding.resolve(from: URL(fileURLWithPath: request.cwd)) {
-            boundRepo = binding
-            statusText = "Bound to \(binding.displayName)"
-            boundRepoDisplayText = binding.displayPath
+            // Accumulate rather than overwrite: add to the known-repo list (deduped) and make it
+            // the active selection, so launching from repo B no longer forgets repo A (MULTI-01).
+            addKnownRepo(binding)
+            activate(binding)
         } else {
             statusText = "No git repository found"
         }
+    }
+
+    // MARK: - Multi-repo selection (MULTI-01)
+
+    /// Switch the active bound repo to `repo`. No-ops if `repo` is not a known repo. The next
+    /// dictation files against the newly-selected active repo; in-flight jobs are unaffected
+    /// (they captured their own repo by value at spawn time).
+    func setActiveRepo(_ repo: RepoBinding) {
+        guard knownRepos.contains(where: { $0.rootURL == repo.rootURL }) else { return }
+        activate(repo)
+    }
+
+    /// Remove `repo` from the known-repo list. If it was active, the most-recent remaining repo
+    /// becomes active (or none, restoring the empty state). Optional MULTI-01 affordance.
+    func removeRepo(_ repo: RepoBinding) {
+        let wasActive = boundRepo?.rootURL == repo.rootURL
+        knownRepos.removeAll { $0.rootURL == repo.rootURL }
+        if wasActive {
+            if let next = knownRepos.first {
+                activate(next)
+            } else {
+                boundRepo = nil
+                boundRepoDisplayText = "No repository bound"
+            }
+        }
+        persistRepos()
+    }
+
+    /// Restore the persisted known-repo list and active selection at launch, before any pending
+    /// launch request is applied on top (MULTI-01). Called by AppDelegate; never in the tests'
+    /// plain `AppState()` path, so unit tests stay isolated from `.standard`.
+    func restorePersistedRepos() {
+        guard let data = repoDefaults.data(forKey: Self.knownReposKey),
+              let repos = try? JSONDecoder().decode([RepoBinding].self, from: data),
+              !repos.isEmpty
+        else { return }
+
+        knownRepos = repos
+        let activePath = repoDefaults.string(forKey: Self.activeRepoKey)
+        let active = repos.first { $0.rootURL.path == activePath } ?? repos[0]
+        boundRepo = active
+        boundRepoDisplayText = active.displayPath
+        statusText = "Bound to \(active.displayName)"
+    }
+
+    /// Make `binding` the active repo and refresh the derived display/status fields, then persist.
+    private func activate(_ binding: RepoBinding) {
+        boundRepo = binding
+        boundRepoDisplayText = binding.displayPath
+        statusText = "Bound to \(binding.displayName)"
+        persistRepos()
+    }
+
+    /// Insert `binding` at the front of the known-repo list, deduped by root URL so re-launching
+    /// an already-known repo moves it to most-recent instead of creating a duplicate (MULTI-01).
+    private func addKnownRepo(_ binding: RepoBinding) {
+        knownRepos.removeAll { $0.rootURL == binding.rootURL }
+        knownRepos.insert(binding, at: 0)
+    }
+
+    /// Persist the known-repo list and active selection to `repoDefaults` (MULTI-01), keyed the
+    /// same way `instructions` is, so the state survives an app relaunch.
+    private func persistRepos() {
+        if let data = try? JSONEncoder().encode(knownRepos) {
+            repoDefaults.set(data, forKey: Self.knownReposKey)
+        }
+        repoDefaults.set(boundRepo?.rootURL.path, forKey: Self.activeRepoKey)
     }
 }

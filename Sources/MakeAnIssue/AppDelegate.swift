@@ -15,7 +15,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsWindowController: NSWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        consumeLatestLaunchRequest()
+        appState.restorePersistedRepos()        // MULTI-01: restore known repos + active selection first
+        consumeLatestLaunchRequest()            // then apply any pending launch request on top
         setUpStatusItem()                       // NEW
         observeCaptureStateForIndicator()       // NEW — after setUpStatusItem so contentView hierarchy exists
     }

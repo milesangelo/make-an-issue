@@ -13,8 +13,10 @@ investigates the repo via a local model CLI, files the issue with `gh issue crea
 spoken word to filed issue must work end to end.
 
 v1 is **happy-path only**. See `.planning/PROJECT.md` and `.planning/REQUIREMENTS.md` for scope
-and explicit exclusions (no wake phrase, no embedded model runtime, no multi-repo UI, no review
-screen, no advanced recovery).
+and explicit exclusions (no wake phrase, no embedded model runtime, no review screen, no advanced
+recovery). Multi-repo selection **is** implemented (MULTI-01): the menu accumulates every launched
+repo, lets the user switch which is the active bound repo, and persists the list + selection across
+relaunches; each dictation files against the currently-active repo.
 <!-- GSD:project-end -->
 
 <!-- GSD:stack-start source:STACK.md -->
@@ -37,7 +39,8 @@ Greenfield project — conventions will firm up as code lands. Starting guidance
 - One shared `CLIRunner` for every external invocation (working dir, configurable PATH, stdout/exit capture).
 - Repo binding = git root of the launching command's working directory; `gh`/git run with that as the working directory.
 - Make ASR and model commands and the shortcut user-configurable; never hard-code Homebrew paths (GUI `PATH` differs from Terminal).
-- Keep v1 strictly on the happy path; do not add review UI, multi-repo UI, or recovery logic without a roadmap change.
+- Keep v1 strictly on the happy path; do not add review UI or recovery logic without a roadmap change.
+- Multi-repo selection is implemented (MULTI-01): `AppState.knownRepos` accumulates launched repos (deduped by `rootURL`, most-recent first), `boundRepo` is the active selection, and both are persisted to `UserDefaults` under `knownReposKey`/`activeRepoKey` — restored via `restorePersistedRepos()` before the launch request is applied. In-flight `FilingJob`s keep the repo they were spawned against (by-value capture).
 <!-- GSD:conventions-end -->
 
 <!-- GSD:architecture-start source:ARCHITECTURE.md -->

@@ -15,6 +15,14 @@ final class AppStateTests: XCTestCase {
         try? FileManager.default.removeItem(at: temporaryDirectory)
     }
 
+    /// Creates an isolated UserDefaults suite so repo-persistence writes never touch `.standard`
+    /// (MULTI-01), mirroring the instructions-freshness test's suite-injection hygiene.
+    private func makeIsolatedDefaults() throws -> (UserDefaults, String) {
+        let suiteName = "make-an-issue.repos.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        return (defaults, suiteName)
+    }
+
     func testInitialStateShowsRunningStatus() {
         let state = AppState()
 
@@ -32,7 +40,9 @@ final class AppStateTests: XCTestCase {
         let repo = try makeRepo(named: "first repo")
         let nested = repo.appendingPathComponent("nested", isDirectory: true)
         try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: true)
-        let state = AppState()
+        let (defaults, suiteName) = try makeIsolatedDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let state = AppState(defaults: defaults)
 
         state.handleLaunchRequest(LaunchRequest(cwd: nested.path, createdAtUnixSeconds: 1))
 
@@ -45,11 +55,15 @@ final class AppStateTests: XCTestCase {
     func testSecondValidLaunchRequestReplacesBoundRepo() throws {
         let firstRepo = try makeRepo(named: "first")
         let secondRepo = try makeRepo(named: "second")
-        let state = AppState()
+        let (defaults, suiteName) = try makeIsolatedDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let state = AppState(defaults: defaults)
 
         state.handleLaunchRequest(LaunchRequest(cwd: firstRepo.path, createdAtUnixSeconds: 1))
         state.handleLaunchRequest(LaunchRequest(cwd: secondRepo.path, createdAtUnixSeconds: 2))
 
+        // MULTI-01: the second launch changes the ACTIVE repo but no longer forgets the first —
+        // both remain known (asserted in the accumulation tests below).
         XCTAssertEqual(state.boundRepo?.rootURL.standardizedFileURL, secondRepo.standardizedFileURL)
         XCTAssertEqual(state.boundRepo?.displayName, "second")
     }
@@ -58,7 +72,9 @@ final class AppStateTests: XCTestCase {
         let repo = try makeRepo(named: "repo")
         let nonRepo = temporaryDirectory.appendingPathComponent("not-a-repo", isDirectory: true)
         try FileManager.default.createDirectory(at: nonRepo, withIntermediateDirectories: true)
-        let state = AppState()
+        let (defaults, suiteName) = try makeIsolatedDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let state = AppState(defaults: defaults)
 
         state.handleLaunchRequest(LaunchRequest(cwd: repo.path, createdAtUnixSeconds: 1))
         state.handleLaunchRequest(LaunchRequest(cwd: nonRepo.path, createdAtUnixSeconds: 2))
@@ -66,6 +82,218 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(state.launchCWD, nonRepo.path)
         XCTAssertEqual(state.boundRepo?.rootURL.standardizedFileURL, repo.standardizedFileURL)
         XCTAssertEqual(state.statusText, "No git repository found")
+    }
+
+    // MARK: - Multi-repo support (MULTI-01)
+
+    func testLaunchRequestsAccumulateBothReposIntoKnownList() throws {
+        let firstRepo = try makeRepo(named: "alpha")
+        let secondRepo = try makeRepo(named: "beta")
+        let (defaults, suiteName) = try makeIsolatedDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let state = AppState(defaults: defaults)
+
+        state.handleLaunchRequest(LaunchRequest(cwd: firstRepo.path, createdAtUnixSeconds: 1))
+        state.handleLaunchRequest(LaunchRequest(cwd: secondRepo.path, createdAtUnixSeconds: 2))
+
+        // SC-1: launching from A then B leaves BOTH in the list — no overwrite.
+        XCTAssertEqual(state.knownRepos.count, 2, "both launched repos must be retained (MULTI-01)")
+        XCTAssertTrue(state.knownRepos.contains { $0.displayName == "alpha" }, "first repo must remain known")
+        XCTAssertTrue(state.knownRepos.contains { $0.displayName == "beta" }, "second repo must be known")
+        // Most-recent-first ordering; the just-launched repo is active and at the front.
+        XCTAssertEqual(state.knownRepos.first?.displayName, "beta")
+        XCTAssertEqual(state.boundRepo?.displayName, "beta", "the most recently launched repo is active")
+    }
+
+    func testLaunchRequestDedupesByRootURLAndMovesToFront() throws {
+        let repoA = try makeRepo(named: "aaa")
+        let repoB = try makeRepo(named: "bbb")
+        let (defaults, suiteName) = try makeIsolatedDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let state = AppState(defaults: defaults)
+
+        state.handleLaunchRequest(LaunchRequest(cwd: repoA.path, createdAtUnixSeconds: 1))
+        state.handleLaunchRequest(LaunchRequest(cwd: repoB.path, createdAtUnixSeconds: 2))
+        // Re-launch A — must not create a duplicate, and must move A to most-recent (front).
+        state.handleLaunchRequest(LaunchRequest(cwd: repoA.path, createdAtUnixSeconds: 3))
+
+        XCTAssertEqual(state.knownRepos.count, 2, "re-launching a known repo must not duplicate it (MULTI-01)")
+        XCTAssertEqual(state.knownRepos.first?.displayName, "aaa", "re-launched repo moves to most-recent")
+        XCTAssertEqual(state.boundRepo?.displayName, "aaa", "re-launched repo becomes active")
+    }
+
+    func testSwitchActiveRepoChangesNextFilingTarget() async throws {
+        let repoA = try makeRepo(named: "target-a")
+        let repoB = try makeRepo(named: "target-b")
+        let (defaults, suiteName) = try makeIsolatedDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        var filedRepoName: String?
+        let state = AppState(
+            onStartRecording: { true },
+            onStopRecording: {},
+            onRunTranscription: { _ in "file it" },
+            onRunIssueFiling: { _, repo, _ in
+                filedRepoName = repo.displayName
+                return IssueFilingResult(number: 1, url: "https://github.com/o/r/issues/1")
+            },
+            defaults: defaults
+        )
+        state.handleLaunchRequest(LaunchRequest(cwd: repoA.path, createdAtUnixSeconds: 1))
+        state.handleLaunchRequest(LaunchRequest(cwd: repoB.path, createdAtUnixSeconds: 2))
+        XCTAssertEqual(state.boundRepo?.displayName, "target-b", "precondition: B is active after launching it")
+
+        // SC-1/SC-2: switch active back to A; the next dictation must file against A.
+        state.setActiveRepo(state.knownRepos.first { $0.displayName == "target-a" }!)
+        XCTAssertEqual(state.boundRepo?.displayName, "target-a", "switching active must update boundRepo")
+
+        state.micPermissionGranted = true
+        state.startRecording()
+        state.stopRecording()
+
+        await waitUntil { filedRepoName != nil }
+        XCTAssertEqual(filedRepoName, "target-a", "the dictation after switching must file against the newly-active repo (MULTI-01)")
+    }
+
+    func testSetActiveRepoIgnoresUnknownRepo() throws {
+        let repoA = try makeRepo(named: "known")
+        let (defaults, suiteName) = try makeIsolatedDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let state = AppState(defaults: defaults)
+        state.handleLaunchRequest(LaunchRequest(cwd: repoA.path, createdAtUnixSeconds: 1))
+
+        let stranger = RepoBinding(
+            rootURL: URL(fileURLWithPath: "/tmp/not-in-list"),
+            displayName: "stranger",
+            displayPath: "/tmp/not-in-list"
+        )
+        state.setActiveRepo(stranger)
+
+        XCTAssertEqual(state.boundRepo?.displayName, "known", "switching to an unknown repo must be a no-op (MULTI-01)")
+    }
+
+    func testInFlightJobRetainsRepoAfterActiveSwitch() async throws {
+        // SC-4: an in-flight filing keeps targeting the repo it started against even if the user
+        // switches the active repo mid-flight (no regression of the by-value capture).
+        let repoA = try makeRepo(named: "inflight-a")
+        let repoB = try makeRepo(named: "inflight-b")
+        let (defaults, suiteName) = try makeIsolatedDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let state = AppState(
+            onStartRecording: { true },
+            onStopRecording: {},
+            onRunTranscription: { _ in "slow filing" },
+            onRunIssueFiling: { _, _, _ in
+                try? await Task.sleep(for: .milliseconds(400))
+                return IssueFilingResult(number: 1, url: "https://github.com/o/r/issues/1")
+            },
+            defaults: defaults
+        )
+        state.handleLaunchRequest(LaunchRequest(cwd: repoB.path, createdAtUnixSeconds: 1))
+        state.handleLaunchRequest(LaunchRequest(cwd: repoA.path, createdAtUnixSeconds: 2))
+        XCTAssertEqual(state.boundRepo?.displayName, "inflight-a", "precondition: A is active")
+
+        state.micPermissionGranted = true
+        state.startRecording()
+        state.stopRecording()
+        await waitUntil { state.jobs.count == 1 && state.jobs[0].state == .filing }
+
+        // Switch active to B while the job is still filing against A.
+        state.setActiveRepo(state.knownRepos.first { $0.displayName == "inflight-b" }!)
+        XCTAssertEqual(state.boundRepo?.displayName, "inflight-b", "active must switch to B")
+        XCTAssertEqual(state.jobs[0].repo.displayName, "inflight-a", "in-flight job must still target the repo it started against (SC-4)")
+    }
+
+    func testKnownReposAndActiveSelectionSurviveRelaunch() throws {
+        // SC-3: the known-repo list and active selection survive an app relaunch, restored from
+        // the injected UserDefaults suite by a fresh AppState.
+        let repoA = try makeRepo(named: "persist-a")
+        let repoB = try makeRepo(named: "persist-b")
+        let (defaults, suiteName) = try makeIsolatedDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let first = AppState(defaults: defaults)
+        first.handleLaunchRequest(LaunchRequest(cwd: repoA.path, createdAtUnixSeconds: 1))
+        first.handleLaunchRequest(LaunchRequest(cwd: repoB.path, createdAtUnixSeconds: 2))
+        // Switch active back to A so persistence must capture a non-default selection.
+        first.setActiveRepo(first.knownRepos.first { $0.displayName == "persist-a" }!)
+
+        // Simulate relaunch: a brand-new AppState reading the same defaults.
+        let restored = AppState(defaults: defaults)
+        XCTAssertTrue(restored.knownRepos.isEmpty, "precondition: restore must be explicit (not in init), so tests stay isolated")
+        restored.restorePersistedRepos()
+
+        XCTAssertEqual(restored.knownRepos.count, 2, "known-repo list must survive relaunch (MULTI-01/SC-3)")
+        XCTAssertTrue(restored.knownRepos.contains { $0.displayName == "persist-a" })
+        XCTAssertTrue(restored.knownRepos.contains { $0.displayName == "persist-b" })
+        XCTAssertEqual(restored.boundRepo?.displayName, "persist-a", "active selection must survive relaunch (SC-3)")
+        XCTAssertEqual(restored.boundRepoDisplayText, repoA.path)
+    }
+
+    func testRestoredReposAreApplyingLaunchRequestOnTop() throws {
+        // MULTI-01: on launch, restore the list/selection, THEN apply the pending launch request
+        // on top — the launched repo becomes active and is added if new.
+        let repoA = try makeRepo(named: "restore-a")
+        let repoC = try makeRepo(named: "restore-c")
+        let (defaults, suiteName) = try makeIsolatedDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let first = AppState(defaults: defaults)
+        first.handleLaunchRequest(LaunchRequest(cwd: repoA.path, createdAtUnixSeconds: 1))
+
+        let relaunch = AppState(defaults: defaults)
+        relaunch.restorePersistedRepos()                    // restore A (active)
+        relaunch.handleLaunchRequest(LaunchRequest(cwd: repoC.path, createdAtUnixSeconds: 2))  // launch C on top
+
+        XCTAssertEqual(relaunch.knownRepos.count, 2, "restored A plus newly-launched C must both be known")
+        XCTAssertEqual(relaunch.boundRepo?.displayName, "restore-c", "the pending launch request applies on top of restore")
+    }
+
+    func testRemoveActiveRepoPromotesNextAndRemoveLastEmptiesState() throws {
+        let repoA = try makeRepo(named: "rm-a")
+        let repoB = try makeRepo(named: "rm-b")
+        let (defaults, suiteName) = try makeIsolatedDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let state = AppState(defaults: defaults)
+        state.handleLaunchRequest(LaunchRequest(cwd: repoA.path, createdAtUnixSeconds: 1))
+        state.handleLaunchRequest(LaunchRequest(cwd: repoB.path, createdAtUnixSeconds: 2))
+        // knownRepos == [rm-b, rm-a], active rm-b.
+
+        state.removeRepo(state.boundRepo!)   // remove active rm-b → rm-a promoted
+        XCTAssertEqual(state.knownRepos.count, 1)
+        XCTAssertEqual(state.boundRepo?.displayName, "rm-a", "removing the active repo must promote the next known repo")
+
+        state.removeRepo(state.boundRepo!)   // remove last repo → empty state restored
+        XCTAssertTrue(state.knownRepos.isEmpty, "removing the last repo must empty the list")
+        XCTAssertNil(state.boundRepo, "no active repo remains after removing the last one")
+        XCTAssertEqual(state.boundRepoDisplayText, "No repository bound", "empty state text is restored")
+    }
+
+    func testEmptyStateHasNoKnownReposAndSkipsFiling() async throws {
+        // SC (empty state): with zero known repos, the existing "No repository bound — cannot file"
+        // behavior is preserved and no filing occurs.
+        let (defaults, suiteName) = try makeIsolatedDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        var filingCalled = false
+        let state = AppState(
+            onStartRecording: { true },
+            onStopRecording: {},
+            onRunTranscription: { _ in "no repo transcript" },
+            onRunIssueFiling: { _, _, _ in
+                filingCalled = true
+                return IssueFilingResult(number: 1, url: "https://github.com/o/r/issues/1")
+            },
+            defaults: defaults
+        )
+        XCTAssertTrue(state.knownRepos.isEmpty, "fresh state has no known repos")
+        XCTAssertNil(state.boundRepo)
+
+        state.micPermissionGranted = true
+        state.startRecording()
+        state.stopRecording()
+        await waitUntil { state.captureState == .idle }
+
+        XCTAssertFalse(filingCalled, "no repo bound → filing seam must not be called")
+        XCTAssertEqual(state.statusText, "No repository bound — cannot file", "empty-state message preserved")
     }
 
     func testInitialCaptureStateIsIdle() {

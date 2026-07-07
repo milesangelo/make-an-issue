@@ -1,6 +1,6 @@
 import Foundation
 
-struct RepoBinding: Equatable {
+struct RepoBinding: Equatable, Codable {
     let rootURL: URL
     let displayName: String
     let displayPath: String
