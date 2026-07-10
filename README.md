@@ -113,7 +113,9 @@ Navigate to any git repository where you want to file issues, then run:
 ```
 
 The app appears in your menu bar (no Dock icon). It binds to the git repository resolved from
-your current working directory.
+your current working directory. Launching again from a different repo *adds* it to the menu-bar
+picker (rather than forgetting the previous one) and makes it the active target; switch between
+known repos from the picker at any time.
 
 > [!TIP]
 > For convenience, symlink the launcher into a directory on your `PATH`:
@@ -140,7 +142,7 @@ your current working directory.
 
 Click the **exclamationmark.bubble** (❗💬) icon in your menu bar to see:
 
-- **Repository card** — Which repo is currently bound
+- **Repository picker** — Lists every repo you've launched from, marks the active one, and lets you switch which repo the next dictation files against; the list and active selection persist across relaunches. Empty and single-repo states render as before.
 - **Status badge** — Current state (IDLE, RECORDING, ASR, FILING, DONE)
 - **Transcript** — The last transcription result (copyable)
 - **Settings** — Configure your push-to-talk shortcut and CLI command

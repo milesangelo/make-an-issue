@@ -36,8 +36,9 @@ struct MenuView: View {
             
             Divider()
             
-            // Repository Card
-            RepositoryCard(boundRepo: appState.boundRepo, fallbackText: appState.boundRepoDisplayText)
+            // Repository picker — lists known repos, marks the active one, lets the user
+            // switch which repo the next dictation files against (MULTI-01).
+            RepositoryPicker(appState: appState)
             
             // Active Action/State Card
             ActionCard(appState: appState, shortcutText: shortcutText)
@@ -147,6 +148,87 @@ struct RepositoryCard: View {
             RoundedRectangle(cornerRadius: 10)
                 .stroke(Color.primary.opacity(0.08), lineWidth: 1)
         )
+    }
+}
+
+/// Lists every known repo and lets the user pick which is active (MULTI-01). Falls back to the
+/// existing "No Repository Bound" card when nothing is known, and renders a single-repo list
+/// identically to today for the one-repo case.
+struct RepositoryPicker: View {
+    @ObservedObject var appState: AppState
+
+    var body: some View {
+        if appState.knownRepos.isEmpty {
+            RepositoryCard(boundRepo: nil, fallbackText: appState.boundRepoDisplayText)
+        } else {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("REPOSITORY")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(.secondary)
+
+                ForEach(appState.knownRepos, id: \.rootURL) { repo in
+                    RepoRow(
+                        repo: repo,
+                        isActive: repo.rootURL == appState.boundRepo?.rootURL,
+                        onSelect: { appState.setActiveRepo(repo) },
+                        onRemove: { appState.removeRepo(repo) }
+                    )
+                }
+            }
+            .padding(12)
+            .background(Color(NSColor.controlBackgroundColor).opacity(0.4))
+            .cornerRadius(10)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+            )
+        }
+    }
+}
+
+/// A single selectable repo row. The active repo is marked with a filled check and accent tint;
+/// tapping an inactive row makes it active. A trailing remove button drops it from the list.
+struct RepoRow: View {
+    let repo: RepoBinding
+    let isActive: Bool
+    let onSelect: () -> Void
+    let onRemove: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Button(action: onSelect) {
+                HStack(spacing: 10) {
+                    Image(systemName: isActive ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 14))
+                        .foregroundColor(isActive ? .blue : .secondary)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(repo.displayName)
+                            .font(.system(size: 13, weight: isActive ? .semibold : .regular))
+                            .foregroundColor(.primary)
+                        Text(repo.displayPath)
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    Spacer()
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            Button(action: onRemove) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 8)
+        .background((isActive ? Color.blue.opacity(0.08) : Color.clear))
+        .cornerRadius(6)
     }
 }
 
