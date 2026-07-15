@@ -2,11 +2,11 @@
 
 A native macOS menu-bar utility that turns a spoken thought into a GitHub issue for the
 repository you're working in. Hold a global shortcut, describe the issue, and the app
-transcribes your speech, hands the transcript to your AI coding CLI (e.g. `claude`), which
-investigates the repo, drafts the issue, files it via its own MCP server — and speaks
+transcribes your speech, hands the transcript to Claude Code, which investigates the repo,
+drafts the issue through a GitHub MCP server, and speaks
 "created issue #NUMBER" back to you.
 
-No API tokens. No browser. No leaving the keyboard.
+No manually managed API tokens. No browser. No leaving the keyboard.
 
 ---
 
@@ -51,11 +51,13 @@ Before building or running make-an-issue, ensure you have the following installe
 | **cmake** | 3.14+ | Builds vendored whisper.cpp | `brew install cmake` |
 | **Docker** | Latest | Runs GitHub MCP server container | [Docker Desktop](https://www.docker.com/products/docker-desktop/) |
 | **gh** | Latest | Provides GitHub auth token | `brew install gh` |
-| **An AI coding CLI** | — | Drafts & files issues via MCP | e.g. [claude](https://docs.anthropic.com/en/docs/claude-cli) (validated), `codex` (experimental) |
+| **Claude Code** | — | Drafts and files issues via MCP | [Install Claude Code](https://docs.anthropic.com/en/docs/claude-cli) |
 
 > [!NOTE]
-> The app itself holds **no API tokens**. It rides the AI CLI's existing MCP OAuth session for
-> issue filing. You authenticate once through your AI CLI's normal setup flow.
+> The app does not persist a GitHub token. For each filing, it obtains a token with `gh auth token`
+> (or uses `GITHUB_PERSONAL_ACCESS_TOKEN` when it is already in the app environment), writes a
+> temporary MCP configuration, and starts `ghcr.io/github/github-mcp-server` through Docker.
+> Authenticate `gh` and keep Docker running before filing an issue.
 
 ---
 
@@ -94,10 +96,10 @@ ad-hoc code-signs everything.
 ### 4. Authenticate your tools
 
 ```bash
-# Authenticate gh (needed to provide the GitHub token to the AI CLI's MCP server)
+# Authenticate gh (provides the GitHub token to the MCP server)
 gh auth login
 
-# Ensure your AI CLI is set up (e.g. claude)
+# Ensure Claude Code is available
 claude --version
 
 # Ensure Docker is running (for the GitHub MCP server container)
@@ -135,7 +137,7 @@ known repos from the picker at any time.
 3. **Speak** — Describe the issue naturally (e.g. *"The login page crashes when the password field is empty"*)
 4. **Release** — Let go of the shortcut; the app:
    - Transcribes your speech using the bundled whisper model
-   - Invokes your AI CLI in the bound repo to draft & file the issue via MCP
+   - Invokes Claude Code in the bound repo to draft and file the issue via MCP
    - Speaks "created issue #NUMBER" aloud
 
 ### Menu Bar UI
@@ -143,9 +145,9 @@ known repos from the picker at any time.
 Click the **exclamationmark.bubble** (❗💬) icon in your menu bar to see:
 
 - **Repository picker** — Lists every repo you've launched from, marks the active one, and lets you switch which repo the next dictation files against; the list and active selection persist across relaunches. Empty and single-repo states render as before.
-- **Status badge** — Current state (IDLE, RECORDING, ASR, FILING, DONE)
+- **Status badge** — Capture state (IDLE, RECORDING, ASR); filing jobs appear separately
 - **Transcript** — The last transcription result (copyable)
-- **Settings** — Configure your push-to-talk shortcut and CLI command
+- **Settings** — Configure your push-to-talk shortcut and drafting instructions
 
 ---
 
@@ -161,16 +163,17 @@ The default shortcut is **⌃⌥I** (Control + Option + I). To change it:
 
 The shortcut is persisted across launches via UserDefaults.
 
-### AI CLI Command
+### Drafting Instructions
 
-The CLI command used for issue drafting and filing defaults to `claude`. To change it:
+The app currently uses Claude Code with the GitHub MCP server. There is no provider selector or
+editable CLI-command field. A provider selector may be added later, but no alternate provider is
+supported today.
+
+To customize how Claude investigates and drafts issues:
 
 1. Open **⚙ Settings** in the menu-bar popover
-2. Edit the **CLI Command** text field (e.g. `claude`, `codex`)
-
-> [!IMPORTANT]
-> Only `claude` with the GitHub MCP server is validated end-to-end in v1.
-> `codex` support is experimental and blocked by an upstream issue with non-interactive MCP writes.
+2. Select the **Instructions** tab
+3. Edit **Drafting Instructions**, or select **Reset to Default** to restore the shipped guidance
 
 ### Environment Variables
 
@@ -183,12 +186,13 @@ The CLI command used for issue drafting and filing defaults to `claude`. To chan
 
 ## macOS Permissions
 
-The app requires two system permissions on first launch. macOS will prompt you automatically:
+The app requests microphone access when recording. Its global shortcut uses Carbon hotkey
+registration through KeyboardShortcuts, which does not require Accessibility or Input Monitoring
+permission.
 
 | Permission | Why | Where to Grant |
 |---|---|---|
 | **Microphone** | Records voice for push-to-talk | System Settings → Privacy & Security → Microphone |
-| **Accessibility / Input Monitoring** | Global keyboard shortcut while app is in background | System Settings → Privacy & Security → Accessibility (or Input Monitoring) |
 
 > [!NOTE]
 > The v1 build runs **non-sandboxed** (App Sandbox is disabled) because it needs to spawn
@@ -205,14 +209,14 @@ make-an-issue/
 ├── Sources/MakeAnIssue/
 │   ├── MakeAnIssueApp.swift               # @main — MenuBarExtra scene
 │   ├── AppDelegate.swift                  # NSApplicationDelegate setup
-│   ├── AppState.swift                     # Central state machine (idle → recording → ASR → filing → done)
+│   ├── AppState.swift                     # Capture state (idle → recording → transcribing → idle) and filing jobs
 │   ├── MenuView.swift                     # SwiftUI menu-bar popover UI
 │   ├── RepoBinding.swift                  # Git repo resolution from cwd
 │   ├── AudioRecorder.swift                # AVAudioEngine mic → 16kHz mono WAV
 │   ├── Transcriber.swift                  # Invokes bundled whisper-cli
 │   ├── CLIRunner.swift                    # Foundation Process wrapper (stdout/stderr/exit)
-│   ├── IssueFilingConfig.swift            # Provider-agnostic config seam (claude+GitHub, etc.)
-│   ├── IssueFilingRunner.swift            # Orchestrates AI CLI → MCP → issue filed
+│   ├── IssueFilingConfig.swift            # Claude Code + GitHub MCP configuration
+│   ├── IssueFilingRunner.swift            # Orchestrates Claude Code → MCP → issue filed
 │   ├── IssueResultParser.swift            # Parses issue URL/number from CLI stdout
 │   ├── LaunchRequest.swift                # Launch request model
 │   └── LaunchRequestStore.swift           # Reads launch-request.json from disk
@@ -264,12 +268,15 @@ The app follows a **sequential pipeline** pattern:
 2. **HotkeyManager** — `onKeyDown` starts recording, `onKeyUp` stops
 3. **AudioRecorder** — Captures mic audio to a 16kHz mono WAV file
 4. **Transcriber** — Runs bundled `whisper-cli` against the WAV
-5. **IssueFilingRunner** — Invokes the AI CLI with the transcript + repo context; the CLI drafts and files the issue via its own MCP server
+5. **IssueFilingRunner** — Invokes Claude Code with the transcript + repo context; it drafts and files the issue through a Docker-hosted GitHub MCP server
 6. **IssueResultParser** — Extracts the issue number/URL from CLI stdout
 7. **SpeechOutput** — Speaks "created issue #N" via `AVSpeechSynthesizer`
 
-State transitions flow through a central `AppState` observable:
-`idle → recording → transcribing → finished → filing → idle`
+Capture transitions flow through the central `AppState` observable:
+`idle → recording → transcribing → idle`
+
+After transcription, each issue filing runs as a separate job with its own `filing`, `done`,
+`failed`, or `cancelled` state, so capture can return to idle while filings continue.
 
 ### Running the App in Development
 
@@ -303,8 +310,8 @@ and downloads the model.
 
 ### Push-to-talk shortcut doesn't fire in the background
 
-- Grant **Accessibility** or **Input Monitoring** permission in System Settings
 - Try re-setting the shortcut in the Settings panel
+- Check that another app or the system has not claimed the selected shortcut
 
 ### Microphone permission denied
 
@@ -315,8 +322,7 @@ and downloads the model.
 
 - Ensure Docker is running (`docker info`)
 - Verify `gh auth status` shows you're authenticated
-- Check that your AI CLI is on your `PATH` (GUI apps inherit a minimal PATH — configure the
-  CLI command as an absolute path if needed)
+- Check that `claude` is available on the app's `PATH` (GUI apps can inherit a minimal PATH)
 - The default timeout is 300 seconds (5 minutes); complex repos may take longer
 
 ### Model download fails (SHA mismatch)
