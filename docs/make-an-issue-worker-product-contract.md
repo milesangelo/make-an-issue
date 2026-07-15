@@ -402,13 +402,18 @@ same group. v1 defines exactly two re-trigger paths:
    as after a label-triggered run.
 
 An issue that already has a human-linked pull request but no worker run history fails closed on
-any currently present `agent:run` label: `observe` creates (or retains) the group's run-group
-projection, records the current last observed timeline event — or the before-first-event
-sentinel — as the suppression baseline cursor, and idempotently removes the label without
-creating a run. Only an effective `agent:run` `labeled` event strictly after that baseline is
-accepted as a re-trigger; `run --issue <url>` remains the immediate authenticated override. This
-keeps a linked PR from ever causing duplicate passive pickup while preserving both explicit v1
-rerun paths.
+any currently present `agent:run` label. The suppression baseline is initialized exactly once,
+only when the group's projection has no cleanup cursor: `observe` creates the run-group
+projection, records the current last observed timeline event as the baseline cursor (a currently
+present label guarantees at least its own effective `labeled` event, so the timeline is never
+empty here), and idempotently removes the label without creating a run. If that removal fails,
+the projection records the same `label_removal_outcome = pending` flag and the reconciliation
+poll retries idempotently; while the flag is set, the present label is never accepted as a
+trigger. On every later observation the cursor is never re-based merely because a label is
+present: the effective `agent:run` `labeled` event is compared against the stored cursor,
+accepted as a re-trigger when strictly after it, and treated as stale at or before it.
+`run --issue <url>` remains the immediate authenticated override. This keeps a linked PR from
+ever causing duplicate passive pickup while preserving both explicit v1 rerun paths.
 
 The UI must show earlier terminal runs and a newer run separately.
 
