@@ -255,6 +255,7 @@ make-an-issue/
 │   ├── fixtures/                          # Smoke fixtures: fake-claude provider, jfk.wav audio
 │   ├── smoke-app.sh                       # Assembled-artifact smoke of .build/MakeAnIssue.app
 │   └── verify-app-signing.sh              # Strict codesign verification of the sealed bundle
+├── docs/                                  # Worker product contract & threat model (design docs)
 ├── vendor/                                # (git-ignored) whisper-cli, dylibs, model
 └── .planning/                             # Design docs, research, roadmap
 ```
