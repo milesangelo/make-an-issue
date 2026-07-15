@@ -38,6 +38,14 @@ No manually managed API tokens. No browser. No leaving the keyboard.
                          └──────────────────────┘
 ```
 
+### Issue-to-PR worker design
+
+The proposed `make-an-issue-worker` pickup system is specified separately from the current app
+implementation. Its [product contract](docs/make-an-issue-worker-product-contract.md) defines
+triggers, routing, configuration, lifecycle, safety invariants, and dependency seams; the companion
+[threat model](docs/make-an-issue-worker-threat-model.md) defines trust boundaries, mitigations, and
+accepted v1 residual risk. These are design documents only—the worker is not implemented yet.
+
 ---
 
 ## Prerequisites
