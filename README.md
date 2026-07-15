@@ -51,7 +51,7 @@ Before building or running make-an-issue, ensure you have the following installe
 | **cmake** | 3.14+ | Builds vendored whisper.cpp | `brew install cmake` |
 | **Docker** | Latest | Runs GitHub MCP server container | [Docker Desktop](https://www.docker.com/products/docker-desktop/) |
 | **gh** | Latest | Provides GitHub auth token | `brew install gh` |
-| **Claude Code** | — | Drafts and files issues via MCP | [Install Claude Code](https://docs.anthropic.com/en/docs/claude-cli) |
+| **Claude Code** | — | Drafts and files issues via MCP | [Install Claude Code](https://code.claude.com/docs) |
 
 > [!NOTE]
 > The app does not persist a GitHub token. For each filing, it obtains a token with `gh auth token`
@@ -211,6 +211,9 @@ make-an-issue/
 │   ├── AppDelegate.swift                  # NSApplicationDelegate setup
 │   ├── AppState.swift                     # Capture state (idle → recording → transcribing → idle) and filing jobs
 │   ├── MenuView.swift                     # SwiftUI menu-bar popover UI
+│   ├── SettingsView.swift                 # Settings window (shortcut + drafting instructions)
+│   ├── FilingJob.swift                    # Per-recording filing job model (filing → done/failed/cancelled)
+│   ├── JobRowStyle.swift                  # Per-state icon/color styling for jobs-list rows
 │   ├── RepoBinding.swift                  # Git repo resolution from cwd
 │   ├── AudioRecorder.swift                # AVAudioEngine mic → 16kHz mono WAV
 │   ├── Transcriber.swift                  # Invokes bundled whisper-cli
