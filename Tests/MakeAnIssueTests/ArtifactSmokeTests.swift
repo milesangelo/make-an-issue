@@ -47,6 +47,6 @@ final class ArtifactSmokeTests: XCTestCase {
             at: tempDirectory,
             includingPropertiesForKeys: nil
         ).filter { $0.lastPathComponent.hasPrefix("make-an-issue-mcp-") }
-        XCTAssertEqual(remainingMCPFiles, existingMCPFiles, "Runner must remove its temporary MCP config")
+        XCTAssertEqual(Set(remainingMCPFiles), Set(existingMCPFiles), "Runner must remove its temporary MCP config")
     }
 }

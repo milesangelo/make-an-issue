@@ -65,21 +65,21 @@ if ! "$repo_root/scripts/verify-app-signing.sh" "$app_dir"; then
 fi
 pass "strict signing verification"
 
-fixture="$repo_root/vendor/whisper.cpp-src/samples/jfk.wav"
-require_file "$fixture" "vendored deterministic audio fixture"
+fixture="$repo_root/scripts/fixtures/jfk.wav"
+require_file "$fixture" "checked-in deterministic audio fixture"
 if ! "$resources_dir/whisper-cli" -m "$resources_dir/ggml-small.en.bin" -f "$fixture" -l en -nt -t 4 >"$transcript_file" 2>&1; then
     fail "bundled ASR transcription failed"
 fi
 if ! grep -qi 'ask not what your country can do for you' "$transcript_file"; then
     fail "bundled ASR transcript did not contain expected JFK phrase"
 fi
-pass "bundled whisper-cli transcribed vendored JFK fixture"
+pass "bundled whisper-cli transcribed checked-in JFK fixture"
 
 fake_claude="$repo_root/scripts/fixtures/fake-claude"
 require_file "$fake_claude" "fake claude provider fixture"
 [ -x "$fake_claude" ] || fail "issue filing: fake provider is not executable"
 if ! MAKE_AN_ISSUE_SMOKE_FAKE_CLAUDE="$fake_claude" MAKE_AN_ISSUE_SMOKE_TOKEN="smoke-token" \
-    swift test --filter ArtifactSmokeTests/testFakeProviderFilesIssueThroughRealRunner; then
+    swift test --package-path "$repo_root" --filter ArtifactSmokeTests/testFakeProviderFilesIssueThroughRealRunner; then
     fail "issue filing pipeline with fake provider failed"
 fi
 pass "real issue filing runner parsed fake issue #4242 without network"
