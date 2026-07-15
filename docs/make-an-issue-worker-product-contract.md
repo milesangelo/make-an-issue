@@ -49,8 +49,9 @@ The following decisions are closed and are not implementation questions:
    never receives a pull request.
 4. Provider adapter delivery order is Claude Code first, Codex second, then local models through
    the Codex OSS/custom-provider path.
-5. A public-repository trigger is trusted only when activated by a maintainer or an actor with
-   write access.
+5. A trigger is trusted only when activated by an actor with `WRITE`, `MAINTAIN`, or `ADMIN`
+   permission. This requirement applies uniformly to public and private repositories and fails
+   closed when trust cannot be proven.
 6. MVP concurrency is one host and one active run at a time.
 7. Pull requests are always draft and are never auto-merged.
 8. Configuration is versioned TOML at
@@ -237,8 +238,9 @@ route_ids = ["bug"]
 | `workspace_backend` | `treehouse` or `builtin`; `auto` is forbidden because workspace retention semantics must be known |
 | `publisher_backend` | `auto`, `no-mistakes`, or `builtin`; `auto` selects only an adapter that passes capability probes |
 
-`worker.limits` values are required positive integers. `allow_binary_files` defaults to and should
-remain `false`; if true, binaries are still subject to changed-file, per-file, and total limits.
+Numeric `worker.limits` values are required positive integers. `allow_binary_files` defaults to
+and should remain `false`; if true, binaries are still subject to changed-file, per-file, and
+total limits.
 
 #### `[[providers]]`
 
@@ -277,9 +279,11 @@ the worker adds `agent:unrouted`, records an unrouted observation, and creates n
 
 `repository` is a lowercase canonical `owner/name` GitHub slug and is unique. `enabled = true` is
 the opt-in boundary. `remote` must be the matching GitHub repository over HTTPS or SSH; redirects
-or a fetched repository identity that disagree with `repository` are rejected. `default_branch`
-is a configured expectation and is verified against GitHub before each run. A disagreement stops
-preparation; the worker never guesses a different publication base.
+or a fetched repository identity that disagree with `repository` are rejected. Because GitHub
+preserves case in owner and repository names, the worker case-folds the fetched owner and
+repository identity and compares it case-insensitively with the configured lowercase slug.
+`default_branch` is a configured expectation and is verified against GitHub before each run. A
+disagreement stops preparation; the worker never guesses a different publication base.
 
 ## 5. Trigger and routing contract
 
@@ -313,7 +317,8 @@ within configured resource bounds; a partial page never proves absence.
 Both fast path and polling call the same `observe(issueURL, configSnapshot)` function. There is no
 separate fast-path state machine.
 
-For a public repository, the worker verifies that activation was performed by a trusted actor:
+For every repository, public or private, the worker verifies that activation was performed by a
+trusted actor:
 
 - An app fast-path activation is accepted only when the authenticated `gh` user has
   `WRITE`, `MAINTAIN`, or `ADMIN` permission on the repository.
@@ -325,7 +330,8 @@ For a public repository, the worker verifies that activation was performed by a 
   inserted.
 
 This permits a maintainer to deliberately label an outsider's issue while preventing an outsider
-from self-activating arbitrary prompt text.
+on a public repository — or a collaborator with only `READ` or `TRIAGE` permission on a private
+repository — from self-activating arbitrary prompt text.
 
 ### 5.3 SQLite run ledger and idempotency
 
@@ -337,8 +343,17 @@ full durability for state transitions (`synchronous=FULL`). The logical run iden
 ```
 
 The `runs` table has a unique constraint over those three fields. `INSERT ... ON CONFLICT DO
-NOTHING` makes fast path and polling converge. A new config revision intentionally permits a new
-run for the same issue; the UI must show the earlier terminal run and the newer run separately.
+NOTHING` makes fast path and polling converge.
+
+Terminal outcomes are final. Once an issue has any `pr_opened` or `failed` run, or a pull request
+already linked to it, `observe` suppresses passive pickup of that issue regardless of later
+configuration edits; a new config revision alone never re-runs it. On entering a terminal state
+the worker removes the `agent:run` label, or, when removal fails or is not permitted, durably
+marks the issue as terminally observed, so polling never sees a completed issue as eligible.
+Re-running an issue requires an explicit re-trigger: a trusted actor re-applies the activation
+label after the terminal state, or uses a rerun command. A new config revision therefore permits
+a new run for the same issue only together with such an explicit re-trigger; the UI must show the
+earlier terminal run and the newer run separately.
 
 Minimum durable fields are:
 
@@ -380,6 +395,8 @@ only after proving its owning process is gone and reconciling the associated run
 Cancellation, timeout, provider failure, diff rejection, validation failure, and publication
 failure all enter `failed` with distinct codes. Validation failure is specifically
 `validation_failed_retained`; it is never retried automatically and never enters `publishing`.
+On entering `pr_opened` or `failed`, the worker removes or marks the `agent:run` label as
+specified in section 5.3 so the issue is no longer eligible for passive pickup.
 
 ### 6.1 Preparation
 
@@ -490,6 +507,7 @@ Publishing, Draft PR opened, Failed (work retained), Unrouted, and Configuration
 | No data loss on cleanup | `ArtifactStore` records base SHA, full patch, logs, config revision, and run events before cleanup; `WorkspaceManager.release` is allowed only for clean, published work |
 | Dirty/unpublished workspaces persist | `RetentionPolicy` converts the Treehouse lease to retained state and never calls reset/return/destroy automatically; deletion requires a separate user action after patch export |
 | Idempotent triggers | SQLite unique key on repository + issue + config revision in `TriggerLedger.observe` |
+| Terminal outcomes suppress passive pickup | `TriggerLedger.observe` skips issues with a terminal run or linked PR across config revisions; terminal transitions remove or mark `agent:run`; only an explicit re-trigger creates a new run |
 | Interrupted publication reconciles | `PublicationReconciler` checks exact remote ref and PR before any retry |
 | Bounded resources | `ResourceGovernor` applies run/provider/command timeouts, log caps, disk quotas, output truncation markers, one-run claim, and process-group teardown |
 
@@ -658,8 +676,10 @@ The following are explicitly not part of the MVP:
 An implementation is conformant only when tests demonstrate:
 
 - fast enqueue and a 60-second startup/periodic poll converge on one ledger row;
-- repository + issue + config revision is idempotent and a new revision creates a new run;
-- untrusted public triggers and equal route priorities fail closed;
+- repository + issue + config revision is idempotent; a terminal run or linked pull request
+  suppresses passive pickup across config revisions, and a new revision creates a new run only
+  after an explicit re-trigger;
+- untrusted triggers on public and private repositories and equal route priorities fail closed;
 - no route adds `agent:unrouted` and launches no process;
 - the exact state transitions and one-host claim survive restart;
 - provider processes have no injected GitHub credential and cannot call a publication API through

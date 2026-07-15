@@ -66,9 +66,9 @@ actions, or denial of service.
 **Mitigations and enforcement.**
 
 - `TriggerVerifier`: pickup requires repository opt-in and `agent:run`.
-- `PublicTriggerTrust`: for public repos, app activation requires the authenticated user to have
-  write/maintain/admin permission; polled activation requires the effective label-add actor to have
-  write/maintain/admin permission. Missing proof fails closed.
+- `TriggerTrust`: for every repository, public or private, app activation requires the
+  authenticated user to have write/maintain/admin permission; polled activation requires the
+  effective label-add actor to have write/maintain/admin permission. Missing proof fails closed.
 - `RouteResolver`: only explicit label routes launch a provider; no route adds `agent:unrouted` and
   runs nothing.
 - `PromptBuilder`: issue data is size-bounded, quoted, and marked untrusted beneath fixed
@@ -78,8 +78,9 @@ actions, or denial of service.
   inspected diff and green receipt can publish.
 
 Maintainer-only activation plus the label gate does not make issue text trustworthy. It bounds who
-may spend local execution authority: an outsider cannot self-trigger, while a maintainer's label is
-an explicit approval to process that specific text.
+may spend local execution authority: an outsider on a public repository cannot self-trigger, a
+read- or triage-only collaborator on a private repository cannot self-trigger, and a maintainer's
+label is an explicit approval to process that specific text.
 
 **Residual risk.** A trusted maintainer may label a malicious issue or have a compromised account.
 Prompt injection can still persuade the provider to attempt same-user filesystem/network access.
@@ -280,7 +281,8 @@ chain compromise remains possible. Residual severity: **high**.
 
 Before MVP release, automated tests must cover:
 
-- public trigger actors with read, triage, write, maintain, admin, missing, and changed permission;
+- trigger actors on public and private repositories with read, triage, write, maintain, admin,
+  missing, and changed permission;
 - label remove/re-add timeline handling and missing timeline failure;
 - prompt injection strings attempting git, `gh`, path escape, secret reads, and publication;
 - config symlink/ownership/mode/TOCTOU cases, unknown keys, and equal priorities;
