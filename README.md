@@ -97,6 +97,11 @@ nested whisper binaries before sealing the outer app last. Signing uses `CODESIG
 (ad-hoc by default), and the build finishes by running `scripts/verify-app-signing.sh`, a strict
 `codesign --verify --deep --strict` check of the sealed bundle.
 
+For an assembled-artifact release smoke (no GUI launch and no network writes), run
+`./scripts/smoke-app.sh` after `fetch-whisper.sh` and `build-app.sh`. It validates the sealed
+bundle, executes bundled Whisper against the vendored JFK fixture, and drives the real issue-filing
+runner through a fake local Claude provider.
+
 ### 4. Authenticate your tools
 
 ```bash
