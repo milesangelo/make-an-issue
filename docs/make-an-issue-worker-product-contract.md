@@ -353,7 +353,12 @@ Passive eligibility is governed by the group's latest run record. While the late
 non-terminal, observation is a no-op. Once the latest record is terminal (`pr_opened` or
 `failed`), or a pull request is already linked to the issue, `observe` suppresses passive pickup
 of that issue regardless of later configuration edits; a new config revision alone never re-runs
-it.
+it. Both suppression arms guard passive pickup only; neither vetoes the explicit re-trigger
+paths below. In particular, after a `pr_opened` terminal record the prior pull request stays
+linked permanently, so re-trigger acceptance is governed by the cleanup-cursor rule of path 1 —
+an effective `agent:run` `labeled` event strictly after the group's cleanup cursor, or a
+`run --issue <url>` invocation, creates a new run record even though the earlier PR remains
+linked.
 
 Terminal `agent:run` cleanup belongs to the reconciliation poll and is expressed only in GitHub
 issue-timeline terms; local and GitHub wall clocks are never compared. Cleanup state lives in a
@@ -395,6 +400,15 @@ same group. v1 defines exactly two re-trigger paths:
    label event; at its terminal state it performs the same idempotent label cleanup and records
    the same cleanup cursor, so a later `agent:run` re-add is judged against that cursor exactly
    as after a label-triggered run.
+
+An issue that already has a human-linked pull request but no worker run history fails closed on
+any currently present `agent:run` label: `observe` creates (or retains) the group's run-group
+projection, records the current last observed timeline event — or the before-first-event
+sentinel — as the suppression baseline cursor, and idempotently removes the label without
+creating a run. Only an effective `agent:run` `labeled` event strictly after that baseline is
+accepted as a re-trigger; `run --issue <url>` remains the immediate authenticated override. This
+keeps a linked PR from ever causing duplicate passive pickup while preserving both explicit v1
+rerun paths.
 
 The UI must show earlier terminal runs and a newer run separately.
 
@@ -554,7 +568,7 @@ Publishing, Draft PR opened, Failed (work retained), Unrouted, and Configuration
 | No data loss on cleanup | `ArtifactStore` records base SHA, full patch, logs, config revision, and run events before cleanup; `WorkspaceManager.release` is allowed only for clean, published work |
 | Dirty/unpublished workspaces persist | `RetentionPolicy` converts the Treehouse lease to retained state and never calls reset/return/destroy automatically; deletion requires a separate user action after patch export |
 | Idempotent triggers | Partial unique index allowing at most one non-terminal run per repository + issue group in `TriggerLedger.observe` |
-| Terminal outcomes suppress passive pickup | `TriggerLedger.observe` skips issues whose latest run record is terminal or that have a linked PR, regardless of config edits; the reconciliation poll removes `agent:run` idempotently at terminal cleanup, retries under a pending-removal flag without treating the present label as a trigger, and records a timeline cleanup cursor (a before-first-event sentinel when the timeline is empty) on the mutable run-group projection, never on a terminal run record; only an explicit re-trigger (an `agent:run` `labeled` timeline event strictly after that cursor, or `run --issue <url>`) creates a new run record |
+| Terminal outcomes suppress passive pickup | `TriggerLedger.observe` skips passive pickup — never explicit re-triggers — for issues whose latest run record is terminal or that have a linked PR, regardless of config edits; an issue with a human-linked PR and no run history fails closed by recording a baseline cursor and idempotently removing any present label; the reconciliation poll removes `agent:run` idempotently at terminal cleanup, retries under a pending-removal flag without treating the present label as a trigger, and records a timeline cleanup cursor (a before-first-event sentinel when the timeline is empty) on the mutable run-group projection, never on a terminal run record; only an explicit re-trigger (an `agent:run` `labeled` timeline event strictly after that cursor, or `run --issue <url>`) creates a new run record, including after `pr_opened` while the prior PR remains linked |
 | Interrupted publication reconciles | `PublicationReconciler` checks exact remote ref and PR before any retry |
 | Bounded resources | `ResourceGovernor` applies run/provider/command timeouts, log caps, disk quotas, output truncation markers, one-run claim, and process-group teardown |
 
@@ -726,8 +740,10 @@ An implementation is conformant only when tests demonstrate:
 
 - fast enqueue and a 60-second startup/periodic poll converge on one ledger row;
 - observation is idempotent per repository + issue run group: at most one non-terminal run exists
-  per group, a terminal latest run or linked pull request suppresses passive pickup regardless of
-  configuration edits, a stale still-present label under a pending-removal flag creates no run
+  per group, a terminal latest run or linked pull request suppresses passive pickup — but not the
+  explicit re-trigger paths — regardless of configuration edits, an issue with a human-linked
+  pull request and no run history records a baseline cursor and idempotently removes any present
+  label instead of running, a stale still-present label under a pending-removal flag creates no run
   while the poller retries removal, removing an already-absent label counts as success, cleanup
   against an empty issue timeline records the before-first-event sentinel cursor, terminal run
   records are never written again while cleanup mutates only the run-group projection, and only
