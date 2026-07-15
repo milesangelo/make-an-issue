@@ -87,9 +87,13 @@ downloads the `ggml-small.en` model (~466 MB). Artifacts land in `vendor/` (git-
 ./scripts/build-app.sh
 ```
 
-This runs `swift build`, assembles the `.app` bundle at `.build/MakeAnIssue.app`, copies the
-vendored whisper-cli + model + dylibs into `Contents/Resources/`, rewrites the rpath, and
-ad-hoc code-signs everything.
+This runs `swift build -c release`, assembles the `.app` bundle at `.build/MakeAnIssue.app`,
+stamps both bundle version fields (`CFBundleShortVersionString` and `CFBundleVersion`) from
+`APP_VERSION` (defaulting to the version in `Resources/Info.plist`), copies the vendored
+whisper-cli + model + dylibs into `Contents/Resources/`, rewrites the rpath, and code-signs the
+nested whisper binaries before sealing the outer app last. Signing uses `CODESIGN_IDENTITY`
+(ad-hoc by default), and the build finishes by running `scripts/verify-app-signing.sh`, a strict
+`codesign --verify --deep --strict` check of the sealed bundle.
 
 ### 4. Authenticate your tools
 
@@ -223,7 +227,8 @@ make-an-issue/
 │   └── make-an-issue                      # Repo-local launcher shell script
 ├── scripts/
 │   ├── build-app.sh                       # Builds .app bundle with vendored whisper
-│   └── fetch-whisper.sh                   # Clones, builds, and vendors whisper.cpp + model
+│   ├── fetch-whisper.sh                   # Clones, builds, and vendors whisper.cpp + model
+│   └── verify-app-signing.sh              # Strict codesign verification of the sealed bundle
 ├── vendor/                                # (git-ignored) whisper-cli, dylibs, model
 └── .planning/                             # Design docs, research, roadmap
 ```

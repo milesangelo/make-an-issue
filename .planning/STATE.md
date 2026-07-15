@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-06-28)
 Phase: 09
 Plan: Not started
 Status: Phase complete — ready for verification
-Last activity: 2026-07-02 — Phase 09 complete
+Last activity: 2026-07-15 — Completed quick task 260715-k1m: Release app signing
 
 ## Accumulated Context
 
@@ -94,9 +94,15 @@ Open items carried into the v1.1 milestone:
 - ~~**Cancellation correctness (Phase 6):**~~ RESOLVED in Phase 6 — process-group SIGTERM→2s grace→SIGKILL on cancel and quit paths; `make-an-issue-mcp-*.json` swept on quit (synchronous sweep fix, commit 30fd152). UAT verified, threats SECURED (06-SECURITY.md).
 - ~~**KeyboardShortcuts under NSPopover/NSMenu (Phase 7):**~~ RESOLVED in Phase 7 — the `MenuBarExtra` `.onDisappear` end-tracking workaround was removed; UAT Test 6 (2026-07-01) confirmed push-to-talk fires across popover/menu open-close cycles and while the popover is open (A4 closed). Threats SECURED (07-SECURITY.md).
 - **Editable-prompt parse safety (Phase 8):** keep the editable field instructions-only; the enforced contract (scoped `--allowedTools`, `method=create`, "Issue URL on last line") is appended by `buildPrompt` and the CLI flags live in `assembleCommand`. Harden `IssueResultParser` prose fallback to match the **last** URL/line, not the first occurrence anywhere, or user edits produce false "created #N".
-- **Distribution gap (carried):** bundled `whisper-cli` is only ad-hoc signed for local use. Developer-ID signing + hardened-runtime notarization required before clean-machine distribution (deferred — DIST-01; see 03-CONTEXT.md D-04/D-05).
+- **Distribution gap (carried):** the release `.app` (nested whisper Mach-O files, then the sealed outer bundle) is signed by `build-app.sh` with `CODESIGN_IDENTITY` (ad-hoc `-` by default) and strict-verified via `scripts/verify-app-signing.sh` — but an ad-hoc signature is not Gatekeeper-approved. Developer-ID signing + hardened-runtime notarization required before clean-machine distribution (deferred — DIST-01; see 03-CONTEXT.md D-04/D-05).
 - **Provider breadth deferred (carried):** `codex exec` non-interactive MCP writes broken upstream; Atlassian/Jira zero-token non-interactive write may be infeasible. v1 proven leg = `claude -p` + GitHub remote MCP. Re-spike before promising non-Claude/Jira providers (PROVIDER-01).
 - **Migration cost (Phase 5):** the jobs-model refactor intentionally rewrites serial-filing AppStateTests (`testFilingEntersFilingState`, `testPushToTalkDuringFilingIsIgnored` — re-press during filing is now *allowed*, the feature; `testStartRecordingAfterFilingReturnsToIdle`; `.filing` assertions in `testSuccessfulTranscriptionStoresText`).
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260715-k1m | Release app signing | 2026-07-15 | 8dcfb3d | [260715-k1m-release-app-signing](./quick/260715-k1m-release-app-signing/) |
 
 ## Deferred Items
 
