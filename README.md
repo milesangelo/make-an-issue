@@ -29,7 +29,7 @@ No manually managed API tokens. No browser. No leaving the keyboard.
                          └────────┬────────────-┘
                                   │
                          ┌────────▼────────────-┐
-                         │  AI CLI + MCP        │
+                         │  Claude Code + MCP   │
                          │  (draft & file issue) │
                          └────────┬────────────-┘
                                   │
@@ -147,7 +147,10 @@ Click the **exclamationmark.bubble** (❗💬) icon in your menu bar to see:
 - **Repository picker** — Lists every repo you've launched from, marks the active one, and lets you switch which repo the next dictation files against; the list and active selection persist across relaunches. Empty and single-repo states render as before.
 - **Status badge** — Capture state (IDLE, RECORDING, ASR); filing jobs appear separately
 - **Transcript** — The last transcription result (copyable)
-- **Settings** — Configure your push-to-talk shortcut and drafting instructions
+- **Filing jobs** — Each in-flight or finished filing, with per-job Stop/dismiss controls
+
+**Right-click** (or Control-click) the icon for a menu with **Settings…** (opens the Settings
+window with Shortcut and Instructions tabs) and **Quit**.
 
 ---
 
@@ -157,8 +160,8 @@ Click the **exclamationmark.bubble** (❗💬) icon in your menu bar to see:
 
 The default shortcut is **⌃⌥I** (Control + Option + I). To change it:
 
-1. Click the menu-bar icon
-2. Expand the **⚙ Settings** section
+1. Right-click the menu-bar icon and choose **Settings…**
+2. Select the **Shortcut** tab
 3. Click the shortcut recorder and press your desired key combination
 
 The shortcut is persisted across launches via UserDefaults.
@@ -171,7 +174,7 @@ supported today.
 
 To customize how Claude investigates and drafts issues:
 
-1. Open **⚙ Settings** in the menu-bar popover
+1. Right-click the menu-bar icon and choose **Settings…**
 2. Select the **Instructions** tab
 3. Edit **Drafting Instructions**, or select **Reset to Default** to restore the shipped guidance
 
@@ -207,7 +210,7 @@ permission.
 make-an-issue/
 ├── Package.swift                          # SPM manifest (Swift 5.10+, macOS 13+)
 ├── Sources/MakeAnIssue/
-│   ├── MakeAnIssueApp.swift               # @main — MenuBarExtra scene
+│   ├── MakeAnIssueApp.swift               # @main — app entry (status item lives in AppDelegate)
 │   ├── AppDelegate.swift                  # NSApplicationDelegate setup
 │   ├── AppState.swift                     # Capture state (idle → recording → transcribing → idle) and filing jobs
 │   ├── MenuView.swift                     # SwiftUI menu-bar popover UI
@@ -268,12 +271,12 @@ swift test
 The app follows a **sequential pipeline** pattern:
 
 1. **RepoBinding** — Resolves the git root from the launcher's working directory
-2. **HotkeyManager** — `onKeyDown` starts recording, `onKeyUp` stops
+2. **KeyboardShortcuts handlers** (in `AppState`) — `onKeyDown` starts recording, `onKeyUp` stops
 3. **AudioRecorder** — Captures mic audio to a 16kHz mono WAV file
 4. **Transcriber** — Runs bundled `whisper-cli` against the WAV
 5. **IssueFilingRunner** — Invokes Claude Code with the transcript + repo context; it drafts and files the issue through a Docker-hosted GitHub MCP server
 6. **IssueResultParser** — Extracts the issue number/URL from CLI stdout
-7. **SpeechOutput** — Speaks "created issue #N" via `AVSpeechSynthesizer`
+7. **AppState.speak** — Speaks "created issue #N" via `AVSpeechSynthesizer`
 
 Capture transitions flow through the central `AppState` observable:
 `idle → recording → transcribing → idle`
@@ -321,7 +324,7 @@ and downloads the model.
 - Grant **Microphone** access in System Settings → Privacy & Security → Microphone
 - The app will show a status banner if mic permission is missing
 
-### AI CLI times out or fails
+### Claude Code times out or fails
 
 - Ensure Docker is running (`docker info`)
 - Verify `gh auth status` shows you're authenticated
