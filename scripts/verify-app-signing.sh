@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
+repo_root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)
 app_dir="${1:-$repo_root/.build/MakeAnIssue.app}"
 
 if [ ! -d "$app_dir" ]; then

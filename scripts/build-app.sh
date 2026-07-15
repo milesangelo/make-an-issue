@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
+repo_root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)
 app_dir="$repo_root/.build/MakeAnIssue.app"
 contents_dir="$app_dir/Contents"
 macos_dir="$contents_dir/MacOS"
