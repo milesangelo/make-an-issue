@@ -92,10 +92,16 @@ downloads the `ggml-small.en` model (~466 MB). Artifacts land in `vendor/` (git-
 This runs `swift build -c release`, assembles the `.app` bundle at `.build/MakeAnIssue.app`,
 stamps both bundle version fields (`CFBundleShortVersionString` and `CFBundleVersion`) from
 `APP_VERSION` (defaulting to the version in `Resources/Info.plist`), copies the vendored
-whisper-cli + model + dylibs into `Contents/Resources/`, rewrites the rpath, and code-signs the
-nested whisper binaries before sealing the outer app last. Signing uses `CODESIGN_IDENTITY`
+whisper-cli + model + dylibs into `Contents/Resources/`, rewrites the copied whisper binaries'
+build-tree rpaths to `@loader_path`, and code-signs the nested whisper binaries before sealing
+the outer app last. Signing uses `CODESIGN_IDENTITY`
 (ad-hoc by default), and the build finishes by running `scripts/verify-app-signing.sh`, a strict
 `codesign --verify --deep --strict` check of the sealed bundle.
+
+For an assembled-artifact release smoke (no GUI launch and no network writes), run
+`./scripts/smoke-app.sh` after `fetch-whisper.sh` and `build-app.sh`. It validates the sealed
+bundle, executes bundled Whisper against the checked-in JFK fixture (`scripts/fixtures/jfk.wav`),
+and drives the real issue-filing runner through a fake local Claude provider.
 
 ### 4. Authenticate your tools
 
@@ -238,6 +244,8 @@ make-an-issue/
 ├── scripts/
 │   ├── build-app.sh                       # Builds .app bundle with vendored whisper
 │   ├── fetch-whisper.sh                   # Clones, builds, and vendors whisper.cpp + model
+│   ├── fixtures/                          # Smoke fixtures: fake-claude provider, jfk.wav audio
+│   ├── smoke-app.sh                       # Assembled-artifact smoke of .build/MakeAnIssue.app
 │   └── verify-app-signing.sh              # Strict codesign verification of the sealed bundle
 ├── vendor/                                # (git-ignored) whisper-cli, dylibs, model
 └── .planning/                             # Design docs, research, roadmap
@@ -262,6 +270,9 @@ swift test
 # 4. Build the full .app bundle (includes whisper vendoring)
 ./scripts/fetch-whisper.sh   # first time only
 ./scripts/build-app.sh
+
+# 5. Smoke-test the assembled bundle (no GUI launch, no network writes)
+./scripts/smoke-app.sh
 ```
 
 ### Key Dependencies

@@ -52,13 +52,25 @@ for _lib in $DYLIBS; do
     cp "$repo_root/vendor/$_lib" "$resources_dir/$_lib"
 done
 
-# Rewrite whisper-cli's absolute LC_RPATH to @loader_path (must precede codesign).
+# Rewrite the copied whisper Mach-O files' build-tree LC_RPATH values to
+# @loader_path before signing. The dylibs refer to each other via @rpath too,
+# so they need the same local rpath as whisper-cli when the bundle is moved.
 # install_name_tool invalidates any existing signature, so this runs before codesign.
-_old_rpath=$(otool -l "$resources_dir/whisper-cli" | awk '/cmd LC_RPATH/{found=1} found && /path /{print $2; exit}')
-if [ -n "$_old_rpath" ] && [ "$_old_rpath" != "@loader_path" ]; then
-    install_name_tool -delete_rpath "$_old_rpath" "$resources_dir/whisper-cli"
-fi
-install_name_tool -add_rpath "@loader_path" "$resources_dir/whisper-cli"
+rewrite_rpath() {
+    _macho="$1"
+    _old_rpaths=$(otool -l "$_macho" | awk '/cmd LC_RPATH/{found=1; next} found && /path /{print $2; found=0}')
+    for _old_rpath in $_old_rpaths; do
+        [ "$_old_rpath" = "@loader_path" ] || install_name_tool -delete_rpath "$_old_rpath" "$_macho"
+    done
+    if ! otool -l "$_macho" | awk '/cmd LC_RPATH/{found=1; next} found && /path @loader_path /{present=1; found=0} END{exit !present}'; then
+        install_name_tool -add_rpath "@loader_path" "$_macho"
+    fi
+}
+
+rewrite_rpath "$resources_dir/whisper-cli"
+for _lib in $DYLIBS; do
+    rewrite_rpath "$resources_dir/$_lib"
+done
 
 # Sign nested Mach-O files before sealing the completed app bundle. The outer
 # app must be signed last, after every resource and Info.plist is in place.

@@ -1,0 +1,43 @@
+#!/bin/sh
+set -eu
+
+mcp_config=""
+strict_config=0
+stream_json=0
+verbose=0
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --mcp-config)
+            mcp_config="${2:-}"
+            shift 2
+            ;;
+        --strict-mcp-config)
+            strict_config=1
+            shift
+            ;;
+        --output-format)
+            [ "${2:-}" = "stream-json" ] || {
+                echo "fake claude: expected stream-json output" >&2
+                exit 2
+            }
+            stream_json=1
+            shift 2
+            ;;
+        --verbose)
+            verbose=1
+            shift
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
+
+[ "$strict_config" -eq 1 ] || { echo "fake claude: missing --strict-mcp-config" >&2; exit 2; }
+[ "$stream_json" -eq 1 ] || { echo "fake claude: missing stream-json output" >&2; exit 2; }
+[ "$verbose" -eq 1 ] || { echo "fake claude: missing --verbose" >&2; exit 2; }
+[ -n "$mcp_config" ] && [ -f "$mcp_config" ] || { echo "fake claude: MCP config missing" >&2; exit 2; }
+
+printf '%s\n' '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_result","tool_use_id":"toolu_smoke","content":"{\"id\":\"fake-node-id\",\"url\":\"https://github.com/example/smoke/issues/4242\"}"}]}}'
+printf '%s\n' '{"type":"result","subtype":"success","is_error":false,"result":"Issue filed.","session_id":"smoke","total_cost_usd":0,"num_turns":1,"permission_denials":[]}'
