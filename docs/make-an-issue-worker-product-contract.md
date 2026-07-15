@@ -353,23 +353,37 @@ Passive eligibility is governed by the group's latest run record. While the late
 non-terminal, observation is a no-op. Once the latest record is terminal (`pr_opened` or
 `failed`), or a pull request is already linked to the issue, `observe` suppresses passive pickup
 of that issue regardless of later configuration edits; a new config revision alone never re-runs
-it. On entering a terminal state the worker removes the `agent:run` label; when removal fails or
-is not permitted, it durably marks the group label-removal-failed, so polling never treats a
-completed issue as eligible.
+it.
+
+Terminal `agent:run` cleanup belongs to the reconciliation poll and is expressed only in GitHub
+issue-timeline terms; local and GitHub wall clocks are never compared. On entering a terminal
+state the worker removes the `agent:run` label. Removing an already-absent label is idempotent
+success. On successful removal or confirmed absence, the group durably records a cleanup cursor
+(`label_cleanup_cursor_event_id`): the timeline `unlabeled` event produced by the removal, or the
+last observed timeline event when the label was already absent. When removal fails or is not
+permitted, the worker durably records `label_removal_outcome = pending` on the latest terminal
+record; that pending mark is the group's pending-removal flag. While the latest record is
+terminal, `agent:run` is still present, and the flag is set, the poller retries removal on each
+cycle and MUST NOT interpret the present label as a re-trigger. The flag is cleared, and the
+cleanup cursor recorded, once removal succeeds or absence is confirmed.
 
 Re-running an issue requires an explicit re-trigger, which creates a new run record under the
 same group. v1 defines exactly two re-trigger paths:
 
-1. **Activation-label re-application.** A trusted actor re-adds `agent:run` after the latest
-   terminal record. Every run persists the identity and timestamp of the effective timeline
-   label-add event that activated it. `observe` accepts a polled issue past a terminal latest
-   record only when the timeline shows an effective `agent:run` addition strictly newer than the
-   activating event of that terminal record. A label that is merely still present because
-   terminal removal failed is a stale label, not a re-trigger; a group marked
-   label-removal-failed fails closed and creates no run until the label state is reconciled.
+1. **Activation-label re-application.** A trusted actor re-adds `agent:run` after terminal
+   cleanup. A label-triggered run persists the identity and timestamp of the effective timeline
+   `labeled` event that activated it. `observe` accepts a polled issue past a terminal latest
+   record only when the issue timeline shows an effective `agent:run` `labeled` event strictly
+   after the group's cleanup cursor; timeline ordering alone decides, never wall-clock
+   comparison. Events at or before the cursor are stale, and a label that is merely still
+   present under a pending-removal flag is a stale label, not a re-trigger: the group fails
+   closed and creates no run until the poller's cleanup retries record the cursor.
 2. **Local CLI rerun.** The worker CLI invocation `run --issue <url>` executes as the logged-in
    local user, applies the same uniform write-access verification and fail-closed trust rule from
-   section 5.2, and creates a new run record.
+   section 5.2, and creates a new run record with `trigger_kind = cli`. A CLI run consumes no
+   label event; at its terminal state it performs the same idempotent label cleanup and records
+   the same cleanup cursor, so a later `agent:run` re-add is judged against that cursor exactly
+   as after a label-triggered run.
 
 The UI must show earlier terminal runs and a newer run separately.
 
@@ -378,6 +392,7 @@ Minimum durable fields are:
 ```text
 id, repository, issue_number, issue_url, config_revision, route_id, agent_id,
 trigger_kind, trigger_event_id, trigger_event_at, label_removal_outcome,
+label_cleanup_cursor_event_id,
 state, failure_code, base_sha, branch_name, workspace_id, workspace_path,
 provider_pid, provider_exit, patch_path, log_dir, validated_sha,
 remote_branch_sha, pr_number, pr_url, pr_is_draft,
@@ -526,7 +541,7 @@ Publishing, Draft PR opened, Failed (work retained), Unrouted, and Configuration
 | No data loss on cleanup | `ArtifactStore` records base SHA, full patch, logs, config revision, and run events before cleanup; `WorkspaceManager.release` is allowed only for clean, published work |
 | Dirty/unpublished workspaces persist | `RetentionPolicy` converts the Treehouse lease to retained state and never calls reset/return/destroy automatically; deletion requires a separate user action after patch export |
 | Idempotent triggers | Partial unique index allowing at most one non-terminal run per repository + issue group in `TriggerLedger.observe` |
-| Terminal outcomes suppress passive pickup | `TriggerLedger.observe` skips issues whose latest run record is terminal or that have a linked PR, regardless of config edits; terminal transitions remove `agent:run` or durably mark removal failure; only an explicit re-trigger (label re-add newer than the latest terminal record's activating event, or `run --issue <url>`) creates a new run record |
+| Terminal outcomes suppress passive pickup | `TriggerLedger.observe` skips issues whose latest run record is terminal or that have a linked PR, regardless of config edits; the reconciliation poll removes `agent:run` idempotently at terminal cleanup, retries under a pending-removal flag without treating the present label as a trigger, and records a timeline cleanup cursor; only an explicit re-trigger (an `agent:run` `labeled` timeline event strictly after that cursor, or `run --issue <url>`) creates a new run record |
 | Interrupted publication reconciles | `PublicationReconciler` checks exact remote ref and PR before any retry |
 | Bounded resources | `ResourceGovernor` applies run/provider/command timeouts, log caps, disk quotas, output truncation markers, one-run claim, and process-group teardown |
 
@@ -699,9 +714,11 @@ An implementation is conformant only when tests demonstrate:
 - fast enqueue and a 60-second startup/periodic poll converge on one ledger row;
 - observation is idempotent per repository + issue run group: at most one non-terminal run exists
   per group, a terminal latest run or linked pull request suppresses passive pickup regardless of
-  configuration edits, a stale still-present label after failed removal creates no run, and only
-  an explicit re-trigger — label re-application newer than the latest terminal record's activating
-  event, or `run --issue <url>` — creates a new run record with its own config-revision snapshot;
+  configuration edits, a stale still-present label under a pending-removal flag creates no run
+  while the poller retries removal, removing an already-absent label counts as success, and only
+  an explicit re-trigger — an `agent:run` `labeled` timeline event strictly after the group's
+  cleanup cursor, or `run --issue <url>` — creates a new run record with its own config-revision
+  snapshot;
 - untrusted triggers on public and private repositories and equal route priorities fail closed;
 - no route adds `agent:unrouted` and launches no process;
 - the exact state transitions and one-host claim survive restart;
