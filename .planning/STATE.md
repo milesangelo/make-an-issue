@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-06-28)
 Phase: 09
 Plan: Not started
 Status: Phase complete — ready for verification
-Last activity: 2026-07-02 — Phase 09 complete
+Last activity: 2026-07-15 — Completed quick task 260715-k1m: Release app signing
 
 ## Accumulated Context
 
@@ -97,6 +97,12 @@ Open items carried into the v1.1 milestone:
 - **Distribution gap (carried):** bundled `whisper-cli` is only ad-hoc signed for local use. Developer-ID signing + hardened-runtime notarization required before clean-machine distribution (deferred — DIST-01; see 03-CONTEXT.md D-04/D-05).
 - **Provider breadth deferred (carried):** `codex exec` non-interactive MCP writes broken upstream; Atlassian/Jira zero-token non-interactive write may be infeasible. v1 proven leg = `claude -p` + GitHub remote MCP. Re-spike before promising non-Claude/Jira providers (PROVIDER-01).
 - **Migration cost (Phase 5):** the jobs-model refactor intentionally rewrites serial-filing AppStateTests (`testFilingEntersFilingState`, `testPushToTalkDuringFilingIsIgnored` — re-press during filing is now *allowed*, the feature; `testStartRecordingAfterFilingReturnsToIdle`; `.filing` assertions in `testSuccessfulTranscriptionStoresText`).
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260715-k1m | Release app signing | 2026-07-15 | 8dcfb3d | [260715-k1m-release-app-signing](./quick/260715-k1m-release-app-signing/) |
 
 ## Deferred Items
 
