@@ -241,7 +241,8 @@ or provider quota.
 
 **Mitigations and enforcement.**
 
-- `TriggerLedger` deduplicates repository + issue + config revision.
+- `TriggerLedger` permits at most one non-terminal run per repository + issue group and
+  suppresses passive pickup while the group's latest run record is terminal.
 - `HostClaim` allows only one active run.
 - `ResourceGovernor` applies prompt/body/page, time, output, workspace, file-count, file-size,
   diff-size, and log limits.
@@ -283,7 +284,8 @@ Before MVP release, automated tests must cover:
 
 - trigger actors on public and private repositories with read, triage, write, maintain, admin,
   missing, and changed permission;
-- label remove/re-add timeline handling and missing timeline failure;
+- label remove/re-add timeline handling, stale-label versus re-application discrimination
+  after a terminal run, and missing timeline failure;
 - prompt injection strings attempting git, `gh`, path escape, secret reads, and publication;
 - config symlink/ownership/mode/TOCTOU cases, unknown keys, and equal priorities;
 - provider environment snapshots proving GitHub/SSH variables and real home are absent;

@@ -67,7 +67,7 @@ IssueFilingResult success                 60-second reconciliation poll
                                     v
                          Trigger verifier + router
                                     |
-                 SQLite INSERT OR IGNORE by run identity
+         SQLite guarded insert: one non-terminal run per repo+issue
                                     |
                      one-host global claim transaction
                                     |
@@ -336,29 +336,48 @@ repository — from self-activating arbitrary prompt text.
 ### 5.3 SQLite run ledger and idempotency
 
 The SQLite database lives under `state_root`, uses WAL mode, foreign keys, a busy timeout, and
-full durability for state transitions (`synchronous=FULL`). The logical run identity is:
+full durability for state transitions (`synchronous=FULL`). The durable run-group identity is:
 
 ```text
-(repository, issue_number, config_revision)
+(repository, issue_number)
 ```
 
-The `runs` table has a unique constraint over those three fields. `INSERT ... ON CONFLICT DO
-NOTHING` makes fast path and polling converge.
+Every execution, including a rerun, creates a new immutable append-only run record under that
+group with a unique run ID and its own `config_revision` snapshot. `config_revision` is per-run
+audit data, never part of a unique key; prior terminal records are never mutated or deleted. A
+partial unique index permits at most one non-terminal run per group, and `observe` inserts with
+`INSERT ... ON CONFLICT DO NOTHING` against it, so fast path and polling converge on one row
+while a run is in flight.
 
-Terminal outcomes are final. Once an issue has any `pr_opened` or `failed` run, or a pull request
-already linked to it, `observe` suppresses passive pickup of that issue regardless of later
-configuration edits; a new config revision alone never re-runs it. On entering a terminal state
-the worker removes the `agent:run` label, or, when removal fails or is not permitted, durably
-marks the issue as terminally observed, so polling never sees a completed issue as eligible.
-Re-running an issue requires an explicit re-trigger: a trusted actor re-applies the activation
-label after the terminal state, or uses a rerun command. A new config revision therefore permits
-a new run for the same issue only together with such an explicit re-trigger; the UI must show the
-earlier terminal run and the newer run separately.
+Passive eligibility is governed by the group's latest run record. While the latest record is
+non-terminal, observation is a no-op. Once the latest record is terminal (`pr_opened` or
+`failed`), or a pull request is already linked to the issue, `observe` suppresses passive pickup
+of that issue regardless of later configuration edits; a new config revision alone never re-runs
+it. On entering a terminal state the worker removes the `agent:run` label; when removal fails or
+is not permitted, it durably marks the group label-removal-failed, so polling never treats a
+completed issue as eligible.
+
+Re-running an issue requires an explicit re-trigger, which creates a new run record under the
+same group. v1 defines exactly two re-trigger paths:
+
+1. **Activation-label re-application.** A trusted actor re-adds `agent:run` after the latest
+   terminal record. Every run persists the identity and timestamp of the effective timeline
+   label-add event that activated it. `observe` accepts a polled issue past a terminal latest
+   record only when the timeline shows an effective `agent:run` addition strictly newer than the
+   activating event of that terminal record. A label that is merely still present because
+   terminal removal failed is a stale label, not a re-trigger; a group marked
+   label-removal-failed fails closed and creates no run until the label state is reconciled.
+2. **Local CLI rerun.** The worker CLI invocation `run --issue <url>` executes as the logged-in
+   local user, applies the same uniform write-access verification and fail-closed trust rule from
+   section 5.2, and creates a new run record.
+
+The UI must show earlier terminal runs and a newer run separately.
 
 Minimum durable fields are:
 
 ```text
 id, repository, issue_number, issue_url, config_revision, route_id, agent_id,
+trigger_kind, trigger_event_id, trigger_event_at, label_removal_outcome,
 state, failure_code, base_sha, branch_name, workspace_id, workspace_path,
 provider_pid, provider_exit, patch_path, log_dir, validated_sha,
 remote_branch_sha, pr_number, pr_url, pr_is_draft,
@@ -506,8 +525,8 @@ Publishing, Draft PR opened, Failed (work retained), Unrouted, and Configuration
 | Never auto-merge | No merge capability exists in `Publisher`; config has no merge field; CI completion only updates status |
 | No data loss on cleanup | `ArtifactStore` records base SHA, full patch, logs, config revision, and run events before cleanup; `WorkspaceManager.release` is allowed only for clean, published work |
 | Dirty/unpublished workspaces persist | `RetentionPolicy` converts the Treehouse lease to retained state and never calls reset/return/destroy automatically; deletion requires a separate user action after patch export |
-| Idempotent triggers | SQLite unique key on repository + issue + config revision in `TriggerLedger.observe` |
-| Terminal outcomes suppress passive pickup | `TriggerLedger.observe` skips issues with a terminal run or linked PR across config revisions; terminal transitions remove or mark `agent:run`; only an explicit re-trigger creates a new run |
+| Idempotent triggers | Partial unique index allowing at most one non-terminal run per repository + issue group in `TriggerLedger.observe` |
+| Terminal outcomes suppress passive pickup | `TriggerLedger.observe` skips issues whose latest run record is terminal or that have a linked PR, regardless of config edits; terminal transitions remove `agent:run` or durably mark removal failure; only an explicit re-trigger (label re-add newer than the latest terminal record's activating event, or `run --issue <url>`) creates a new run record |
 | Interrupted publication reconciles | `PublicationReconciler` checks exact remote ref and PR before any retry |
 | Bounded resources | `ResourceGovernor` applies run/provider/command timeouts, log caps, disk quotas, output truncation markers, one-run claim, and process-group teardown |
 
@@ -670,15 +689,19 @@ The following are explicitly not part of the MVP:
 - Multiple simultaneous runs on one host.
 - Provider fallback after a provider has begun editing.
 - Automatic deletion of retained dirty/unpublished work.
+- A dedicated rerun verb. It is deferred from v1 because `run --issue <url>` and activation-label
+  re-application already provide the v1 rerun paths.
 
 ## 12. Implementation acceptance checklist
 
 An implementation is conformant only when tests demonstrate:
 
 - fast enqueue and a 60-second startup/periodic poll converge on one ledger row;
-- repository + issue + config revision is idempotent; a terminal run or linked pull request
-  suppresses passive pickup across config revisions, and a new revision creates a new run only
-  after an explicit re-trigger;
+- observation is idempotent per repository + issue run group: at most one non-terminal run exists
+  per group, a terminal latest run or linked pull request suppresses passive pickup regardless of
+  configuration edits, a stale still-present label after failed removal creates no run, and only
+  an explicit re-trigger — label re-application newer than the latest terminal record's activating
+  event, or `run --issue <url>` — creates a new run record with its own config-revision snapshot;
 - untrusted triggers on public and private repositories and equal route priorities fail closed;
 - no route adds `agent:unrouted` and launches no process;
 - the exact state transitions and one-host claim survive restart;
