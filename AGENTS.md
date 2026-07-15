@@ -84,3 +84,14 @@ Do not make direct repo edits outside a GSD workflow unless the user explicitly 
 > Profile not yet configured. Run `$gsd-profile-user` to generate your developer profile.
 > This section is managed by `generate-claude-profile` — do not edit manually.
 <!-- GSD:profile-end -->
+
+## Skill routing
+
+- **Spike findings for make-an-issue** (implementation patterns, constraints, gotchas) → `Skill("spike-findings-make-an-issue")`
+
+## Maintaining this file
+
+Keep this file for knowledge useful to almost every future agent session in this project.
+Do not repeat what the codebase already shows; point to the authoritative file or command instead.
+Prefer rewriting or pruning existing entries over appending new ones.
+When updating this file, preserve this bar for all agents and keep entries concise.
