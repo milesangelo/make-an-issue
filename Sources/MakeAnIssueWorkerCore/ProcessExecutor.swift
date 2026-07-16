@@ -98,22 +98,27 @@ public struct FoundationProcessExecutor: ProcessExecuting {
         let drainDeadline = DeadlineBox(
             .now() + .seconds(request.timeoutSeconds + request.terminationGraceSeconds + 5)
         )
+        // Dedicated threads rather than DispatchQueue.global(): these closures block for the whole
+        // command lifetime, and the shared concurrent pool can be saturated by unrelated blocked
+        // work elsewhere in the process. If the exit-wait closure can't get scheduled, the semaphore
+        // never signals and a fast command is spuriously declared timed out and killed. A detached
+        // thread is guaranteed to run immediately, so completion detection cannot be starved.
         let outputGroup = DispatchGroup()
         nonisolated(unsafe) var stdout = Data()
         nonisolated(unsafe) var stderr = Data()
         outputGroup.enter()
-        DispatchQueue.global().async {
+        Thread.detachNewThread {
             stdout = Self.drain(stdoutPipe.fileHandleForReading, cap: cap, deadline: drainDeadline)
             outputGroup.leave()
         }
         outputGroup.enter()
-        DispatchQueue.global().async {
+        Thread.detachNewThread {
             stderr = Self.drain(stderrPipe.fileHandleForReading, cap: cap, deadline: drainDeadline)
             outputGroup.leave()
         }
 
         let exited = DispatchSemaphore(value: 0)
-        DispatchQueue.global().async {
+        Thread.detachNewThread {
             process.waitUntilExit()
             exited.signal()
         }
