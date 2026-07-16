@@ -38,6 +38,14 @@ No manually managed API tokens. No browser. No leaving the keyboard.
                          └──────────────────────┘
 ```
 
+### Issue-to-PR worker design
+
+The proposed `make-an-issue-worker` pickup system is specified separately from the current app
+implementation. Its [product contract](docs/make-an-issue-worker-product-contract.md) defines
+triggers, routing, configuration, lifecycle, safety invariants, and dependency seams; the companion
+[threat model](docs/make-an-issue-worker-threat-model.md) defines trust boundaries, mitigations, and
+accepted v1 residual risk. These are design documents only—the worker is not implemented yet.
+
 ---
 
 ## Prerequisites
@@ -247,6 +255,7 @@ make-an-issue/
 │   ├── fixtures/                          # Smoke fixtures: fake-claude provider, jfk.wav audio
 │   ├── smoke-app.sh                       # Assembled-artifact smoke of .build/MakeAnIssue.app
 │   └── verify-app-signing.sh              # Strict codesign verification of the sealed bundle
+├── docs/                                  # Worker product contract & threat model (design docs)
 ├── vendor/                                # (git-ignored) whisper-cli, dylibs, model
 └── .planning/                             # Design docs, research, roadmap
 ```
