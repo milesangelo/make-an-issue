@@ -47,11 +47,17 @@ public struct ProcessCommandRunner: CommandRunning {
         process.standardError = stderr
         do {
             try process.run()
-            let stdoutTask = Task { stdout.fileHandleForReading.readDataToEndOfFile() }
-            let stderrTask = Task { stderr.fileHandleForReading.readDataToEndOfFile() }
+            let group = DispatchGroup()
+            nonisolated(unsafe) var stdoutData = Data()
+            nonisolated(unsafe) var stderrData = Data()
+            DispatchQueue.global().async(group: group) {
+                stdoutData = stdout.fileHandleForReading.readDataToEndOfFile()
+            }
+            DispatchQueue.global().async(group: group) {
+                stderrData = stderr.fileHandleForReading.readDataToEndOfFile()
+            }
             process.waitUntilExit()
-            let stdoutData = blockingTaskValue(stdoutTask)
-            let stderrData = blockingTaskValue(stderrTask)
+            group.wait()
             return CommandResult(
                 exitCode: process.terminationStatus,
                 stdout: String(decoding: stdoutData.prefix(1024 * 1024), as: UTF8.self),
@@ -60,17 +66,6 @@ public struct ProcessCommandRunner: CommandRunning {
         } catch {
             return CommandResult(exitCode: -1, stderr: error.localizedDescription)
         }
-    }
-
-    private func blockingTaskValue(_ task: Task<Data, Never>) -> Data {
-        let semaphore = DispatchSemaphore(value: 0)
-        nonisolated(unsafe) var result = Data()
-        Task {
-            result = await task.value
-            semaphore.signal()
-        }
-        semaphore.wait()
-        return result
     }
 }
 

@@ -217,15 +217,25 @@ public struct RunService: Sendable {
         do {
             _ = try ledger.claimHost(runID: run.id, ownerPID: ownerPID)
         } catch let error as LedgerError {
+            let busy: Bool
+            if case .hostAlreadyClaimed = error { busy = true } else { busy = false }
             _ = try? ledger.transition(
                 runID: run.id,
                 to: .failed,
-                failureCode: "host_busy",
+                failureCode: busy ? "host_busy" : "ledger_error",
                 detail: error.description
             )
-            throw RunServiceError.hostBusy(error.description)
+            if busy { throw RunServiceError.hostBusy(error.description) }
+            throw RunServiceError.ledger(error.description)
         } catch {
-            throw RunServiceError.hostBusy(String(describing: error))
+            let detail = String(describing: error)
+            _ = try? ledger.transition(
+                runID: run.id,
+                to: .failed,
+                failureCode: "ledger_error",
+                detail: detail
+            )
+            throw RunServiceError.ledger(detail)
         }
 
         do {
@@ -243,6 +253,12 @@ public struct RunService: Sendable {
             )
             try ledger.releaseHostClaim(runID: run.id)
         } catch {
+            _ = try? ledger.transition(
+                runID: run.id,
+                to: .failed,
+                failureCode: "ledger_error",
+                detail: String(describing: error)
+            )
             try? ledger.releaseHostClaim(runID: run.id)
             throw RunServiceError.ledger(String(describing: error))
         }

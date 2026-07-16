@@ -94,6 +94,16 @@ final class ConfigLoaderTests: XCTestCase {
         }
     }
 
+    func testRejectsRelativeProviderExecutablePath() throws {
+        let fixture = try ConfigFixture { $0.replacingOccurrences(of: "executable = \"/usr/bin/true\"", with: "executable = \"usr/bin/true\"") }
+
+        XCTAssertThrowsError(try fixture.snapshot()) { error in
+            let configError = error as? ConfigError
+            XCTAssertEqual(configError?.key, "providers[claude-primary].executable")
+            XCTAssertEqual(configError?.reason, "must be an absolute path")
+        }
+    }
+
     func testRejectsEnvironmentAssignmentsInProviderArgv() throws {
         let fixture = try ConfigFixture { $0.replacingOccurrences(of: "argv = [\"--model\", \"sonnet\"]", with: "argv = [\"TOKEN=secret\"]") }
 

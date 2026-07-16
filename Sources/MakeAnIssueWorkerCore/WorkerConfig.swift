@@ -482,8 +482,8 @@ public struct ConfigLoader: Sendable {
                 try require(!argument.contains("\0"), file, "providers[\(provider.id)].argv[\(index)]", "must not contain a NUL byte")
                 try require(!looksLikeEnvironmentAssignment(argument), file, "providers[\(provider.id)].argv[\(index)]", "environment assignments are forbidden")
             }
+            try require(provider.executable.hasPrefix("/"), file, "providers[\(provider.id)].executable", "must be an absolute path")
             let executableURL = URL(fileURLWithPath: provider.executable)
-            try require(executableURL.path.hasPrefix("/"), file, "providers[\(provider.id)].executable", "must be an absolute path")
             let identity = try executableIdentity(at: executableURL, file: file, key: "providers[\(provider.id)].executable")
             return ProviderConfig(
                 id: provider.id,
