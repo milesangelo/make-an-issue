@@ -40,9 +40,13 @@ No manually managed API tokens. No browser. No leaving the keyboard.
 
 ### Issue-to-PR worker
 
-The foundational `make-an-issue-worker` CLI is governed by the
+The `make-an-issue-worker` CLI is governed by the
 [product contract](docs/make-an-issue-worker-product-contract.md) and companion
-[threat model](docs/make-an-issue-worker-threat-model.md).
+[threat model](docs/make-an-issue-worker-threat-model.md). Its `run --issue` command takes a run
+from `claimed` through `pr_opened` — preparing a worker-owned fresh workspace, running the agent,
+inspecting a bounded diff, running trusted validation, pushing a fresh non-force branch, and
+opening a draft pull request that closes the issue — with idempotent startup reconciliation after a
+push-before-PR interruption.
 
 ---
 
@@ -244,8 +248,13 @@ make-an-issue/
 │   └── LaunchRequestStore.swift           # Reads launch-request.json from disk
 ├── Sources/MakeAnIssueWorkerCore/        # Issue-to-PR worker core library
 │   ├── WorkerConfig.swift                 # Schema-v1 agents.toml loading & validation
-│   ├── RunLedger.swift                    # Append-only SQLite run ledger + state machine
-│   ├── RunService.swift                   # run --issue flow (records/claims run → preparing → stub)
+│   ├── RunLedger.swift                    # Append-only SQLite run ledger + state machine (artifacts/events)
+│   ├── RunService.swift                   # run --issue flow: claim → prepare → validate → publish → pr_opened, plus startup reconciliation
+│   ├── WorkspaceManager.swift             # Worker-owned repo store + builtin git-worktree & Treehouse lease backends
+│   ├── GitSupervisor.swift                # Guarded git ops: immutable default branch, fresh non-force branch push
+│   ├── DiffInspector.swift                # Bounded structural diff inspection + artifact/log store
+│   ├── Publisher.swift                    # Validation profiles + builtin draft-PR publisher (Closes linkage, CI observation)
+│   ├── ProcessExecutor.swift              # Deadlock-free Process runner: bounded timeout/output, process-group kill
 │   ├── IssueRouting.swift                 # Repository/trust/agent routing
 │   ├── Doctor.swift                       # Fail-closed provider/workspace/publisher/gh/state probes
 │   └── WorkerVersion.swift                # Worker version constant
@@ -255,7 +264,7 @@ make-an-issue/
 ├── Resources/
 │   └── Info.plist                          # LSUIElement=true, NSMicrophoneUsageDescription
 ├── Tests/MakeAnIssueTests/                # App unit & integration tests
-├── Tests/MakeAnIssueWorkerTests/         # Worker config, ledger, routing, doctor & CLI tests
+├── Tests/MakeAnIssueWorkerTests/         # Worker config, ledger, routing, doctor, workspace/publisher safety, process-executor & CLI tests
 ├── bin/
 │   └── make-an-issue                      # Repo-local launcher shell script
 ├── scripts/

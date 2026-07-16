@@ -25,12 +25,14 @@ struct MakeAnIssueWorkerCLI {
             case .run(let issueURL, let agent):
                 let config = try ConfigLoader().load(from: parsed.configURL)
                 let ledger = try RunLedger(stateRoot: config.worker.stateRoot)
-                let outcome = try RunService(config: config, ledger: ledger).run(
+                let service = RunService(config: config, ledger: ledger)
+                try service.reconcileStartup()
+                let outcome = try service.run(
                     issueURL: issueURL,
                     agentOverride: agent
                 )
                 print(outcome.message)
-                return StubRunOutcome.exitCode
+                return outcome.exitCode
             }
         } catch let error as ArgumentError {
             writeError("error: \(error.description)\n\n\(Arguments.usage)")
@@ -61,7 +63,7 @@ private struct Arguments {
       make-an-issue-worker --version
 
     The default config is ~/Library/Application Support/MakeAnIssue/agents.toml.
-    The current run command deliberately exits 3 after recording the preparing-state publisher stub.
+    The run command opens a draft pull request only after isolated editing, inspection, and validation.
     """
 
     let configURL: URL

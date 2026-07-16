@@ -87,6 +87,80 @@ struct FakeIssueInspector: IssueInspecting {
     func inspect(_ issue: IssueReference) throws -> IssueFacts { try result.get() }
 }
 
+struct TerminalTestDriver: RunExecutionDriving {
+    let failureCode: String
+
+    init(failureCode: String = "test_driver_terminal") {
+        self.failureCode = failureCode
+    }
+
+    func execute(_ context: RunExecutionContext) throws -> RunOutcome {
+        _ = try context.ledger.transition(
+            runID: context.run.id,
+            to: .failed,
+            failureCode: failureCode
+        )
+        try context.ledger.releaseHostClaim(runID: context.run.id)
+        return RunOutcome(runID: context.run.id, stateReached: .failed, message: failureCode)
+    }
+}
+
+/// Per-process git timeout for the two known-heavy integration tests. These drive real git
+/// setup and can be starved well past the 120s default when the whole suite contends for
+/// CPU/IO under load; a generous ceiling keeps them deterministic without touching the
+/// shared default other tests rely on.
+let loadTolerantGitTimeoutSeconds = 600
+
+@discardableResult
+func runProcess(
+    _ executable: String,
+    _ arguments: [String],
+    cwd: URL? = nil,
+    environment: [String: String] = ProcessInfo.processInfo.environment,
+    timeoutSeconds: Int = 120
+) throws -> ProcessExecution {
+    let result = FoundationProcessExecutor().execute(ProcessRequest(
+        executable: executable,
+        arguments: arguments,
+        workingDirectory: cwd,
+        environment: environment,
+        timeoutSeconds: timeoutSeconds
+    ))
+    guard result.exitCode == 0 else {
+        throw NSError(
+            domain: "TestProcess",
+            code: Int(result.exitCode),
+            userInfo: [NSLocalizedDescriptionKey: result.stderrString]
+        )
+    }
+    return result
+}
+
+func makeBareOrigin(root: URL, timeoutSeconds: Int = 120) throws -> (origin: URL, mainSHA: String) {
+    let origin = root.appendingPathComponent("origin.git", isDirectory: true)
+    let seed = root.appendingPathComponent("seed", isDirectory: true)
+    try runProcess("/usr/bin/git", ["init", "--bare", origin.path], timeoutSeconds: timeoutSeconds)
+    try runProcess("/usr/bin/git", ["init", "-b", "main", seed.path], timeoutSeconds: timeoutSeconds)
+    try Data("seed\n".utf8).write(to: seed.appendingPathComponent("README.md"))
+    try runProcess("/usr/bin/git", ["add", "README.md"], cwd: seed, timeoutSeconds: timeoutSeconds)
+    try runProcess(
+        "/usr/bin/git",
+        ["-c", "user.name=Tests", "-c", "user.email=tests@localhost", "commit", "-m", "seed"],
+        cwd: seed,
+        timeoutSeconds: timeoutSeconds
+    )
+    try runProcess("/usr/bin/git", ["remote", "add", "origin", origin.path], cwd: seed, timeoutSeconds: timeoutSeconds)
+    try runProcess(
+        "/usr/bin/git",
+        ["push", "origin", "refs/heads/main:refs/heads/main"],
+        cwd: seed,
+        timeoutSeconds: timeoutSeconds
+    )
+    let sha = try runProcess("/usr/bin/git", ["rev-parse", "HEAD"], cwd: seed, timeoutSeconds: timeoutSeconds)
+        .stdoutString.trimmingCharacters(in: .whitespacesAndNewlines)
+    return (origin, sha)
+}
+
 func makeIssue(number: Int = 42) throws -> IssueReference {
     try IssueReference.parse("https://github.com/acme/widgets/issues/\(number)")
 }
