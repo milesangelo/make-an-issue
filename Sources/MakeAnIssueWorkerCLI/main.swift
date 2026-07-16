@@ -21,6 +21,7 @@ struct MakeAnIssueWorkerCLI {
             case .doctor:
                 let report = Doctor().run(configURL: parsed.configURL) { check in
                     print(DoctorReport.humanReadable(check))
+                    fflush(stdout)
                 }
                 return report.hasBlockingIssues ? 1 : 0
             case .run(let issueURL, let agent):
