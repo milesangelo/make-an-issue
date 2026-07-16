@@ -1,0 +1,52 @@
+schema_version = 1
+
+[worker]
+poll_interval_seconds = 60
+max_concurrent_runs = 1
+run_timeout_seconds = 3600
+provider_grace_seconds = 10
+state_root = "__STATE_ROOT__"
+workspace_backend = "__WORKSPACE_BACKEND__"
+publisher_backend = "__PUBLISHER_BACKEND__"
+
+[worker.limits]
+max_log_bytes = 10485760
+max_workspace_bytes = 5368709120
+max_changed_files = 500
+max_diff_bytes = 5242880
+max_single_file_bytes = 1048576
+allow_binary_files = false
+
+[[providers]]
+id = "claude-primary"
+kind = "claude-code"
+executable = "__EXECUTABLE__"
+argv = ["--model", "sonnet"]
+timeout_seconds = 2700
+
+[[agents]]
+id = "bugfix"
+provider = "claude-primary"
+instructions_file = "__INSTRUCTIONS__"
+validation_profile = "default"
+
+[[routes]]
+id = "urgent-bug"
+priority = 300
+labels_all = ["agent:run", "bug"]
+labels_any = ["priority:critical", "priority:high"]
+agent = "bugfix"
+
+[[routes]]
+id = "bug"
+priority = 200
+labels_all = ["agent:run", "bug"]
+labels_any = []
+agent = "bugfix"
+
+[[repositories]]
+repository = "acme/widgets"
+enabled = true
+default_branch = "main"
+remote = "https://github.com/acme/widgets.git"
+route_ids = ["urgent-bug", "bug"]
