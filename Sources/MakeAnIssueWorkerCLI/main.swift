@@ -26,7 +26,7 @@ struct MakeAnIssueWorkerCLI {
                 let config = try ConfigLoader().load(from: parsed.configURL)
                 let ledger = try RunLedger(stateRoot: config.worker.stateRoot)
                 let service = RunService(config: config, ledger: ledger)
-                try service.reconcilePublishingRuns()
+                try service.reconcileStartup()
                 let outcome = try service.run(
                     issueURL: issueURL,
                     agentOverride: agent

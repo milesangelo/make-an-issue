@@ -333,6 +333,151 @@ final class WorkspacePublisherSafetyTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: countURL, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines), "1")
     }
 
+    func testStartupReclaimsDeadOwnerClaimAndRetainsInterruptedRun() throws {
+        // A crash while holding the singleton host claim in a pre-publication state (here: running)
+        // must not block all future work. Startup reconciliation reclaims the dead owner's claim,
+        // marks the interrupted run failed with an explicit disposition, retains its workspace and
+        // artifacts, and frees the host so new runs can proceed.
+        let fixture = try ConfigFixture(publisherBackend: "builtin", workspaceBackend: "builtin")
+        let origin = try makeBareOrigin(root: fixture.root, timeoutSeconds: loadTolerantGitTimeoutSeconds)
+        let config = try fixture.snapshot()
+        let prepared = try prepareWorkspace(fixture: fixture, config: config, origin: origin.origin)
+        let ledger = try RunLedger(stateRoot: fixture.stateRoot)
+        let inserted = try ledger.createRun(NewRun(
+            id: prepared.lease.id,
+            issue: makeIssue(),
+            configRevision: config.revision,
+            redactedConfigSnapshot: config.redactedSnapshot,
+            routeID: "bug",
+            agentID: "bugfix",
+            triggerKind: .cli
+        ))
+        guard case .created(let run) = inserted else { return XCTFail("expected run creation") }
+        _ = try ledger.claimHost(runID: run.id, ownerPID: Int32.max)
+        _ = try ledger.transition(runID: run.id, to: .claimed)
+        _ = try ledger.transition(runID: run.id, to: .preparing)
+        let artifacts = try ArtifactStore(stateRoot: fixture.stateRoot, runID: run.id)
+        try ledger.recordPreparation(
+            runID: run.id,
+            baseSHA: prepared.baseSHA,
+            branchName: prepared.branch,
+            workspace: prepared.lease,
+            artifacts: artifacts
+        )
+        _ = try ledger.transition(runID: run.id, to: .running)
+
+        let service = RunService(config: config, ledger: ledger)
+        try service.reconcileStartup()
+
+        let reconciled = try ledger.run(id: run.id)
+        XCTAssertEqual(reconciled.state, .failed, "a run interrupted before publication must not be resumed")
+        XCTAssertEqual(reconciled.failureCode, "worker_interrupted_retained")
+        XCTAssertNil(try ledger.currentHostClaim(), "a dead owner's claim must be reclaimed so new work is never blocked")
+        XCTAssertTrue(
+            FileManager.default.fileExists(atPath: fixture.stateRoot.appendingPathComponent("retained/\(run.id).json").path),
+            "the interrupted workspace must be retained"
+        )
+        let dispositions = try ledger.events(runID: run.id).filter { $0.kind == "workspace_disposition" }.compactMap(\.detail)
+        XCTAssertTrue(
+            dispositions.contains { $0.hasPrefix("retained:worker_interrupted_retained") },
+            "the interrupted retention must be a visible diagnostic, got \(dispositions)"
+        )
+
+        // The host is provably free: a brand-new run claims it without a host_busy failure.
+        let next = try ledger.createRun(NewRun(
+            id: UUID().uuidString.lowercased(),
+            issue: try makeIssue(number: 99),
+            configRevision: config.revision,
+            redactedConfigSnapshot: config.redactedSnapshot,
+            routeID: "bug",
+            agentID: "bugfix",
+            triggerKind: .cli
+        ))
+        guard case .created(let nextRun) = next else { return XCTFail("expected run creation") }
+        XCTAssertNoThrow(try ledger.claimHost(runID: nextRun.id))
+    }
+
+    func testStartupNeverStealsALiveHostClaim() throws {
+        // A live (or indeterminate) owner must never be reclaimed. pid 1 (launchd) is always alive
+        // and is not this process, exercising the start-time liveness probe rather than the
+        // self-PID shortcut.
+        let fixture = try ConfigFixture(publisherBackend: "builtin", workspaceBackend: "builtin")
+        let config = try fixture.snapshot()
+        let ledger = try RunLedger(stateRoot: fixture.stateRoot)
+        let inserted = try ledger.createRun(makeNewRun(issue: try makeIssue()))
+        guard case .created(let run) = inserted else { return XCTFail("expected run creation") }
+        _ = try ledger.claimHost(runID: run.id, ownerPID: 1)
+        _ = try ledger.transition(runID: run.id, to: .claimed)
+        _ = try ledger.transition(runID: run.id, to: .preparing)
+        _ = try ledger.transition(runID: run.id, to: .running)
+
+        let service = RunService(config: config, ledger: ledger)
+        try service.reconcileStartup()
+
+        XCTAssertEqual(try ledger.run(id: run.id).state, .running, "a live owner's run must never be reclaimed or failed")
+        XCTAssertEqual(try ledger.currentHostClaim()?.ownerPID, 1, "a live owner's host claim must be preserved")
+    }
+
+    func testReconciliationStaysPublishingOnTransientPublisherFailureThenConverges() throws {
+        // A transient gh outage after a push-before-record crash must never terminalize a run whose
+        // remote draft PR may already exist. The run stays in publishing (retryable) with a visible
+        // diagnostic; when gh recovers, reconciliation converges to pr_opened, opening the PR once.
+        let fixture = try ConfigFixture(publisherBackend: "builtin", workspaceBackend: "builtin")
+        let origin = try makeBareOrigin(root: fixture.root, timeoutSeconds: loadTolerantGitTimeoutSeconds)
+        let config = try fixture.snapshot()
+        let ledger = try RunLedger(stateRoot: fixture.stateRoot)
+        let seeded = try seedPushedPublishingRun(fixture: fixture, config: config, origin: origin.origin, ledger: ledger, marker: "transient")
+        let run = seeded.run
+
+        let transientEnvironment = try transientGHEnvironment(root: fixture.root, origin: origin.origin)
+        let transientService = RunService(config: config, ledger: ledger, environment: transientEnvironment)
+        try transientService.reconcileStartup()
+
+        let deferredRun = try ledger.run(id: run.id)
+        XCTAssertEqual(deferredRun.state, .publishing, "a transient publisher failure must never terminalize a reconcilable run")
+        XCTAssertNil(deferredRun.failureCode)
+        XCTAssertNil(try ledger.currentHostClaim(), "the run must release the host claim while awaiting retry")
+        let diagnostics = try ledger.events(runID: run.id).filter { $0.kind == "publication_reconciliation_deferred" }
+        XCTAssertFalse(diagnostics.isEmpty, "a deferred reconciliation must leave a visible diagnostic")
+
+        let draftEnvironment = try draftGHEnvironment(root: fixture.root, origin: origin.origin)
+        let draftService = RunService(config: config, ledger: ledger, environment: draftEnvironment)
+        try draftService.reconcileStartup()
+
+        let reconciled = try ledger.run(id: run.id)
+        XCTAssertEqual(reconciled.state, .prOpened)
+        XCTAssertNil(reconciled.failureCode)
+        XCTAssertEqual(reconciled.prNumber, 23)
+        XCTAssertNil(try ledger.currentHostClaim())
+        let countURL = fixture.root.appendingPathComponent("create-count")
+        XCTAssertEqual(
+            try String(contentsOf: countURL, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines),
+            "1",
+            "convergence after a transient failure must open the draft PR exactly once"
+        )
+    }
+
+    func testReconciliationTerminalizesOnDeterministicNonDraftPullRequest() throws {
+        // A deterministic safety violation — an existing pull request that is not a draft — must
+        // terminalize the run (it can never converge on retry) with full retention, unlike a
+        // transient failure which stays publishing.
+        let fixture = try ConfigFixture(publisherBackend: "builtin", workspaceBackend: "builtin")
+        let origin = try makeBareOrigin(root: fixture.root, timeoutSeconds: loadTolerantGitTimeoutSeconds)
+        let config = try fixture.snapshot()
+        let ledger = try RunLedger(stateRoot: fixture.stateRoot)
+        let seeded = try seedPushedPublishingRun(fixture: fixture, config: config, origin: origin.origin, ledger: ledger, marker: "nondraft")
+        let run = seeded.run
+
+        let environment = try nonDraftGHEnvironment(root: fixture.root, origin: origin.origin)
+        let service = RunService(config: config, ledger: ledger, environment: environment)
+        try service.reconcileStartup()
+
+        let reconciled = try ledger.run(id: run.id)
+        XCTAssertEqual(reconciled.state, .failed, "a non-draft PR is a deterministic safety violation and must terminalize")
+        XCTAssertEqual(reconciled.failureCode, "publication_reconciliation_failed_retained")
+        XCTAssertNil(try ledger.currentHostClaim(), "a failed reconciliation must release its host claim")
+    }
+
     func testReconciliationKeepsPROpenedWhenPostPublicationCleanupFails() throws {
         // Regression: once the draft PR is recorded and the run transitions to the terminal
         // pr_opened state, a failure in post-publication cleanup (here the workspace-release
@@ -738,6 +883,90 @@ final class WorkspacePublisherSafetyTests: XCTestCase {
             branch,
             GitSupervisor(workspace: lease.path, branch: branch, defaultBranch: "main")
         )
+    }
+
+    /// Drives a run all the way to `publishing` with a real pushed remote branch — the exact
+    /// push-before-record state startup reconciliation must re-drive — so a test only has to supply
+    /// the gh behavior for the reconciliation pass.
+    private func seedPushedPublishingRun(
+        fixture: ConfigFixture,
+        config: WorkerConfigSnapshot,
+        origin: URL,
+        ledger: RunLedger,
+        marker: String,
+        claimOwnerPID: Int32 = Int32.max
+    ) throws -> (
+        run: RunRecord,
+        prepared: (workspace: URL, lease: WorkspaceLease, baseSHA: String, branch: String, git: GitSupervisor),
+        receipt: ValidationReceipt
+    ) {
+        let prepared = try prepareWorkspace(fixture: fixture, config: config, origin: origin)
+        let inserted = try ledger.createRun(NewRun(
+            id: prepared.lease.id,
+            issue: makeIssue(),
+            configRevision: config.revision,
+            redactedConfigSnapshot: config.redactedSnapshot,
+            routeID: "bug",
+            agentID: "bugfix",
+            triggerKind: .cli
+        ))
+        guard case .created(let run) = inserted else {
+            throw NSError(domain: "SeedRun", code: 1, userInfo: [NSLocalizedDescriptionKey: "expected run creation"])
+        }
+        _ = try ledger.claimHost(runID: run.id, ownerPID: claimOwnerPID)
+        _ = try ledger.transition(runID: run.id, to: .claimed)
+        _ = try ledger.transition(runID: run.id, to: .preparing)
+        let artifacts = try ArtifactStore(stateRoot: fixture.stateRoot, runID: run.id)
+        try ledger.recordPreparation(
+            runID: run.id,
+            baseSHA: prepared.baseSHA,
+            branchName: prepared.branch,
+            workspace: prepared.lease,
+            artifacts: artifacts
+        )
+        _ = try ledger.transition(runID: run.id, to: .running)
+        try Data("\(marker)\n".utf8).write(to: prepared.workspace.appendingPathComponent("\(marker).txt"))
+        try ledger.recordProviderExit(runID: run.id, pid: nil, exit: 0)
+        _ = try ledger.transition(runID: run.id, to: .validating)
+        let inspection = try DiffInspector(limits: config.worker.limits).inspect(git: prepared.git, baseSHA: prepared.baseSHA)
+        try artifacts.archive(inspection)
+        try ledger.recordInspection(runID: run.id, inspection: inspection)
+        let publisher = BuiltinPublisher(stateRoot: fixture.stateRoot)
+        let receipt = try publisher.validate(ValidationRequest(
+            repository: "acme/widgets",
+            issueNumber: 42,
+            configRevision: config.revision,
+            validationProfile: "default",
+            baseSHA: prepared.baseSHA,
+            inspection: inspection,
+            git: prepared.git,
+            limits: config.worker.limits,
+            artifactStore: artifacts,
+            timeoutSeconds: 300
+        ))
+        try ledger.recordValidatedSHA(runID: run.id, sha: receipt.headSHA, receiptID: receipt.id)
+        try ledger.recordPublicationIntent(
+            runID: run.id,
+            branch: prepared.branch,
+            baseSHA: prepared.baseSHA,
+            headSHA: receipt.headSHA
+        )
+        _ = try ledger.transition(runID: run.id, to: .publishing)
+        _ = try prepared.git.pushFreshBranch(expectedSHA: receipt.headSHA)
+        return (run, prepared, receipt)
+    }
+
+    /// A gh that fails every invocation, standing in for a transient outage or rate limit.
+    private func transientGHEnvironment(root: URL, origin: URL) throws -> [String: String] {
+        let gh = root.appendingPathComponent("gh")
+        let script = #"""
+        #!/bin/sh
+        echo 'gh: API rate limit exceeded (HTTP 403)' >&2
+        exit 1
+        """#
+        try Data(script.utf8).write(to: gh)
+        chmod(gh.path, 0o700)
+        return ["PATH": "\(root.path):/usr/bin:/bin", "ORIGIN": origin.path]
     }
 
     private func nonDraftGHEnvironment(root: URL, origin: URL) throws -> [String: String] {

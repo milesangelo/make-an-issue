@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 public struct IssueFacts: Equatable, Sendable {
@@ -293,13 +294,42 @@ public struct RunService: Sendable {
         }
     }
 
+    /// Startup reconciliation: first reclaim a host claim held by a provably dead owner (so a
+    /// crash mid-run never globally blocks new work), then re-drive interrupted publishing runs.
+    public func reconcileStartup() throws {
+        try reconcileInterruptedHostClaim()
+        try reconcilePublishingRuns()
+    }
+
+    /// The host claim is a singleton, so at most one run can hold it. If its owner process is
+    /// provably dead, release the claim and — for a run interrupted before publication — mark it
+    /// failed with an explicit interrupted disposition while retaining its workspace and artifacts.
+    /// A live or indeterminate owner is never disturbed.
+    func reconcileInterruptedHostClaim() throws {
+        guard let claim = try ledger.currentHostClaim(), claim.ownerPID != ownerPID else { return }
+        guard ownerLiveness(pid: claim.ownerPID, claimedAt: claim.claimedAt) == .dead else { return }
+        let run = try? ledger.run(id: claim.runID)
+        guard let run else {
+            try? ledger.clearReconciledHostClaim(expectedRunID: claim.runID)
+            return
+        }
+        if run.state != .publishing, !run.state.isTerminal {
+            failInterruptedRun(run)
+        }
+        try? ledger.clearReconciledHostClaim(expectedRunID: claim.runID)
+    }
+
     public func reconcilePublishingRuns() throws {
         let publisher = BuiltinPublisher(stateRoot: config.worker.stateRoot, environment: environment)
         for run in try ledger.publishingReconciliationCandidates() {
             do {
                 try reconcile(run: run, publisher: publisher)
             } catch {
-                try? failReconciliation(run, detail: String(describing: error))
+                if isDeterministicPublicationFailure(error) {
+                    try? failReconciliation(run, detail: String(describing: error))
+                } else {
+                    deferReconciliation(run, detail: String(describing: error))
+                }
             }
         }
     }
@@ -388,16 +418,23 @@ public struct RunService: Sendable {
                 publication = opened
             } catch {
                 let backend = WorkspaceBackend(rawValue: frozenConfig.worker.workspaceBackend) ?? .builtin
+                let deterministic = isDeterministicPublicationFailure(error)
                 _ = try? workspaceManager(
                     backend: backend,
                     stateRoot: config.worker.stateRoot,
                     environment: environment
                 ).retain(
                     lease: lease,
-                    reason: "publication_reconciliation_failed_retained",
+                    reason: deterministic
+                        ? "publication_reconciliation_failed_retained"
+                        : "publication_reconciliation_deferred_retained",
                     artifacts: [URL(fileURLWithPath: patchPath)]
                 )
-                try failReconciliation(run, detail: String(describing: error))
+                if deterministic {
+                    try failReconciliation(run, detail: String(describing: error))
+                } else {
+                    deferReconciliation(run, detail: String(describing: error))
+                }
                 return
             }
             do {
@@ -444,6 +481,106 @@ public struct RunService: Sendable {
             detail: detail
         )
         if try ledger.currentHostClaim()?.runID == run.id { try ledger.releaseHostClaim(runID: run.id) }
+    }
+
+    /// A transient publisher/ledger failure after (or during) reconciliation must never terminalize
+    /// a run whose remote draft PR may already be open. Leave it in `publishing` with a loud, bounded
+    /// diagnostic and release any held claim so the next startup pass retries idempotently.
+    private func deferReconciliation(_ run: RunRecord, detail: String) {
+        try? ledger.appendObservation(
+            runID: run.id,
+            kind: "publication_reconciliation_deferred",
+            detail: concise(detail)
+        )
+        if (try? ledger.currentHostClaim())??.runID == run.id {
+            try? ledger.releaseHostClaim(runID: run.id)
+        }
+        FileHandle.standardError.write(Data(
+            "make-an-issue-worker: publication reconciliation deferred for run \(run.id); left in publishing for retry (\(concise(detail)))\n".utf8
+        ))
+    }
+
+    /// Only deterministic safety violations terminalize a publishing run; transient gh/network/
+    /// command-availability failures (and unclassified errors) stay retryable so a valid open draft
+    /// PR is never orphaned.
+    private func isDeterministicPublicationFailure(_ error: Error) -> Bool {
+        switch error {
+        case let publisherError as PublisherError:
+            switch publisherError {
+            case .ghUnavailable, .commandFailed:
+                return false
+            case .validationFailed, .staleReceipt, .draftRequired, .remoteDivergence,
+                 .multiplePullRequests, .nonDraftPullRequest, .pullRequestHeadMismatch:
+                return true
+            }
+        case let safetyError as GitSafetyError:
+            switch safetyError {
+            case .commandFailed:
+                return false
+            case .forceOperation, .defaultBranchMutation, .unexpectedBranch, .branchExists,
+                 .protectedSurfaceTampered:
+                return true
+            }
+        default:
+            return false
+        }
+    }
+
+    /// A run interrupted before publication is never resumed: it is marked failed with an explicit
+    /// interrupted disposition, and its workspace plus recorded artifacts are retained for inspection.
+    private func failInterruptedRun(_ run: RunRecord) {
+        if let workspacePath = run.workspacePath, let workspaceID = run.workspaceID {
+            let lease = WorkspaceLease(
+                id: workspaceID,
+                path: URL(fileURLWithPath: workspacePath),
+                sourceStorePath: config.worker.stateRoot.appendingPathComponent(
+                    "repositories/\(run.repository.replacingOccurrences(of: "/", with: "--"))"
+                ),
+                proofPath: config.worker.stateRoot.appendingPathComponent("leases/\(workspaceID).json")
+            )
+            let artifacts = [run.patchPath, run.logDirectory].compactMap { $0 }.map { URL(fileURLWithPath: $0) }
+            _ = try? BuiltinWorkspaceManager(stateRoot: config.worker.stateRoot, environment: environment)
+                .retain(lease: lease, reason: "worker_interrupted_retained", artifacts: artifacts)
+        }
+        try? ledger.appendObservation(
+            runID: run.id,
+            kind: "workspace_disposition",
+            detail: "retained:worker_interrupted_retained"
+        )
+        if let current = try? ledger.run(id: run.id), !current.state.isTerminal {
+            _ = try? ledger.transition(
+                runID: run.id,
+                to: .failed,
+                failureCode: "worker_interrupted_retained",
+                detail: "run owner process exited before completion in \(current.state.rawValue); workspace and artifacts retained"
+            )
+        }
+        FileHandle.standardError.write(Data(
+            "make-an-issue-worker: run \(run.id) was interrupted by a dead owner; marked failed and retained\n".utf8
+        ))
+    }
+
+    /// Liveness of a host-claim owner PID. A process that started after the claim was recorded is a
+    /// PID reuse (original owner dead); a probe that cannot resolve the process treats it as
+    /// indeterminate so a live or unknown owner is never stolen from.
+    enum OwnerLiveness { case live, dead, indeterminate }
+
+    func ownerLiveness(pid: Int32, claimedAt: Date) -> OwnerLiveness {
+        if pid == ownerPID { return .live }
+        var info = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.stride
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+        let result = mib.withUnsafeMutableBufferPointer { pointer in
+            sysctl(pointer.baseAddress, u_int(pointer.count), &info, &size, nil, 0)
+        }
+        if result != 0 { return errno == ESRCH ? .dead : .indeterminate }
+        if size == 0 { return .dead }
+        let start = info.kp_proc.p_starttime
+        let startInterval = Double(start.tv_sec) + Double(start.tv_usec) / 1_000_000
+        // The owner must have started before it claimed. A clearly later start proves the PID was
+        // reused by a new process, so the original owner is gone.
+        if startInterval > claimedAt.timeIntervalSince1970 + 2 { return .dead }
+        return .live
     }
 }
 
