@@ -38,13 +38,11 @@ No manually managed API tokens. No browser. No leaving the keyboard.
                          └──────────────────────┘
 ```
 
-### Issue-to-PR worker design
+### Issue-to-PR worker
 
-The proposed `make-an-issue-worker` pickup system is specified separately from the current app
-implementation. Its [product contract](docs/make-an-issue-worker-product-contract.md) defines
-triggers, routing, configuration, lifecycle, safety invariants, and dependency seams; the companion
-[threat model](docs/make-an-issue-worker-threat-model.md) defines trust boundaries, mitigations, and
-accepted v1 residual risk. These are design documents only—the worker is not implemented yet.
+The foundational `make-an-issue-worker` CLI is governed by the
+[product contract](docs/make-an-issue-worker-product-contract.md) and companion
+[threat model](docs/make-an-issue-worker-threat-model.md).
 
 ---
 
@@ -226,7 +224,7 @@ permission.
 
 ```
 make-an-issue/
-├── Package.swift                          # SPM manifest (Swift 5.10+, macOS 13+)
+├── Package.swift                          # SPM manifest — MakeAnIssue app + make-an-issue-worker CLI
 ├── Sources/MakeAnIssue/
 │   ├── MakeAnIssueApp.swift               # @main — app entry (status item lives in AppDelegate)
 │   ├── AppDelegate.swift                  # NSApplicationDelegate setup
@@ -244,9 +242,20 @@ make-an-issue/
 │   ├── IssueResultParser.swift            # Parses issue URL/number from CLI stdout
 │   ├── LaunchRequest.swift                # Launch request model
 │   └── LaunchRequestStore.swift           # Reads launch-request.json from disk
+├── Sources/MakeAnIssueWorkerCore/        # Issue-to-PR worker core library
+│   ├── WorkerConfig.swift                 # Schema-v1 agents.toml loading & validation
+│   ├── RunLedger.swift                    # Append-only SQLite run ledger + state machine
+│   ├── RunService.swift                   # run --issue flow (records/claims run → preparing → stub)
+│   ├── IssueRouting.swift                 # Repository/trust/agent routing
+│   ├── Doctor.swift                       # Fail-closed provider/workspace/publisher/gh/state probes
+│   └── WorkerVersion.swift                # Worker version constant
+├── Sources/MakeAnIssueWorkerCLI/         # make-an-issue-worker executable
+│   └── main.swift                         # CLI: doctor, run --issue [--agent], --version
+├── Sources/CSQLite/                      # System-library shim exposing sqlite3 to the worker core
 ├── Resources/
 │   └── Info.plist                          # LSUIElement=true, NSMicrophoneUsageDescription
-├── Tests/MakeAnIssueTests/                # Unit & integration tests
+├── Tests/MakeAnIssueTests/                # App unit & integration tests
+├── Tests/MakeAnIssueWorkerTests/         # Worker config, ledger, routing, doctor & CLI tests
 ├── bin/
 │   └── make-an-issue                      # Repo-local launcher shell script
 ├── scripts/
@@ -290,6 +299,8 @@ swift test
 |---|---|---|
 | [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts) | SPM | Global push-to-talk hotkey via Carbon events |
 | [whisper.cpp](https://github.com/ggml-org/whisper.cpp) (v1.9.1) | Vendored at build time | Bundled speech-to-text (ggml-small.en model) |
+| [swift-toml](https://github.com/mattt/swift-toml) | SPM | Parses the worker's `agents.toml` config |
+| SQLite (`CSQLite` shim) | System library | Backs the worker's append-only run ledger |
 
 ### Architecture at a Glance
 
