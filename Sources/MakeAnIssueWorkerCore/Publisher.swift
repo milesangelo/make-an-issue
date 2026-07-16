@@ -271,7 +271,7 @@ public struct BuiltinPublisher: Publisher {
         guard observation.headRefOID == request.headSHA else {
             throw PublisherError.pullRequestHeadMismatch(expected: request.headSHA, observed: observation.headRefOID)
         }
-        let ciStatus = try observeCI(repository: request.repository, number: observation.number)
+        let ciStatus = observeCI(repository: request.repository, number: observation.number)
         return PublicationReceipt(
             pushedSHA: request.headSHA,
             prNumber: observation.number,
@@ -281,19 +281,38 @@ public struct BuiltinPublisher: Publisher {
         )
     }
 
-    private func observeCI(repository: String, number: Int) throws -> String {
-        let gh = try ghExecutable()
+    private func observeCI(repository: String, number: Int) -> String {
+        guard let gh = try? ghExecutable() else { return "unknown" }
         let result = processes.execute(ProcessRequest(
             executable: gh,
-            arguments: ["pr", "checks", String(number), "--repo", repository, "--json", "name,state"],
+            arguments: ["pr", "checks", String(number), "--repo", repository, "--json", "state"],
             environment: supervisorEnvironment,
             timeoutSeconds: 60
         ))
-        guard result.exitCode == 0 || result.exitCode == 8 else {
-            throw PublisherError.commandFailed("CI status observation failed: \(concise(result.stderrString))")
+        if result.timedOut || result.exitCode == -1 {
+            return "unknown"
         }
-        let value = result.stdoutString.trimmingCharacters(in: .whitespacesAndNewlines)
-        return value.isEmpty ? "[]" : value
+        let trimmed = result.stdoutString.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            return result.stderrString.range(of: "no checks reported", options: .caseInsensitive) != nil
+                ? "none"
+                : "unknown"
+        }
+        guard let checks = try? JSONDecoder().decode([CICheckObservation].self, from: result.stdout) else {
+            return "unknown"
+        }
+        return classifyCI(checks.map { $0.state.uppercased() })
+    }
+
+    private func classifyCI(_ states: [String]) -> String {
+        if states.isEmpty { return "none" }
+        let failing: Set<String> = [
+            "FAILURE", "ERROR", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED", "STARTUP_FAILURE", "STALE",
+        ]
+        let passing: Set<String> = ["SUCCESS", "NEUTRAL", "SKIPPED"]
+        if states.contains(where: failing.contains) { return "failing" }
+        if states.allSatisfy(passing.contains) { return "passing" }
+        return "pending"
     }
 
     private func ghExecutable() throws -> String {
@@ -318,6 +337,17 @@ private struct PullRequestObservation: Decodable {
     enum CodingKeys: String, CodingKey {
         case number, url, isDraft
         case headRefOID = "headRefOid"
+    }
+}
+
+private struct CICheckObservation: Decodable {
+    let state: String
+
+    enum CodingKeys: String, CodingKey { case state }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        state = (try? container.decode(String.self, forKey: .state)) ?? ""
     }
 }
 

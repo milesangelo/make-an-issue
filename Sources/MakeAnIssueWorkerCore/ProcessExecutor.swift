@@ -34,6 +34,15 @@ public struct ProcessExecution: Equatable, Sendable {
     public let stdout: Data
     public let stderr: Data
     public let timedOut: Bool
+    public let stdoutTruncated: Bool
+
+    public init(exitCode: Int32, stdout: Data, stderr: Data, timedOut: Bool, stdoutTruncated: Bool = false) {
+        self.exitCode = exitCode
+        self.stdout = stdout
+        self.stderr = stderr
+        self.timedOut = timedOut
+        self.stdoutTruncated = stdoutTruncated
+    }
 
     public var stdoutString: String { String(decoding: stdout, as: UTF8.self) }
     public var stderrString: String { String(decoding: stderr, as: UTF8.self) }
@@ -116,7 +125,8 @@ public struct FoundationProcessExecutor: ProcessExecuting {
             exitCode: timedOut ? -SIGKILL : process.terminationStatus,
             stdout: Data(stdout.prefix(cap)),
             stderr: Data(stderr.prefix(cap)),
-            timedOut: timedOut
+            timedOut: timedOut,
+            stdoutTruncated: stdout.count > cap
         )
     }
 }

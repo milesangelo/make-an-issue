@@ -302,6 +302,128 @@ final class WorkspacePublisherSafetyTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: countURL, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines), "1")
     }
 
+    func testCIObservationRecordsStatusAndNeverFailsOpenedDraftPullRequest() throws {
+        let fixture = try ConfigFixture(publisherBackend: "builtin", workspaceBackend: "builtin")
+        let origin = try makeBareOrigin(root: fixture.root)
+        let config = try fixture.snapshot()
+        let prepared = try prepareWorkspace(fixture: fixture, config: config, origin: origin.origin)
+        try Data("ci\n".utf8).write(to: prepared.workspace.appendingPathComponent("ci.txt"))
+        let inspection = try DiffInspector(limits: config.worker.limits).inspect(git: prepared.git, baseSHA: prepared.baseSHA)
+        let artifacts = try ArtifactStore(stateRoot: fixture.stateRoot, runID: "ci-observe")
+        try artifacts.archive(inspection)
+        let validator = BuiltinPublisher(
+            stateRoot: fixture.stateRoot,
+            environment: try ciGHEnvironment(root: fixture.root, origin: origin.origin, checksStdout: "[]", checksStderr: "", checksExit: 0)
+        )
+        let receipt = try validator.validate(ValidationRequest(
+            repository: "acme/widgets",
+            issueNumber: 42,
+            configRevision: config.revision,
+            validationProfile: "default",
+            baseSHA: prepared.baseSHA,
+            inspection: inspection,
+            git: prepared.git,
+            limits: config.worker.limits,
+            artifactStore: artifacts,
+            timeoutSeconds: 300
+        ))
+        _ = try prepared.git.pushFreshBranch(expectedSHA: receipt.headSHA)
+        let request = PublicationRequest(
+            repository: "acme/widgets",
+            issueNumber: 42,
+            issueTitle: "CI recording",
+            configRevision: config.revision,
+            validationProfile: "default",
+            defaultBranch: "main",
+            branchName: prepared.branch,
+            baseSHA: prepared.baseSHA,
+            headSHA: receipt.headSHA,
+            diffDigest: inspection.digest,
+            git: prepared.git
+        )
+
+        let scenarios: [(stdout: String, stderr: String, exit: Int32, expected: String)] = [
+            (#"[{"state":"FAILURE"},{"state":"SUCCESS"}]"#, "", 1, "failing"),
+            ("[]", "", 1, "none"),
+            ("", "no checks reported on the 'topic' branch", 1, "none"),
+            (#"[{"state":"IN_PROGRESS"},{"state":"SUCCESS"}]"#, "", 8, "pending"),
+            (#"[{"state":"SUCCESS"},{"state":"NEUTRAL"}]"#, "", 0, "passing"),
+            ("", "gh: could not authenticate to github.com", 4, "unknown"),
+        ]
+        for scenario in scenarios {
+            let publisher = BuiltinPublisher(
+                stateRoot: fixture.stateRoot,
+                environment: try ciGHEnvironment(
+                    root: fixture.root,
+                    origin: origin.origin,
+                    checksStdout: scenario.stdout,
+                    checksStderr: scenario.stderr,
+                    checksExit: scenario.exit
+                )
+            )
+            let status = try publisher.reconcile(PublicationIntent(request: request, validationReceipt: receipt))
+            guard case .opened(let publication) = status else {
+                return XCTFail("CI scenario \(scenario.expected) must still open the draft PR")
+            }
+            XCTAssertEqual(publication.ciStatus, scenario.expected, "unexpected ci_status for scenario \(scenario.expected)")
+            XCTAssertTrue(publication.isDraft)
+        }
+    }
+
+    func testDiffInspectorFailsClosedWhenGitOutputIsTruncated() throws {
+        let fixture = try ConfigFixture(publisherBackend: "builtin", workspaceBackend: "builtin")
+        let config = try fixture.snapshot()
+        let git = GitSupervisor(
+            workspace: fixture.root.appendingPathComponent("phantom-workspace", isDirectory: true),
+            branch: "mai/topic",
+            defaultBranch: "main",
+            processes: TruncatingGitExecutor(branch: "mai/topic"),
+            environment: [:]
+        )
+        XCTAssertThrowsError(try DiffInspector(limits: config.worker.limits).inspect(git: git, baseSHA: "base")) { error in
+            guard case DiffInspectionError.git = error else { return XCTFail("expected fail-closed git error, got \(error)") }
+        }
+    }
+
+    private func ciGHEnvironment(
+        root: URL,
+        origin: URL,
+        checksStdout: String,
+        checksStderr: String,
+        checksExit: Int32
+    ) throws -> [String: String] {
+        let gh = root.appendingPathComponent("gh")
+        let script = #"""
+        #!/bin/sh
+        set -eu
+        if [ "$1" = "pr" ] && [ "$2" = "list" ]; then
+          shift 2
+          head=''
+          while [ "$#" -gt 0 ]; do
+            if [ "$1" = "--head" ]; then head="$2"; shift 2; else shift; fi
+          done
+          sha=$(/usr/bin/git --git-dir "$ORIGIN" rev-parse "refs/heads/$head")
+          printf '[{"number":31,"url":"https://github.com/acme/widgets/pull/31","isDraft":true,"headRefOid":"%s"}]\n' "$sha"
+          exit 0
+        fi
+        if [ "$1" = "pr" ] && [ "$2" = "checks" ]; then
+          printf '%s' "$CHECKS_STDOUT"
+          printf '%s' "$CHECKS_STDERR" >&2
+          exit "$CHECKS_EXIT"
+        fi
+        exit 64
+        """#
+        try Data(script.utf8).write(to: gh)
+        chmod(gh.path, 0o700)
+        return [
+            "PATH": "\(root.path):/usr/bin:/bin",
+            "ORIGIN": origin.path,
+            "CHECKS_STDOUT": checksStdout,
+            "CHECKS_STDERR": checksStderr,
+            "CHECKS_EXIT": String(checksExit),
+        ]
+    }
+
     private func withPreparedWorkspace(
         transform: (String) -> String = { $0 },
         body: (URL, WorkerConfigSnapshot, String, GitSupervisor) throws -> Void
@@ -402,6 +524,29 @@ final class WorkspacePublisherSafetyTests: XCTestCase {
             "PR_STATE": state.path,
             "CREATE_COUNT": count.path,
         ]
+    }
+}
+
+private struct TruncatingGitExecutor: ProcessExecuting {
+    let branch: String
+
+    func resolveExecutable(_ name: String, environment: [String: String]) -> String? { "/usr/bin/\(name)" }
+
+    func execute(_ request: ProcessRequest) -> ProcessExecution {
+        switch request.arguments.first {
+        case "symbolic-ref":
+            return ProcessExecution(exitCode: 0, stdout: Data("\(branch)\n".utf8), stderr: Data(), timedOut: false)
+        case "diff":
+            return ProcessExecution(
+                exitCode: 0,
+                stdout: Data("a\u{0}b\u{0}".utf8),
+                stderr: Data(),
+                timedOut: false,
+                stdoutTruncated: true
+            )
+        default:
+            return ProcessExecution(exitCode: 0, stdout: Data(), stderr: Data(), timedOut: false)
+        }
     }
 }
 

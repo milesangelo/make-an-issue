@@ -55,13 +55,27 @@ public enum DiffInspectionError: Error, Equatable, CustomStringConvertible, Send
 
 public struct DiffInspector: Sendable {
     private let limits: WorkerLimits
+    private static let maxPathRecordBytes = 4160
+    private static let caseCollisionScanCap = 64 * 1024 * 1024
 
     public init(limits: WorkerLimits) { self.limits = limits }
+
+    private var changedPathListCap: Int {
+        (max(1, limits.maxChangedFiles) + 1) * Self.maxPathRecordBytes
+    }
+
+    private func readNULBounded(_ git: GitSupervisor, _ arguments: [String], cap: Int) throws -> ProcessExecution {
+        let result = try git.read(arguments, maximumOutputBytes: cap)
+        guard !result.stdoutTruncated else {
+            throw DiffInspectionError.git("git \(arguments.first ?? "read") output exceeded the \(cap)-byte inspection bound")
+        }
+        return result
+    }
 
     public func inspect(git: GitSupervisor, baseSHA: String) throws -> DiffInspection {
         do {
             try git.stageAll()
-            let nameResult = try git.read(["diff", "--cached", "--name-only", "-z", baseSHA, "--", "."])
+            let nameResult = try readNULBounded(git, ["diff", "--cached", "--name-only", "-z", baseSHA, "--", "."], cap: changedPathListCap)
             let paths = nameResult.stdout.split(separator: 0).map { String(decoding: $0, as: UTF8.self) }
             guard !paths.isEmpty else { throw DiffInspectionError.empty }
             guard paths.count <= limits.maxChangedFiles else { throw DiffInspectionError.tooManyFiles(paths.count) }
@@ -78,7 +92,7 @@ public struct DiffInspector: Sendable {
                 throw DiffInspectionError.diffTooLarge(patchResult.stdout.count)
             }
             if !limits.allowBinaryFiles {
-                let numstat = try git.read(["diff", "--cached", "--numstat", "-z", baseSHA, "--", "."])
+                let numstat = try readNULBounded(git, ["diff", "--cached", "--numstat", "-z", baseSHA, "--", "."], cap: changedPathListCap)
                 for record in numstat.stdout.split(separator: 0) {
                     let fields = record.split(separator: 9, maxSplits: 2, omittingEmptySubsequences: false)
                     if fields.count == 3, fields[0] == Data([45]), fields[1] == Data([45]) {
@@ -130,7 +144,8 @@ public struct DiffInspector: Sendable {
     }
 
     private func inspectCaseCollisions(git: GitSupervisor) throws {
-        let allPaths = try git.read(["ls-files", "-z"]).stdout.split(separator: 0)
+        let allPaths = try readNULBounded(git, ["ls-files", "-z"], cap: Self.caseCollisionScanCap).stdout
+            .split(separator: 0)
             .map { String(decoding: $0, as: UTF8.self) }
         var folded: [String: String] = [:]
         for path in allPaths {
