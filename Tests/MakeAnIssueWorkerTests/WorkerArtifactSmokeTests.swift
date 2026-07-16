@@ -6,7 +6,7 @@ import XCTest
 final class WorkerArtifactSmokeTests: XCTestCase {
     func testBuiltWorkerCompletesOfflinePipelineAndCreatesDraftPR() throws {
         let fixture = try ConfigFixture(publisherBackend: "builtin", workspaceBackend: "builtin")
-        let origin = try makeBareOrigin(root: fixture.root)
+        let origin = try makeBareOrigin(root: fixture.root, timeoutSeconds: loadTolerantGitTimeoutSeconds)
         let provider = try writeProvider(in: fixture.root, contents: "printf 'implemented\\n' > feature.txt")
         let fake = try writeFakeGH(in: fixture.root, origin: origin.origin)
         let environment = fixtureEnvironment(
@@ -47,13 +47,15 @@ final class WorkerArtifactSmokeTests: XCTestCase {
 
         let mainAfter = try runProcess(
             "/usr/bin/git",
-            ["--git-dir", origin.origin.path, "rev-parse", "refs/heads/main"]
+            ["--git-dir", origin.origin.path, "rev-parse", "refs/heads/main"],
+            timeoutSeconds: loadTolerantGitTimeoutSeconds
         ).stdoutString.trimmingCharacters(in: .whitespacesAndNewlines)
         XCTAssertEqual(mainAfter, origin.mainSHA, "default branch must remain immutable")
         let branch = try XCTUnwrap(run.branchName)
         let remoteHead = try runProcess(
             "/usr/bin/git",
-            ["--git-dir", origin.origin.path, "rev-parse", "refs/heads/\(branch)"]
+            ["--git-dir", origin.origin.path, "rev-parse", "refs/heads/\(branch)"],
+            timeoutSeconds: loadTolerantGitTimeoutSeconds
         ).stdoutString.trimmingCharacters(in: .whitespacesAndNewlines)
         XCTAssertEqual(remoteHead, run.validatedSHA)
 

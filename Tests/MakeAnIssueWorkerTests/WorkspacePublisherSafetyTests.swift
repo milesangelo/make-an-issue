@@ -65,21 +65,21 @@ final class WorkspacePublisherSafetyTests: XCTestCase {
     func testDiffInspectorRejectsPerFileBinarySymlinkAndSubmoduleChanges() throws {
         try withPreparedWorkspace(transform: {
             $0.replacingOccurrences(of: "max_single_file_bytes = 1048576", with: "max_single_file_bytes = 4")
-        }) { workspace, config, base, git in
+        }, gitTimeoutSeconds: loadTolerantGitTimeoutSeconds) { workspace, config, base, git in
             try Data("12345".utf8).write(to: workspace.appendingPathComponent("large.txt"))
             XCTAssertThrowsError(try DiffInspector(limits: config.worker.limits).inspect(git: git, baseSHA: base)) { error in
                 XCTAssertEqual(error as? DiffInspectionError, .fileTooLarge("large.txt", 5))
             }
         }
 
-        try withPreparedWorkspace { workspace, config, base, git in
+        try withPreparedWorkspace(gitTimeoutSeconds: loadTolerantGitTimeoutSeconds) { workspace, config, base, git in
             try Data([0, 1, 2, 3]).write(to: workspace.appendingPathComponent("binary.dat"))
             XCTAssertThrowsError(try DiffInspector(limits: config.worker.limits).inspect(git: git, baseSHA: base)) { error in
                 guard case DiffInspectionError.binary("binary.dat") = error else { return XCTFail("unexpected error: \(error)") }
             }
         }
 
-        try withPreparedWorkspace { workspace, config, base, git in
+        try withPreparedWorkspace(gitTimeoutSeconds: loadTolerantGitTimeoutSeconds) { workspace, config, base, git in
             try FileManager.default.createSymbolicLink(
                 at: workspace.appendingPathComponent("escape"),
                 withDestinationURL: URL(fileURLWithPath: "/tmp")
@@ -89,7 +89,7 @@ final class WorkspacePublisherSafetyTests: XCTestCase {
             }
         }
 
-        try withPreparedWorkspace { workspace, config, base, git in
+        try withPreparedWorkspace(gitTimeoutSeconds: loadTolerantGitTimeoutSeconds) { workspace, config, base, git in
             try Data("[submodule \"x\"]\n\tpath = x\n\turl = https://example.invalid/x\n".utf8)
                 .write(to: workspace.appendingPathComponent(".gitmodules"))
             XCTAssertThrowsError(try DiffInspector(limits: config.worker.limits).inspect(git: git, baseSHA: base)) { error in
@@ -426,10 +426,11 @@ final class WorkspacePublisherSafetyTests: XCTestCase {
 
     private func withPreparedWorkspace(
         transform: (String) -> String = { $0 },
+        gitTimeoutSeconds: Int = 120,
         body: (URL, WorkerConfigSnapshot, String, GitSupervisor) throws -> Void
     ) throws {
         let fixture = try ConfigFixture(publisherBackend: "builtin", workspaceBackend: "builtin", transform: transform)
-        let origin = try makeBareOrigin(root: fixture.root)
+        let origin = try makeBareOrigin(root: fixture.root, timeoutSeconds: gitTimeoutSeconds)
         let config = try fixture.snapshot()
         let prepared = try prepareWorkspace(fixture: fixture, config: config, origin: origin.origin)
         try body(prepared.workspace, config, prepared.baseSHA, prepared.git)
