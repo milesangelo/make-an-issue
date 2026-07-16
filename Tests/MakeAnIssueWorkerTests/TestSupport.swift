@@ -49,6 +49,16 @@ final class ConfigFixture {
         try ConfigLoader().load(from: configURL)
     }
 
+    func useProviderExecutable(_ url: URL) throws {
+        var value = try String(contentsOf: configURL, encoding: .utf8)
+        value = value.replacingOccurrences(
+            of: "executable = \"\(Self.toml(executableURL.path))\"",
+            with: "executable = \"\(Self.toml(url.path))\""
+        )
+        try Data(value.utf8).write(to: configURL, options: .atomic)
+        chmod(configURL.path, 0o600)
+    }
+
     private static func toml(_ value: String) -> String {
         value.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
     }

@@ -420,6 +420,29 @@ public final class RunLedger: @unchecked Sendable {
         )
     }
 
+    public func recordProviderOutcome(
+        runID: String,
+        pid: Int32?,
+        outcome: ProviderExecutionOutcome
+    ) throws {
+        let metadata: [String: Any] = [
+            "status": outcome.status.rawValue,
+            "process_id": pid.map { $0 as Any } ?? NSNull(),
+            "exit_code": outcome.exitCode,
+            "duration_ms": outcome.durationMilliseconds,
+            "stdout_truncated": outcome.stdoutTruncated,
+            "stderr_truncated": outcome.stderrTruncated,
+        ]
+        let data = try JSONSerialization.data(withJSONObject: metadata, options: [.sortedKeys])
+        try updateArtifacts(
+            runID: runID,
+            assignments: "provider_pid = ?, provider_exit = ?",
+            values: [.optionalInt64(pid.map(Int64.init)), .integer(Int64(outcome.exitCode))],
+            event: "provider_outcome",
+            detail: String(decoding: data, as: UTF8.self)
+        )
+    }
+
     public func recordInspection(runID: String, inspection: DiffInspection) throws {
         try appendObservation(
             runID: runID,

@@ -213,10 +213,44 @@ public struct ArtifactStore: Sendable {
 
     public func writeLog(name: String, execution: ProcessExecution) throws {
         let safe = name.filter { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" }
-        var data = Data("exit=\(execution.exitCode) timed_out=\(execution.timedOut)\n--- stdout ---\n".utf8)
+        var data = Data(
+            "exit=\(execution.exitCode) timed_out=\(execution.timedOut) cancelled=\(execution.cancelled) duration_ms=\(execution.durationMilliseconds)\n--- stdout ---\n".utf8
+        )
         data.append(execution.stdout)
         data.append(Data("\n--- stderr ---\n".utf8))
         data.append(execution.stderr)
+        try data.write(to: logDirectory.appendingPathComponent("\(safe).log"), options: .atomic)
+    }
+
+    public func writeProviderLog(
+        name: String,
+        outcome: ProviderExecutionOutcome,
+        maximumBytes: Int
+    ) throws {
+        let safe = name.filter { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" }
+        let metadata: [String: Any] = [
+            "status": outcome.status.rawValue,
+            "process_id": outcome.processID.map { $0 as Any } ?? NSNull(),
+            "exit_code": outcome.exitCode,
+            "duration_ms": outcome.durationMilliseconds,
+            "stdout_truncated": outcome.stdoutTruncated,
+            "stderr_truncated": outcome.stderrTruncated,
+        ]
+        let encoded = try JSONSerialization.data(withJSONObject: metadata, options: [.sortedKeys])
+        var data = encoded
+        data.append(Data("\n--- stdout ---\n".utf8))
+        data.append(SecretRedactor.redact(outcome.stdout))
+        data.append(Data("\n--- stderr ---\n".utf8))
+        data.append(SecretRedactor.redact(outcome.stderr))
+        let cap = max(0, maximumBytes)
+        if data.count > cap {
+            let marker = Data("\n[output truncated]\n".utf8)
+            if cap >= marker.count {
+                data = Data(data.prefix(cap - marker.count)) + marker
+            } else {
+                data = Data(marker.prefix(cap))
+            }
+        }
         try data.write(to: logDirectory.appendingPathComponent("\(safe).log"), options: .atomic)
     }
 }

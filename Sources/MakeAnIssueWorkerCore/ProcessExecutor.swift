@@ -9,6 +9,8 @@ public struct ProcessRequest: Sendable {
     public let timeoutSeconds: Int
     public let terminationGraceSeconds: Int
     public let maximumOutputBytes: Int
+    public let standardInputFile: URL?
+    public let cancellation: ProcessCancellation?
 
     public init(
         executable: String,
@@ -17,7 +19,9 @@ public struct ProcessRequest: Sendable {
         environment: [String: String] = ProcessInfo.processInfo.environment,
         timeoutSeconds: Int = 300,
         terminationGraceSeconds: Int = 5,
-        maximumOutputBytes: Int = 1_048_576
+        maximumOutputBytes: Int = 1_048_576,
+        standardInputFile: URL? = nil,
+        cancellation: ProcessCancellation? = nil
     ) {
         self.executable = executable
         self.arguments = arguments
@@ -26,22 +30,59 @@ public struct ProcessRequest: Sendable {
         self.timeoutSeconds = timeoutSeconds
         self.terminationGraceSeconds = terminationGraceSeconds
         self.maximumOutputBytes = maximumOutputBytes
+        self.standardInputFile = standardInputFile
+        self.cancellation = cancellation
+    }
+}
+
+public final class ProcessCancellation: @unchecked Sendable {
+    private let lock = NSLock()
+    private var requested = false
+
+    public init() {}
+
+    public func cancel() {
+        lock.lock(); defer { lock.unlock() }
+        requested = true
+    }
+
+    public var isCancellationRequested: Bool {
+        lock.lock(); defer { lock.unlock() }
+        return requested
     }
 }
 
 public struct ProcessExecution: Equatable, Sendable {
+    public let processID: Int32?
     public let exitCode: Int32
     public let stdout: Data
     public let stderr: Data
     public let timedOut: Bool
+    public let cancelled: Bool
     public let stdoutTruncated: Bool
+    public let stderrTruncated: Bool
+    public let durationMilliseconds: Int64
 
-    public init(exitCode: Int32, stdout: Data, stderr: Data, timedOut: Bool, stdoutTruncated: Bool = false) {
+    public init(
+        processID: Int32? = nil,
+        exitCode: Int32,
+        stdout: Data,
+        stderr: Data,
+        timedOut: Bool,
+        cancelled: Bool = false,
+        stdoutTruncated: Bool = false,
+        stderrTruncated: Bool = false,
+        durationMilliseconds: Int64 = 0
+    ) {
+        self.processID = processID
         self.exitCode = exitCode
         self.stdout = stdout
         self.stderr = stderr
         self.timedOut = timedOut
+        self.cancelled = cancelled
         self.stdoutTruncated = stdoutTruncated
+        self.stderrTruncated = stderrTruncated
+        self.durationMilliseconds = durationMilliseconds
     }
 
     public var stdoutString: String { String(decoding: stdout, as: UTF8.self) }
@@ -68,6 +109,17 @@ public struct FoundationProcessExecutor: ProcessExecuting {
     }
 
     public func execute(_ request: ProcessRequest) -> ProcessExecution {
+        let startedAt = DispatchTime.now()
+        if request.cancellation?.isCancellationRequested == true {
+            return ProcessExecution(
+                exitCode: -SIGTERM,
+                stdout: Data(),
+                stderr: Data(),
+                timedOut: false,
+                cancelled: true,
+                durationMilliseconds: 0
+            )
+        }
         let process = Process()
         process.executableURL = URL(fileURLWithPath: request.executable)
         process.arguments = request.arguments
@@ -77,6 +129,23 @@ public struct FoundationProcessExecutor: ProcessExecuting {
         let stderrPipe = Pipe()
         process.standardOutput = stdoutPipe
         process.standardError = stderrPipe
+        var inputHandle: FileHandle?
+
+        if let inputFile = request.standardInputFile {
+            do {
+                inputHandle = try FileHandle(forReadingFrom: inputFile)
+                process.standardInput = inputHandle
+            } catch {
+                return ProcessExecution(
+                    exitCode: -1,
+                    stdout: Data(),
+                    stderr: Data(error.localizedDescription.utf8),
+                    timedOut: false,
+                    durationMilliseconds: Self.elapsedMilliseconds(since: startedAt)
+                )
+            }
+        }
+        defer { try? inputHandle?.close() }
 
         do {
             try process.run()
@@ -85,7 +154,8 @@ public struct FoundationProcessExecutor: ProcessExecuting {
                 exitCode: -1,
                 stdout: Data(),
                 stderr: Data(error.localizedDescription.utf8),
-                timedOut: false
+                timedOut: false,
+                durationMilliseconds: Self.elapsedMilliseconds(since: startedAt)
             )
         }
 
@@ -123,13 +193,31 @@ public struct FoundationProcessExecutor: ProcessExecuting {
             exited.signal()
         }
         var timedOut = false
-        if exited.wait(timeout: .now() + .seconds(request.timeoutSeconds)) == .timedOut {
-            timedOut = true
-            Self.signalChild(processID, signal: SIGTERM)
-            if exited.wait(timeout: .now() + .seconds(request.terminationGraceSeconds)) == .timedOut {
-                Self.signalChild(processID, signal: SIGKILL)
-                _ = exited.wait(timeout: .now() + .seconds(5))
+        var cancelled = false
+        let timeoutDeadline = startedAt + .seconds(request.timeoutSeconds)
+        while true {
+            if exited.wait(timeout: .now()) == .success { break }
+            if request.cancellation?.isCancellationRequested == true {
+                cancelled = true
+                Self.terminateProcessGroup(
+                    processID,
+                    exited: exited,
+                    graceSeconds: request.terminationGraceSeconds
+                )
+                break
             }
+            let now = DispatchTime.now()
+            if now >= timeoutDeadline {
+                timedOut = true
+                Self.terminateProcessGroup(
+                    processID,
+                    exited: exited,
+                    graceSeconds: request.terminationGraceSeconds
+                )
+                break
+            }
+            let nextPoll = min(timeoutDeadline, now + .milliseconds(50))
+            if exited.wait(timeout: nextPoll) == .success { break }
         }
         // The child is gone (or unreachable). Give the drains a bounded grace to flush buffered
         // output, then force them to stop so a descendant that escaped the process group and still
@@ -138,11 +226,15 @@ public struct FoundationProcessExecutor: ProcessExecuting {
         drainDeadline.reduce(to: .now() + .seconds(request.terminationGraceSeconds))
         outputGroup.wait()
         return ProcessExecution(
-            exitCode: timedOut ? -SIGKILL : process.terminationStatus,
+            processID: processID,
+            exitCode: timedOut ? -SIGKILL : (cancelled ? -SIGTERM : process.terminationStatus),
             stdout: Data(stdout.prefix(cap)),
             stderr: Data(stderr.prefix(cap)),
             timedOut: timedOut,
-            stdoutTruncated: stdout.count > cap
+            cancelled: cancelled,
+            stdoutTruncated: stdout.count > cap,
+            stderrTruncated: stderr.count > cap,
+            durationMilliseconds: Self.elapsedMilliseconds(since: startedAt)
         )
     }
 
@@ -181,6 +273,23 @@ public struct FoundationProcessExecutor: ProcessExecuting {
         _ = kill(-pid, signal)
         _ = kill(pid, signal)
     }
+
+    private static func terminateProcessGroup(
+        _ pid: pid_t,
+        exited: DispatchSemaphore,
+        graceSeconds: Int
+    ) {
+        signalChild(pid, signal: SIGTERM)
+        if exited.wait(timeout: .now() + .seconds(graceSeconds)) == .timedOut {
+            signalChild(pid, signal: SIGKILL)
+            _ = exited.wait(timeout: .now() + .seconds(5))
+        }
+    }
+
+    private static func elapsedMilliseconds(since start: DispatchTime) -> Int64 {
+        let elapsed = DispatchTime.now().uptimeNanoseconds &- start.uptimeNanoseconds
+        return Int64(elapsed / 1_000_000)
+    }
 }
 
 private final class DeadlineBox: @unchecked Sendable {
@@ -211,6 +320,26 @@ enum WorkerEnvironment {
             "GIT_TERMINAL_PROMPT": "0",
         ]
         for (key, value) in extra { result[key] = value }
+        return result
+    }
+
+    static func provider(
+        home: URL,
+        temporaryDirectory: URL,
+        workspace: URL,
+        supervisorEnvironment: [String: String]
+    ) -> [String: String] {
+        var result = [
+            "HOME": home.path,
+            "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+            "PWD": workspace.path,
+            "LANG": "en_US.UTF-8",
+            "LC_ALL": "en_US.UTF-8",
+            "TMPDIR": temporaryDirectory.path,
+        ]
+        for key in ["CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL"] {
+            if let value = supervisorEnvironment[key] { result[key] = value }
+        }
         return result
     }
 }

@@ -8,11 +8,11 @@ final class WorkerArtifactSmokeTests: XCTestCase {
         let fixture = try ConfigFixture(publisherBackend: "builtin", workspaceBackend: "builtin")
         let origin = try makeBareOrigin(root: fixture.root, timeoutSeconds: loadTolerantGitTimeoutSeconds)
         let provider = try writeProvider(in: fixture.root, contents: "printf 'implemented\\n' > feature.txt")
+        try fixture.useProviderExecutable(provider)
         let fake = try writeFakeGH(in: fixture.root, origin: origin.origin)
         let environment = fixtureEnvironment(
             fixture: fixture,
             origin: origin.origin,
-            provider: provider,
             fake: fake
         )
         let worker = try workerArtifact()
@@ -91,11 +91,11 @@ final class WorkerArtifactSmokeTests: XCTestCase {
         let fixture = try ConfigFixture(publisherBackend: "builtin", workspaceBackend: "builtin")
         let origin = try makeBareOrigin(root: fixture.root)
         let provider = try writeProvider(in: fixture.root, contents: "printf 'trailing whitespace  \\n' > bad.txt")
+        try fixture.useProviderExecutable(provider)
         let fake = try writeFakeGH(in: fixture.root, origin: origin.origin)
         let environment = fixtureEnvironment(
             fixture: fixture,
             origin: origin.origin,
-            provider: provider,
             fake: fake
         )
 
@@ -133,7 +133,16 @@ final class WorkerArtifactSmokeTests: XCTestCase {
 
     private func writeProvider(in root: URL, contents: String) throws -> URL {
         let url = root.appendingPathComponent("fixture-provider")
-        try Data("#!/bin/sh\nset -eu\n\(contents)\n".utf8).write(to: url)
+        let script = """
+        #!/bin/sh
+        set -eu
+        if [ "${1-}" = "auth" ] && [ "${2-}" = "status" ]; then
+          echo authenticated
+          exit 0
+        fi
+        \(contents)
+        """
+        try Data(script.utf8).write(to: url)
         chmod(url.path, 0o700)
         return url
     }
@@ -200,13 +209,11 @@ final class WorkerArtifactSmokeTests: XCTestCase {
     private func fixtureEnvironment(
         fixture: ConfigFixture,
         origin: URL,
-        provider: URL,
         fake: (url: URL, log: URL, state: URL)
     ) -> [String: String] {
         [
             "PATH": "\(fixture.root.path):/usr/bin:/bin:/usr/sbin:/sbin",
             "MAKE_AN_ISSUE_WORKER_ALLOW_TEST_FIXTURES": "1",
-            "MAKE_AN_ISSUE_WORKER_TEST_PROVIDER": provider.path,
             "MAKE_AN_ISSUE_WORKER_TEST_REMOTE": origin.path,
             "GH_LOG": fake.log.path,
             "GH_STATE": fake.state.path,
