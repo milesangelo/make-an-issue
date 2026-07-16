@@ -254,7 +254,8 @@ make-an-issue/
 │   ├── GitSupervisor.swift                # Guarded git ops: immutable default branch, fresh non-force branch push
 │   ├── DiffInspector.swift                # Bounded structural diff inspection + artifact/log store
 │   ├── Publisher.swift                    # Validation profiles + builtin draft-PR publisher (Closes linkage, CI observation)
-│   ├── ProcessExecutor.swift              # Deadlock-free Process runner: bounded timeout/output, process-group kill
+│   ├── ProcessExecutor.swift              # Deadlock-free Process runner: bounded timeout/output/cancellation, process-group kill
+│   ├── ProviderAdapter.swift              # Claude Code adapter: edit-only launch, prompt transport, env allowlist, secret-redacted outcomes
 │   ├── IssueRouting.swift                 # Repository/trust/agent routing
 │   ├── Doctor.swift                       # Fail-closed provider/workspace/publisher/gh/state probes
 │   └── WorkerVersion.swift                # Worker version constant
@@ -264,7 +265,7 @@ make-an-issue/
 ├── Resources/
 │   └── Info.plist                          # LSUIElement=true, NSMicrophoneUsageDescription
 ├── Tests/MakeAnIssueTests/                # App unit & integration tests
-├── Tests/MakeAnIssueWorkerTests/         # Worker config, ledger, routing, doctor, workspace/publisher safety, process-executor & CLI tests
+├── Tests/MakeAnIssueWorkerTests/         # Worker config, ledger, routing, doctor, workspace/publisher safety, process-executor, provider-adapter & CLI tests
 ├── bin/
 │   └── make-an-issue                      # Repo-local launcher shell script
 ├── scripts/

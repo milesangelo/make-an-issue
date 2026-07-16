@@ -6,12 +6,20 @@ public struct IssueFacts: Equatable, Sendable {
     public let callerHasWriteAccess: Bool
     public let defaultBranch: String
     public let title: String
+    public let body: String
 
-    public init(labels: Set<String>, callerHasWriteAccess: Bool, defaultBranch: String, title: String = "Issue") {
+    public init(
+        labels: Set<String>,
+        callerHasWriteAccess: Bool,
+        defaultBranch: String,
+        title: String = "Issue",
+        body: String = ""
+    ) {
         self.labels = labels
         self.callerHasWriteAccess = callerHasWriteAccess
         self.defaultBranch = defaultBranch
         self.title = title
+        self.body = body
     }
 }
 
@@ -44,7 +52,7 @@ public struct GHIdentityInspector: IssueInspecting {
         guard let gh = commands.resolveExecutable("gh") else { throw IssueInspectionError.ghUnavailable }
         let issueResult = commands.run(
             executable: gh,
-            arguments: ["issue", "view", issue.url.absoluteString, "--json", "labels,title"]
+            arguments: ["issue", "view", issue.url.absoluteString, "--json", "labels,title,body"]
         )
         guard issueResult.exitCode == 0 else {
             throw IssueInspectionError.commandFailed(concise(issueResult.stderr))
@@ -77,7 +85,8 @@ public struct GHIdentityInspector: IssueInspecting {
             labels: Set(labels.labels.map(\.name)),
             callerHasWriteAccess: permission.admin || permission.maintain || permission.push,
             defaultBranch: repository.defaultBranch,
-            title: labels.title
+            title: labels.title,
+            body: labels.body ?? ""
         )
     }
 
@@ -90,6 +99,7 @@ private struct IssueLabelsResponse: Decodable {
     struct Label: Decodable { let name: String }
     let labels: [Label]
     let title: String
+    let body: String?
 }
 
 private struct RepositoryPermissionResponse: Decodable {
@@ -638,8 +648,6 @@ public struct WorkerRunPipeline: RunExecutionDriving {
                 workspace: acquired,
                 artifacts: artifactStore
             )
-            _ = try ledger.transition(runID: context.run.id, to: .running)
-
             let git = GitSupervisor(
                 workspace: prepared.lease.path,
                 branch: branch,
@@ -648,15 +656,24 @@ public struct WorkerRunPipeline: RunExecutionDriving {
                 environment: environment
             )
             let metadata = try git.snapshotMetadata()
-            let provider = try runFixtureProvider(
+            let provider = try runProvider(
                 context: context,
                 workspace: prepared.lease.path,
-                artifactStore: artifactStore,
-                fixtureEnabled: fixtureEnabled
+                artifactStore: artifactStore
             )
-            try ledger.recordProviderExit(runID: context.run.id, pid: nil, exit: provider.exitCode)
-            guard provider.exitCode == 0, !provider.timedOut else {
-                throw PipelineFailure(code: "provider_failed_retained", detail: concise(provider.stderrString))
+            try ledger.recordProviderOutcome(runID: context.run.id, pid: provider.processID, outcome: provider)
+            switch provider.status {
+            case .completed:
+                break
+            case .failed:
+                throw PipelineFailure(
+                    code: "provider_failed_retained",
+                    detail: concise(SecretRedactor.redact(provider.stderrString))
+                )
+            case .timedOut:
+                throw PipelineFailure(code: "provider_timed_out_retained", detail: "provider exceeded its configured timeout")
+            case .cancelled:
+                throw PipelineFailure(code: "provider_cancelled_retained", detail: "provider execution was cancelled")
             }
             do {
                 try git.verifyMetadataUnchanged(from: metadata)
@@ -781,40 +798,49 @@ public struct WorkerRunPipeline: RunExecutionDriving {
         }
     }
 
-    private func runFixtureProvider(
+    private func runProvider(
         context: RunExecutionContext,
         workspace: URL,
-        artifactStore: ArtifactStore,
-        fixtureEnabled: Bool
-    ) throws -> ProcessExecution {
-        guard fixtureEnabled, let executable = environment["MAKE_AN_ISSUE_WORKER_TEST_PROVIDER"] else {
+        artifactStore: ArtifactStore
+    ) throws -> ProviderExecutionOutcome {
+        guard let provider = context.config.provider(id: context.agent.provider) else {
+            throw PipelineFailure(code: "provider_configuration_invalid_retained", detail: "routed provider is missing")
+        }
+        let adapter: any ProviderAdapting
+        switch provider.kind {
+        case .claudeCode:
+            adapter = ClaudeCodeProviderAdapter(processes: processes)
+        case .codex, .codexOSS:
             throw PipelineFailure(
-                code: "provider_adapter_not_implemented_retained",
-                detail: "real provider adapters land in the next slice; no test fixture provider was enabled"
+                code: "provider_adapter_unavailable_retained",
+                detail: "\(provider.kind.rawValue) is not implemented in this worker version"
             )
         }
-        guard FileManager.default.isExecutableFile(atPath: executable) else {
-            throw PipelineFailure(code: "provider_launch_failed_retained", detail: "fixture provider is not executable")
+        do {
+            return try adapter.execute(ProviderExecutionRequest(
+                provider: provider,
+                agent: context.agent,
+                issueTitle: context.issueFacts.title,
+                issueBody: context.issueFacts.body,
+                issueLabels: context.issueFacts.labels,
+                workspace: workspace,
+                stateRoot: context.config.worker.stateRoot,
+                runID: context.run.id,
+                runTimeoutSeconds: context.config.worker.runTimeoutSeconds,
+                terminationGraceSeconds: context.config.worker.providerGraceSeconds,
+                maximumOutputBytes: context.config.worker.limits.maxLogBytes,
+                artifactStore: artifactStore,
+                supervisorEnvironment: environment,
+                onLaunch: {
+                    _ = try context.ledger.transition(runID: context.run.id, to: .running)
+                }
+            ), cancellation: nil)
+        } catch let error as ProviderAdapterError {
+            throw PipelineFailure(
+                code: "provider_launch_failed_retained",
+                detail: SecretRedactor.redact(error.description)
+            )
         }
-        let home = context.config.worker.stateRoot.appendingPathComponent("provider-home/\(context.run.id)", isDirectory: true)
-        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
-        let execution = processes.execute(ProcessRequest(
-            executable: executable,
-            arguments: [],
-            workingDirectory: workspace,
-            environment: WorkerEnvironment.minimal(
-                home: home,
-                extra: [
-                    "MAI_WORKSPACE": workspace.path,
-                    "MAI_ISSUE_NUMBER": String(context.issue.issueNumber),
-                ]
-            ),
-            timeoutSeconds: min(context.config.worker.runTimeoutSeconds, context.config.provider(id: context.agent.provider)?.timeoutSeconds ?? 300),
-            terminationGraceSeconds: context.config.worker.providerGraceSeconds,
-            maximumOutputBytes: context.config.worker.limits.maxLogBytes
-        ))
-        try artifactStore.writeLog(name: "provider", execution: execution)
-        return execution
     }
 
     private func publicationRecordingDeferred(
