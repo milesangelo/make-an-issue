@@ -91,17 +91,18 @@ public struct FoundationProcessExecutor: ProcessExecuting {
 
         let processID = process.processIdentifier
         _ = setpgid(processID, processID)
+        let cap = max(0, request.maximumOutputBytes)
         let outputGroup = DispatchGroup()
         nonisolated(unsafe) var stdout = Data()
         nonisolated(unsafe) var stderr = Data()
         outputGroup.enter()
         DispatchQueue.global().async {
-            stdout = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+            stdout = Self.drain(stdoutPipe.fileHandleForReading, cap: cap)
             outputGroup.leave()
         }
         outputGroup.enter()
         DispatchQueue.global().async {
-            stderr = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+            stderr = Self.drain(stderrPipe.fileHandleForReading, cap: cap)
             outputGroup.leave()
         }
 
@@ -113,14 +114,13 @@ public struct FoundationProcessExecutor: ProcessExecuting {
         var timedOut = false
         if exited.wait(timeout: .now() + .seconds(request.timeoutSeconds)) == .timedOut {
             timedOut = true
-            _ = kill(-processID, SIGTERM)
+            Self.signalChild(processID, signal: SIGTERM)
             if exited.wait(timeout: .now() + .seconds(request.terminationGraceSeconds)) == .timedOut {
-                _ = kill(-processID, SIGKILL)
+                Self.signalChild(processID, signal: SIGKILL)
                 _ = exited.wait(timeout: .now() + .seconds(5))
             }
         }
         outputGroup.wait()
-        let cap = max(0, request.maximumOutputBytes)
         return ProcessExecution(
             exitCode: timedOut ? -SIGKILL : process.terminationStatus,
             stdout: Data(stdout.prefix(cap)),
@@ -128,6 +128,21 @@ public struct FoundationProcessExecutor: ProcessExecuting {
             timedOut: timedOut,
             stdoutTruncated: stdout.count > cap
         )
+    }
+
+    private static func drain(_ handle: FileHandle, cap: Int) -> Data {
+        var collected = Data()
+        while true {
+            let chunk = handle.readData(ofLength: 65_536)
+            if chunk.isEmpty { break }
+            if collected.count <= cap { collected.append(chunk) }
+        }
+        return collected
+    }
+
+    private static func signalChild(_ pid: pid_t, signal: Int32) {
+        _ = kill(-pid, signal)
+        _ = kill(pid, signal)
     }
 }
 

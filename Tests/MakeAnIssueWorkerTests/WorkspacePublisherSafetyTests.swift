@@ -302,6 +302,66 @@ final class WorkspacePublisherSafetyTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: countURL, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines), "1")
     }
 
+    func testReconciliationIsolatesEachCandidateAndNeverBlocksTheBatch() throws {
+        // Per-run isolation: a candidate that fails reconciliation must be marked failed,
+        // release its host claim, and never abort the loop for the candidates queued behind it.
+        // Kept ledger-only (no real git) so the guarantee stays deterministic under suite load.
+        let fixture = try ConfigFixture(publisherBackend: "builtin", workspaceBackend: "builtin")
+        let config = try fixture.snapshot()
+        let ledger = try RunLedger(stateRoot: fixture.stateRoot)
+
+        let first = try seedIncompletePublishingCandidate(config: config, ledger: ledger, issueNumber: 42, claimOwnerPID: Int32.max)
+        let second = try seedIncompletePublishingCandidate(config: config, ledger: ledger, issueNumber: 43)
+        let third = try seedIncompletePublishingCandidate(config: config, ledger: ledger, issueNumber: 44)
+
+        let service = RunService(config: config, ledger: ledger)
+        try service.reconcilePublishingRuns()
+
+        for runID in [first, second, third] {
+            let run = try ledger.run(id: runID)
+            XCTAssertEqual(run.state, .failed, "every candidate must be reconciled, not just the first")
+            XCTAssertEqual(run.failureCode, "publication_reconciliation_failed_retained")
+        }
+        XCTAssertNil(try ledger.currentHostClaim(), "a failing candidate must release its host claim")
+
+        // Persistent visibility: the failed runs stay terminal across repeated passes and are no
+        // longer publishing candidates requiring attention.
+        try service.reconcilePublishingRuns()
+        XCTAssertTrue(try ledger.publishingReconciliationCandidates().isEmpty)
+        for runID in [first, second, third] {
+            XCTAssertEqual(try ledger.run(id: runID).state, .failed)
+        }
+    }
+
+    /// Drives a run to the `publishing` state through the ledger without recording the artifacts
+    /// reconciliation requires, so `reconcilePublishingRuns` fails it via the incomplete-artifacts
+    /// guard — a fast, git-free failure that still exercises the per-candidate isolation path.
+    @discardableResult
+    private func seedIncompletePublishingCandidate(
+        config: WorkerConfigSnapshot,
+        ledger: RunLedger,
+        issueNumber: Int,
+        claimOwnerPID: Int32? = nil
+    ) throws -> String {
+        let inserted = try ledger.createRun(NewRun(
+            id: UUID().uuidString.lowercased(),
+            issue: try makeIssue(number: issueNumber),
+            configRevision: config.revision,
+            redactedConfigSnapshot: config.redactedSnapshot,
+            routeID: "bug",
+            agentID: "bugfix",
+            triggerKind: .cli
+        ))
+        guard case .created(let run) = inserted else {
+            throw NSError(domain: "SeedRun", code: 1, userInfo: [NSLocalizedDescriptionKey: "expected run creation"])
+        }
+        if let claimOwnerPID { _ = try ledger.claimHost(runID: run.id, ownerPID: claimOwnerPID) }
+        for state in [RunState.claimed, .preparing, .running, .validating, .publishing] {
+            _ = try ledger.transition(runID: run.id, to: state)
+        }
+        return run.id
+    }
+
     func testCIObservationRecordsStatusAndNeverFailsOpenedDraftPullRequest() throws {
         let fixture = try ConfigFixture(publisherBackend: "builtin", workspaceBackend: "builtin")
         let origin = try makeBareOrigin(root: fixture.root)

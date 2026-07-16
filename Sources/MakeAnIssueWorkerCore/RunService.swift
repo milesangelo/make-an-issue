@@ -296,16 +296,25 @@ public struct RunService: Sendable {
     public func reconcilePublishingRuns() throws {
         let publisher = BuiltinPublisher(stateRoot: config.worker.stateRoot, environment: environment)
         for run in try ledger.publishingReconciliationCandidates() {
-            if let claim = try ledger.currentHostClaim(), claim.runID == run.id,
-               claim.ownerPID != getpid(), kill(claim.ownerPID, 0) == 0 {
-                continue
+            do {
+                try reconcile(run: run, publisher: publisher)
+            } catch {
+                try? failReconciliation(run, detail: String(describing: error))
             }
-            guard let baseSHA = run.baseSHA, let branch = run.branchName,
+        }
+    }
+
+    private func reconcile(run: RunRecord, publisher: BuiltinPublisher) throws {
+        if let claim = try ledger.currentHostClaim(), claim.runID == run.id,
+           claim.ownerPID != getpid(), kill(claim.ownerPID, 0) == 0 {
+            return
+        }
+        guard let baseSHA = run.baseSHA, let branch = run.branchName,
                   let workspacePath = run.workspacePath, let workspaceID = run.workspaceID,
                   let validatedSHA = run.validatedSHA,
                   let patchPath = run.patchPath else {
                 try failReconciliation(run, detail: "publication intent artifacts are incomplete")
-                continue
+                return
             }
             let events = try ledger.events(runID: run.id)
             let frozenConfig: ReconciliationSnapshot
@@ -316,7 +325,7 @@ public struct RunService: Sendable {
                 )
             } catch {
                 try failReconciliation(run, detail: "frozen config snapshot is unavailable: \(error)")
-                continue
+                return
             }
             guard let digest = events.reversed().compactMap({ event -> String? in
                 guard event.kind == "diff_inspected", let detail = event.detail,
@@ -326,11 +335,11 @@ public struct RunService: Sendable {
             let repository = frozenConfig.repositories.first(where: { $0.repository == run.repository }),
             let agent = frozenConfig.agents.first(where: { $0.id == run.agentID }) else {
                 try failReconciliation(run, detail: "frozen repository, agent, or diff receipt is unavailable")
-                continue
+                return
             }
             guard frozenConfig.worker.publisherBackend != PublisherBackend.noMistakes.rawValue else {
                 try failReconciliation(run, detail: "frozen publisher backend is not capability-compatible")
-                continue
+                return
             }
             let source = config.worker.stateRoot.appendingPathComponent(
                 "repositories/\(run.repository.replacingOccurrences(of: "/", with: "--"))"
@@ -417,7 +426,6 @@ public struct RunService: Sendable {
                 )
                 try failReconciliation(run, detail: String(describing: error))
             }
-        }
     }
 
     private func failReconciliation(_ run: RunRecord, detail: String) throws {
