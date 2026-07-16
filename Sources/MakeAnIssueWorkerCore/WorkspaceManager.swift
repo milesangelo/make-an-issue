@@ -267,17 +267,20 @@ public struct TreehouseWorkspaceManager: WorkspaceManaging {
     private let executable: String
     private let processes: any ProcessExecuting
     private let path: String
+    private let supervisorEnvironment: [String: String]
 
     public init(
         stateRoot: URL,
         executable: String,
         processes: any ProcessExecuting = FoundationProcessExecutor(),
-        path: String = ProcessInfo.processInfo.environment["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin"
+        path: String = ProcessInfo.processInfo.environment["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin",
+        supervisorEnvironment: [String: String] = ProcessInfo.processInfo.environment
     ) {
         self.stateRoot = stateRoot.standardizedFileURL
         self.executable = executable
         self.processes = processes
         self.path = path
+        self.supervisorEnvironment = supervisorEnvironment
     }
 
     public func acquire(repositoryStore: RepositoryStore, baseSHA: String, runID: String) throws -> WorkspaceLease {
@@ -288,7 +291,7 @@ public struct TreehouseWorkspaceManager: WorkspaceManaging {
             executable: executable,
             arguments: ["get", "--lease", "--lease-holder", runID],
             workingDirectory: repositoryStore.path,
-            environment: WorkerEnvironment.minimal(home: home, path: path),
+            environment: try treehouseGitEnvironment(home: home),
             timeoutSeconds: 120
         ))
         guard result.exitCode == 0 else {
@@ -322,7 +325,7 @@ public struct TreehouseWorkspaceManager: WorkspaceManaging {
         return try BuiltinWorkspaceManager(
             stateRoot: stateRoot,
             processes: processes,
-            environment: WorkerEnvironment.minimal(home: home, path: path)
+            environment: try treehouseGitEnvironment(home: home)
         ).prepare(lease: lease, branchName: branchName, baseSHA: baseSHA)
     }
 
@@ -356,6 +359,37 @@ public struct TreehouseWorkspaceManager: WorkspaceManaging {
     }
 
     public func recover() throws -> [WorkspaceLease] { try readLeaseProofs(stateRoot: stateRoot) }
+
+    /// Treehouse fetches from the worker-owned repository store. Its isolated HOME intentionally
+    /// cannot read the user's git credential helper, so supply the GitHub CLI token only to this
+    /// supervisor-owned process through Git's ephemeral configuration environment.
+    private func treehouseGitEnvironment(home: URL) throws -> [String: String] {
+        guard let gh = processes.resolveExecutable("gh", environment: supervisorEnvironment) else {
+            throw WorkspaceError.commandFailed(
+                "treehouse needs GitHub credentials for a private HTTPS repository; install and authenticate gh with 'gh auth login'"
+            )
+        }
+        let tokenResult = processes.execute(ProcessRequest(
+            executable: gh,
+            arguments: ["auth", "token"],
+            environment: supervisorEnvironment,
+            timeoutSeconds: 30
+        ))
+        let token = tokenResult.stdoutString.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard tokenResult.exitCode == 0, !token.isEmpty else {
+            throw WorkspaceError.commandFailed(
+                "treehouse needs GitHub credentials for a private HTTPS repository; run 'gh auth login' and retry"
+            )
+        }
+        return WorkerEnvironment.minimal(home: home, path: path, extra: [
+            "MAI_TREEHOUSE_GIT_TOKEN": token,
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_CONFIG_GLOBAL": "/dev/null",
+            "GIT_CONFIG_COUNT": "1",
+            "GIT_CONFIG_KEY_0": "credential.helper",
+            "GIT_CONFIG_VALUE_0": "!f() { echo username=x-access-token; echo password=\"$MAI_TREEHOUSE_GIT_TOKEN\"; }; f",
+        ])
+    }
 }
 
 private func makeLeaseProof(stateRoot: URL, runID: String, path: URL, source: URL) throws -> URL {

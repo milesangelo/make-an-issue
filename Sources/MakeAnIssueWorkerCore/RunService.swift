@@ -1005,7 +1005,8 @@ private func workspaceManager(
             stateRoot: stateRoot,
             executable: executable,
             processes: processes,
-            path: environment["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin"
+            path: environment["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin",
+            supervisorEnvironment: environment
         )
     }
 }

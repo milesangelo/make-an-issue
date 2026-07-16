@@ -263,6 +263,101 @@ final class WorkspacePublisherSafetyTests: XCTestCase {
         XCTAssertEqual(getCall.environment["HOME"], fixture.stateRoot.appendingPathComponent("treehouse-home").path)
     }
 
+    func testTreehouseAdapterSuppliesEphemeralGitCredentialsForPrivateHTTPSFetches() throws {
+        let fixture = try ConfigFixture(workspaceBackend: "builtin")
+        try FileManager.default.createDirectory(at: fixture.stateRoot, withIntermediateDirectories: true)
+        let source = fixture.stateRoot.appendingPathComponent("repositories/acme--widgets", isDirectory: true)
+        let workspace = fixture.stateRoot.appendingPathComponent("treehouse-pool/workspace", isDirectory: true)
+        try runProcess("/usr/bin/git", ["init", source.path])
+        try runProcess("/usr/bin/git", ["-C", source.path, "config", "user.email", "tests@example.com"])
+        try runProcess("/usr/bin/git", ["-C", source.path, "config", "user.name", "Tests"])
+        try Data("fixture\n".utf8).write(to: source.appendingPathComponent("fixture.txt"))
+        try runProcess("/usr/bin/git", ["-C", source.path, "add", "fixture.txt"])
+        try runProcess("/usr/bin/git", ["-C", source.path, "commit", "-m", "fixture"])
+        let baseSHA = try runProcess("/usr/bin/git", ["-C", source.path, "rev-parse", "HEAD"])
+            .stdoutString.trimmingCharacters(in: .whitespacesAndNewlines)
+        try runProcess("/usr/bin/git", ["clone", source.path, workspace.path])
+
+        let git = fixture.root.appendingPathComponent("git")
+        let treehouse = fixture.root.appendingPathComponent("treehouse")
+        let gh = fixture.root.appendingPathComponent("gh")
+        try Data("""
+        #!/bin/sh
+        if [ "$GIT_CONFIG_NOSYSTEM" = 1 ] && [ "$GIT_CONFIG_GLOBAL" = /dev/null ] && [ "$GIT_CONFIG_KEY_0" = credential.helper ] && [ "$MAI_TREEHOUSE_GIT_TOKEN" = gho_fixture_token ] && echo "$GIT_CONFIG_VALUE_0" | /usr/bin/grep -q '\\$MAI_TREEHOUSE_GIT_TOKEN'; then
+          exit 0
+        fi
+        echo 'missing treehouse git credential helper' >&2
+        exit 1
+        """.utf8).write(to: git)
+        try Data("""
+        #!/bin/sh
+        git fetch origin || exit $?
+        printf '%s\\n' '\(workspace.path)'
+        """.utf8).write(to: treehouse)
+        try Data("""
+        #!/bin/sh
+        if [ "$1" = auth ] && [ "$2" = token ]; then
+          echo gho_fixture_token
+          exit 0
+        fi
+        exit 64
+        """.utf8).write(to: gh)
+        chmod(git.path, 0o700)
+        chmod(treehouse.path, 0o700)
+        chmod(gh.path, 0o700)
+        let path = "\(fixture.root.path):/usr/bin:/bin"
+        let unauthenticated = FoundationProcessExecutor().execute(ProcessRequest(
+            executable: treehouse.path,
+            arguments: ["get", "--lease", "--lease-holder", "run-private"],
+            workingDirectory: source,
+            environment: WorkerEnvironment.minimal(home: fixture.root, path: path)
+        ))
+        XCTAssertNotEqual(unauthenticated.exitCode, 0, "the fake treehouse fetch must reject an isolated environment without the helper")
+        let manager = TreehouseWorkspaceManager(
+            stateRoot: fixture.stateRoot,
+            executable: treehouse.path,
+            path: path,
+            supervisorEnvironment: ["PATH": path]
+        )
+        let store = RepositoryStore(
+            repository: "acme/widgets",
+            path: source,
+            remote: "https://github.com/acme/widgets.git",
+            defaultBranch: "main",
+            baseSHA: baseSHA
+        )
+
+        _ = try manager.acquire(repositoryStore: store, baseSHA: store.baseSHA, runID: "run-private")
+    }
+
+    func testTreehouseAdapterExplainsHowToAuthenticateWhenGhIsUnavailable() throws {
+        let fixture = try ConfigFixture(workspaceBackend: "builtin")
+        try FileManager.default.createDirectory(at: fixture.stateRoot, withIntermediateDirectories: true)
+        let source = fixture.stateRoot.appendingPathComponent("repositories/acme--widgets", isDirectory: true)
+        try FileManager.default.createDirectory(at: source, withIntermediateDirectories: true)
+        let manager = TreehouseWorkspaceManager(
+            stateRoot: fixture.stateRoot,
+            executable: "/fixture/treehouse",
+            processes: RecordingExecutor(workspacePath: source.path, ghAvailable: false),
+            path: "/usr/bin:/bin",
+            supervisorEnvironment: ["PATH": "/fixture:/usr/bin:/bin"]
+        )
+        let store = RepositoryStore(
+            repository: "acme/widgets",
+            path: source,
+            remote: "https://github.com/acme/widgets.git",
+            defaultBranch: "main",
+            baseSHA: String(repeating: "a", count: 40)
+        )
+
+        XCTAssertThrowsError(try manager.acquire(repositoryStore: store, baseSHA: store.baseSHA, runID: "run-private")) { error in
+            XCTAssertEqual(
+                error as? WorkspaceError,
+                .commandFailed("treehouse needs GitHub credentials for a private HTTPS repository; install and authenticate gh with 'gh auth login'")
+            )
+        }
+    }
+
     func testStartupReconciliationRepairsPushThenCrashExactlyOnce() throws {
         let fixture = try ConfigFixture(publisherBackend: "builtin", workspaceBackend: "builtin")
         let origin = try makeBareOrigin(root: fixture.root)
@@ -1070,16 +1165,22 @@ private final class RecordingExecutor: @unchecked Sendable, ProcessExecuting {
 
     private let lock = NSLock()
     private let workspacePath: String
+    private let ghAvailable: Bool
     private var storage: [Call] = []
 
-    init(workspacePath: String) { self.workspacePath = workspacePath }
+    init(workspacePath: String, ghAvailable: Bool = true) {
+        self.workspacePath = workspacePath
+        self.ghAvailable = ghAvailable
+    }
 
     var calls: [Call] {
         lock.lock(); defer { lock.unlock() }
         return storage
     }
 
-    func resolveExecutable(_ name: String, environment: [String: String]) -> String? { "/fixture/\(name)" }
+    func resolveExecutable(_ name: String, environment: [String: String]) -> String? {
+        name == "gh" && !ghAvailable ? nil : "/fixture/\(name)"
+    }
 
     func execute(_ request: ProcessRequest) -> ProcessExecution {
         lock.lock()
@@ -1088,6 +1189,7 @@ private final class RecordingExecutor: @unchecked Sendable, ProcessExecuting {
         let stdout: String
         let exit: Int32
         switch request.arguments.first {
+        case "auth": stdout = "gho_fixture_token\n"; exit = 0
         case "get": stdout = workspacePath + "\n"; exit = 0
         case "status": stdout = ""; exit = 0
         case "rev-parse": stdout = String(repeating: "a", count: 40) + "\n"; exit = 0
