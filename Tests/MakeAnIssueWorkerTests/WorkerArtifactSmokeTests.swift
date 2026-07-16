@@ -63,6 +63,28 @@ final class WorkerArtifactSmokeTests: XCTestCase {
         XCTAssertTrue(ghLog.contains("pr create"))
         XCTAssertTrue(ghLog.contains("--draft"))
         XCTAssertTrue(ghLog.contains("Closes #42"))
+
+        if let evidenceDir = ProcessInfo.processInfo.environment["MAI_EVIDENCE_DIR"] {
+            let transitions = try ledger.events(runID: run.id).compactMap(\.toState)
+            let transcript = """
+            $ make-an-issue-worker --config agents.toml doctor
+            \(doctor.stdout)
+            $ make-an-issue-worker run --config agents.toml --issue https://github.com/acme/widgets/issues/42
+            \(result.stdout)
+            --- ledger state ---
+            run.state          = \(run.state)
+            run.prNumber       = \(run.prNumber.map(String.init) ?? "nil")
+            run.prIsDraft      = \(run.prIsDraft.map(String.init) ?? "nil")
+            run.branchName     = \(run.branchName ?? "nil")
+            state transitions  = \(transitions)
+            default branch SHA before/after = \(origin.mainSHA) / \(mainAfter) (immutable)
+            --- gh invocation log (offline fake) ---
+            \(ghLog)
+            """
+            try? Data(transcript.utf8).write(
+                to: URL(fileURLWithPath: evidenceDir).appendingPathComponent("worker-offline-pipeline-transcript.txt")
+            )
+        }
     }
 
     func testValidationFailureRetainsDirtyWorkspaceAndPublishesNothing() throws {
