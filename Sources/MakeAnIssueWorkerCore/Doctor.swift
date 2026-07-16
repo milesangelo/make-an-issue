@@ -133,7 +133,7 @@ public struct DoctorReport: Sendable {
     }
 }
 
-private struct PublisherCapabilities: Decodable {
+private struct DoctorPublisherCapabilities: Decodable {
     let draftPR: Bool
     let prePushValidation: Bool
     let tokenIsolation: Bool
@@ -249,7 +249,14 @@ public struct Doctor: Sendable {
 
     private func publisherChecks(_ backend: PublisherBackend) -> [DoctorCheck] {
         if backend == .builtin {
-            return [DoctorCheck(name: "publisher backend", status: .pass, detail: "builtin selected; draft-only capability is available")]
+            let capabilities = BuiltinPublisher(stateRoot: FileManager.default.temporaryDirectory).capabilities()
+            return [DoctorCheck(
+                name: "publisher backend",
+                status: capabilities.satisfiesContract ? .pass : .blocking,
+                detail: capabilities.satisfiesContract
+                    ? "builtin selected; executable capability probe proves validation, no-force, artifact, draft, and reconciliation support"
+                    : "builtin capability probe failed"
+            )]
         }
         guard let executable = commands.resolveExecutable("no-mistakes") else {
             if backend == .auto {
@@ -261,7 +268,7 @@ public struct Doctor: Sendable {
         let version = commands.run(executable: executable, arguments: ["--version"])
         let capability = commands.run(executable: executable, arguments: ["publisher-capabilities", "--json"])
         let capabilities = capability.exitCode == 0
-            ? try? JSONDecoder().decode(PublisherCapabilities.self, from: Data(capability.stdout.utf8))
+            ? try? JSONDecoder().decode(DoctorPublisherCapabilities.self, from: Data(capability.stdout.utf8))
             : nil
         let versionText = concise(version.stdout, fallback: executable)
         let versionLabel = versionText.lowercased().hasPrefix("no-mistakes")

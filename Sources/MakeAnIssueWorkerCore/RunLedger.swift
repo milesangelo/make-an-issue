@@ -78,6 +78,19 @@ public struct RunRecord: Equatable, Sendable {
     public let triggerKind: TriggerKind
     public let state: RunState
     public let failureCode: String?
+    public let baseSHA: String?
+    public let branchName: String?
+    public let workspaceID: String?
+    public let workspacePath: String?
+    public let providerPID: Int32?
+    public let providerExit: Int32?
+    public let patchPath: String?
+    public let logDirectory: String?
+    public let validatedSHA: String?
+    public let remoteBranchSHA: String?
+    public let prNumber: Int?
+    public let prURL: String?
+    public let prIsDraft: Bool?
     public let createdAt: Date
     public let claimedAt: Date?
     public let updatedAt: Date
@@ -128,6 +141,7 @@ public final class RunLedger: @unchecked Sendable {
 
     private let database: OpaquePointer
     private let lock = NSLock()
+    private let stateRoot: URL
 
     public convenience init(stateRoot: URL) throws {
         try StateDirectory.ensure(stateRoot)
@@ -145,6 +159,7 @@ public final class RunLedger: @unchecked Sendable {
             throw LedgerError.sqlite(reason)
         }
         database = handle
+        stateRoot = databaseURL.deletingLastPathComponent().standardizedFileURL
         do {
             try execute("PRAGMA journal_mode=WAL")
             try execute("PRAGMA foreign_keys=ON")
@@ -318,6 +333,16 @@ public final class RunLedger: @unchecked Sendable {
         try synchronized { try fetchRunUnlocked(id: id) }
     }
 
+    public func configSnapshot(runID: String) throws -> String {
+        try synchronized {
+            guard let value = try scalarText(
+                "SELECT config_snapshot_redacted FROM runs WHERE id = ?",
+                [.text(runID)]
+            ) else { throw LedgerError.runNotFound(runID) }
+            return value
+        }
+    }
+
     public func runs(repository: String, issueNumber: Int) throws -> [RunRecord] {
         try synchronized {
             try queryRuns(
@@ -358,6 +383,100 @@ public final class RunLedger: @unchecked Sendable {
         }
     }
 
+    public func recordPreparation(
+        runID: String,
+        baseSHA: String,
+        branchName: String,
+        workspace: WorkspaceLease,
+        artifacts: ArtifactStore
+    ) throws {
+        try requireStoredPath(workspace.path)
+        try requireStoredPath(artifacts.patchURL)
+        try requireStoredPath(artifacts.logDirectory)
+        try updateArtifacts(
+            runID: runID,
+            assignments: "base_sha = ?, branch_name = ?, workspace_id = ?, workspace_path = ?, patch_path = ?, log_dir = ?",
+            values: [
+                .text(baseSHA), .text(branchName), .text(workspace.id), .text(workspace.path.path),
+                .text(artifacts.patchURL.path), .text(artifacts.logDirectory.path),
+            ],
+            event: "preparation_recorded",
+            detail: "base=\(baseSHA) branch=\(branchName) workspace=\(workspace.id)"
+        )
+    }
+
+    public func recordProviderExit(runID: String, pid: Int32?, exit: Int32) throws {
+        try updateArtifacts(
+            runID: runID,
+            assignments: "provider_pid = ?, provider_exit = ?",
+            values: [.optionalInt64(pid.map(Int64.init)), .integer(Int64(exit))],
+            event: "provider_exited",
+            detail: "exit=\(exit)"
+        )
+    }
+
+    public func recordInspection(runID: String, inspection: DiffInspection) throws {
+        try appendObservation(
+            runID: runID,
+            kind: "diff_inspected",
+            detail: "id=\(inspection.id) digest=\(inspection.digest) files=\(inspection.changedFiles.count)"
+        )
+    }
+
+    public func recordValidatedSHA(runID: String, sha: String, receiptID: String) throws {
+        try updateArtifacts(
+            runID: runID,
+            assignments: "validated_sha = ?",
+            values: [.text(sha)],
+            event: "validation_green",
+            detail: "receipt=\(receiptID) sha=\(sha)"
+        )
+    }
+
+    public func recordPublicationIntent(runID: String, branch: String, baseSHA: String, headSHA: String) throws {
+        try appendObservation(
+            runID: runID,
+            kind: "publication_intent",
+            detail: "branch=\(branch) base=\(baseSHA) head=\(headSHA) draft=true"
+        )
+    }
+
+    public func recordRemoteBranch(runID: String, sha: String) throws {
+        try updateArtifacts(
+            runID: runID,
+            assignments: "remote_branch_sha = ?",
+            values: [.text(sha)],
+            event: "remote_branch_observed",
+            detail: sha
+        )
+    }
+
+    public func recordPullRequest(runID: String, number: Int, url: String, isDraft: Bool) throws {
+        try updateArtifacts(
+            runID: runID,
+            assignments: "pr_number = ?, pr_url = ?, pr_is_draft = ?",
+            values: [.integer(Int64(number)), .text(url), .integer(isDraft ? 1 : 0)],
+            event: "pull_request_verified",
+            detail: "number=\(number) draft=\(isDraft) url=\(url)"
+        )
+    }
+
+    public func appendObservation(runID: String, kind: String, detail: String?) throws {
+        try synchronized {
+            try transaction(immediate: true) {
+                _ = try fetchRunUnlocked(id: runID)
+                try insertEvent(
+                    runID: runID,
+                    kind: kind,
+                    from: nil,
+                    to: nil,
+                    detail: detail,
+                    at: Date().timeIntervalSince1970
+                )
+            }
+        }
+    }
+
     /// Non-terminal rows that startup must inspect before claiming new work.
     public func startupReconciliationCandidates() throws -> [RunRecord] {
         try synchronized {
@@ -379,7 +498,7 @@ public final class RunLedger: @unchecked Sendable {
     }
 
     private var runColumns: String {
-        "id, repository, issue_number, issue_url, config_revision, route_id, agent_id, trigger_kind, state, failure_code, created_at, claimed_at, updated_at, finished_at"
+        "id, repository, issue_number, issue_url, config_revision, route_id, agent_id, trigger_kind, state, failure_code, base_sha, branch_name, workspace_id, workspace_path, provider_pid, provider_exit, patch_path, log_dir, validated_sha, remote_branch_sha, pr_number, pr_url, pr_is_draft, created_at, claimed_at, updated_at, finished_at"
     }
 
     private func migrate() throws {
@@ -569,10 +688,23 @@ public final class RunLedger: @unchecked Sendable {
                     triggerKind: triggerKind,
                     state: state,
                     failureCode: columnText(statement, 9),
-                    createdAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 10)),
-                    claimedAt: columnDouble(statement, 11).map(Date.init(timeIntervalSince1970:)),
-                    updatedAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 12)),
-                    finishedAt: columnDouble(statement, 13).map(Date.init(timeIntervalSince1970:))
+                    baseSHA: columnText(statement, 10),
+                    branchName: columnText(statement, 11),
+                    workspaceID: columnText(statement, 12),
+                    workspacePath: columnText(statement, 13),
+                    providerPID: columnInt64(statement, 14).map(Int32.init),
+                    providerExit: columnInt64(statement, 15).map(Int32.init),
+                    patchPath: columnText(statement, 16),
+                    logDirectory: columnText(statement, 17),
+                    validatedSHA: columnText(statement, 18),
+                    remoteBranchSHA: columnText(statement, 19),
+                    prNumber: columnInt64(statement, 20).map(Int.init),
+                    prURL: columnText(statement, 21),
+                    prIsDraft: columnInt64(statement, 22).map { $0 != 0 },
+                    createdAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 23)),
+                    claimedAt: columnDouble(statement, 24).map(Date.init(timeIntervalSince1970:)),
+                    updatedAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 25)),
+                    finishedAt: columnDouble(statement, 26).map(Date.init(timeIntervalSince1970:))
                 )
             )
         }
@@ -642,6 +774,15 @@ public final class RunLedger: @unchecked Sendable {
         return sqlite3_column_int64(statement, 0)
     }
 
+    private func scalarText(_ sql: String, _ bindings: [SQLiteValue]) throws -> String? {
+        var statement: OpaquePointer?
+        try prepare(sql, &statement)
+        defer { sqlite3_finalize(statement) }
+        try bind(bindings, to: statement)
+        guard sqlite3_step(statement) == SQLITE_ROW else { return nil }
+        return columnText(statement, 0)
+    }
+
     private func prepare(_ sql: String, _ statement: inout OpaquePointer?) throws {
         guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK else {
             throw sqliteError()
@@ -683,6 +824,47 @@ public final class RunLedger: @unchecked Sendable {
         sqlite3_column_type(statement, index) == SQLITE_NULL ? nil : sqlite3_column_double(statement, index)
     }
 
+    private func columnInt64(_ statement: OpaquePointer?, _ index: Int32) -> Int64? {
+        sqlite3_column_type(statement, index) == SQLITE_NULL ? nil : sqlite3_column_int64(statement, index)
+    }
+
+    private func updateArtifacts(
+        runID: String,
+        assignments: String,
+        values: [SQLiteValue],
+        event: String,
+        detail: String
+    ) throws {
+        try synchronized {
+            try transaction(immediate: true) {
+                let run = try fetchRunUnlocked(id: runID)
+                guard !run.state.isTerminal else {
+                    throw LedgerError.sqlite("terminal run records are immutable")
+                }
+                try execute(
+                    "UPDATE runs SET \(assignments), updated_at = ? WHERE id = ?",
+                    values + [.double(Date().timeIntervalSince1970), .text(runID)]
+                )
+                try insertEvent(
+                    runID: runID,
+                    kind: event,
+                    from: nil,
+                    to: nil,
+                    detail: detail,
+                    at: Date().timeIntervalSince1970
+                )
+            }
+        }
+    }
+
+    private func requireStoredPath(_ url: URL) throws {
+        let path = url.standardizedFileURL.path
+        let root = stateRoot.path
+        guard path == root || path.hasPrefix(root + "/") else {
+            throw LedgerError.sqlite("artifact path is outside state root: \(path)")
+        }
+    }
+
     private func sqliteError() -> LedgerError {
         .sqlite(String(cString: sqlite3_errmsg(database)))
     }
@@ -696,6 +878,7 @@ private enum SQLiteValue {
 
     static func optionalText(_ value: String?) -> SQLiteValue { value.map(SQLiteValue.text) ?? .null }
     static func optionalDouble(_ value: Double?) -> SQLiteValue { value.map(SQLiteValue.double) ?? .null }
+    static func optionalInt64(_ value: Int64?) -> SQLiteValue { value.map(SQLiteValue.integer) ?? .null }
 }
 
 private let sqliteTransient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)

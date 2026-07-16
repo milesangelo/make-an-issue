@@ -2,7 +2,7 @@ import XCTest
 @testable import MakeAnIssueWorkerCore
 
 final class RunServiceTests: XCTestCase {
-    func testRunReachesPreparingAndRecordsDeliberatePublisherStub() throws {
+    func testRunDelegatesAfterPreparingAndRecordsTerminalDriverOutcome() throws {
         let fixture = try ConfigFixture()
         let config = try fixture.snapshot()
         let ledger = try RunLedger(stateRoot: fixture.stateRoot)
@@ -10,26 +10,31 @@ final class RunServiceTests: XCTestCase {
             config: config,
             ledger: ledger,
             inspector: trustedBugInspector(),
-            ownerPID: 777
+            ownerPID: 777,
+            executionDriver: TerminalTestDriver()
         )
 
         let outcome = try service.run(issueURL: "https://github.com/acme/widgets/issues/42")
 
-        XCTAssertEqual(outcome.stateReached, .preparing)
-        XCTAssertTrue(outcome.message.contains("publisher slice not yet implemented"))
+        XCTAssertEqual(outcome.stateReached, .failed)
         let stored = try ledger.run(id: outcome.runID)
         XCTAssertEqual(stored.state, .failed)
-        XCTAssertEqual(stored.failureCode, StubRunOutcome.failureCode)
+        XCTAssertEqual(stored.failureCode, "test_driver_terminal")
         XCTAssertNil(try ledger.currentHostClaim())
         let transitions = try ledger.events(runID: outcome.runID).compactMap(\.toState)
         XCTAssertEqual(transitions, [.queued, .claimed, .preparing, .failed])
     }
 
-    func testExplicitCLIRunIsSafelyRerunnableAfterTerminalStub() throws {
+    func testExplicitCLIRunIsSafelyRerunnableAfterTerminalOutcome() throws {
         let fixture = try ConfigFixture()
         let config = try fixture.snapshot()
         let ledger = try RunLedger(stateRoot: fixture.stateRoot)
-        let service = RunService(config: config, ledger: ledger, inspector: trustedBugInspector())
+        let service = RunService(
+            config: config,
+            ledger: ledger,
+            inspector: trustedBugInspector(),
+            executionDriver: TerminalTestDriver()
+        )
 
         let first = try service.run(issueURL: "https://github.com/acme/widgets/issues/42")
         let second = try service.run(issueURL: "https://github.com/acme/widgets/issues/42")
@@ -62,7 +67,13 @@ final class RunServiceTests: XCTestCase {
         let ledger = try RunLedger(stateRoot: fixture.stateRoot)
         let blocker = try created(ledger.createRun(makeNewRun(issue: makeIssue(number: 1), id: "blocker")))
         _ = try ledger.claimHost(runID: blocker.id, ownerPID: 111)
-        let service = RunService(config: config, ledger: ledger, inspector: trustedBugInspector(), ownerPID: 222)
+        let service = RunService(
+            config: config,
+            ledger: ledger,
+            inspector: trustedBugInspector(),
+            ownerPID: 222,
+            executionDriver: TerminalTestDriver()
+        )
 
         XCTAssertThrowsError(try service.run(issueURL: "https://github.com/acme/widgets/issues/2")) { error in
             guard case RunServiceError.hostBusy(let detail) = error else {
@@ -113,7 +124,12 @@ final class RunServiceTests: XCTestCase {
         let inspector = FakeIssueInspector(
             result: .success(IssueFacts(labels: [], callerHasWriteAccess: true, defaultBranch: "main"))
         )
-        let service = RunService(config: config, ledger: ledger, inspector: inspector)
+        let service = RunService(
+            config: config,
+            ledger: ledger,
+            inspector: inspector,
+            executionDriver: TerminalTestDriver()
+        )
 
         let outcome = try service.run(
             issueURL: "https://github.com/acme/widgets/issues/42",
