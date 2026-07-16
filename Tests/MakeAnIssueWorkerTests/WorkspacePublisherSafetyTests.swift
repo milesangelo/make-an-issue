@@ -333,6 +333,87 @@ final class WorkspacePublisherSafetyTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: countURL, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines), "1")
     }
 
+    func testReconciliationKeepsPROpenedWhenPostPublicationCleanupFails() throws {
+        // Regression: once the draft PR is recorded and the run transitions to the terminal
+        // pr_opened state, a failure in post-publication cleanup (here the workspace-release
+        // manager cannot be constructed because the frozen treehouse backend is not installed)
+        // must be recorded as a deferred observation and must never route through
+        // failReconciliation to reclassify the successful publication.
+        let fixture = try ConfigFixture(publisherBackend: "builtin", workspaceBackend: "treehouse")
+        let origin = try makeBareOrigin(root: fixture.root)
+        let config = try fixture.snapshot()
+        let prepared = try prepareWorkspace(fixture: fixture, config: config, origin: origin.origin)
+        let ledger = try RunLedger(stateRoot: fixture.stateRoot)
+        let inserted = try ledger.createRun(NewRun(
+            id: prepared.lease.id,
+            issue: makeIssue(),
+            configRevision: config.revision,
+            redactedConfigSnapshot: config.redactedSnapshot,
+            routeID: "bug",
+            agentID: "bugfix",
+            triggerKind: .cli
+        ))
+        guard case .created(let run) = inserted else { return XCTFail("expected run creation") }
+        _ = try ledger.claimHost(runID: run.id, ownerPID: Int32.max)
+        _ = try ledger.transition(runID: run.id, to: .claimed)
+        _ = try ledger.transition(runID: run.id, to: .preparing)
+        let artifacts = try ArtifactStore(stateRoot: fixture.stateRoot, runID: run.id)
+        try ledger.recordPreparation(
+            runID: run.id,
+            baseSHA: prepared.baseSHA,
+            branchName: prepared.branch,
+            workspace: prepared.lease,
+            artifacts: artifacts
+        )
+        _ = try ledger.transition(runID: run.id, to: .running)
+        try Data("cleanup\n".utf8).write(to: prepared.workspace.appendingPathComponent("cleanup.txt"))
+        try ledger.recordProviderExit(runID: run.id, pid: nil, exit: 0)
+        _ = try ledger.transition(runID: run.id, to: .validating)
+        let inspection = try DiffInspector(limits: config.worker.limits).inspect(git: prepared.git, baseSHA: prepared.baseSHA)
+        try artifacts.archive(inspection)
+        try ledger.recordInspection(runID: run.id, inspection: inspection)
+        let environment = try draftGHEnvironment(root: fixture.root, origin: origin.origin)
+        let publisher = BuiltinPublisher(stateRoot: fixture.stateRoot, environment: environment)
+        let receipt = try publisher.validate(ValidationRequest(
+            repository: "acme/widgets",
+            issueNumber: 42,
+            configRevision: config.revision,
+            validationProfile: "default",
+            baseSHA: prepared.baseSHA,
+            inspection: inspection,
+            git: prepared.git,
+            limits: config.worker.limits,
+            artifactStore: artifacts,
+            timeoutSeconds: 300
+        ))
+        try ledger.recordValidatedSHA(runID: run.id, sha: receipt.headSHA, receiptID: receipt.id)
+        try ledger.recordPublicationIntent(
+            runID: run.id,
+            branch: prepared.branch,
+            baseSHA: prepared.baseSHA,
+            headSHA: receipt.headSHA
+        )
+        _ = try ledger.transition(runID: run.id, to: .publishing)
+        _ = try prepared.git.pushFreshBranch(expectedSHA: receipt.headSHA)
+
+        let service = RunService(config: config, ledger: ledger, environment: environment)
+        try service.reconcilePublishingRuns()
+
+        let reconciled = try ledger.run(id: run.id)
+        XCTAssertEqual(reconciled.state, .prOpened, "post-publication cleanup failure must not reclassify a recorded draft PR")
+        XCTAssertNil(reconciled.failureCode)
+        XCTAssertEqual(reconciled.prNumber, 23)
+        XCTAssertEqual(reconciled.prURL, "https://github.com/acme/widgets/pull/23")
+        XCTAssertEqual(reconciled.prIsDraft, true)
+        XCTAssertNil(try ledger.currentHostClaim(), "host claim must still be released after a deferred cleanup")
+
+        let dispositions = try ledger.events(runID: run.id).filter { $0.kind == "workspace_disposition" }.compactMap(\.detail)
+        XCTAssertTrue(
+            dispositions.contains { $0.hasPrefix("clean_published_release_deferred") },
+            "cleanup failure must be recorded as a deferred observation, got \(dispositions)"
+        )
+    }
+
     func testReconciliationIsolatesEachCandidateAndNeverBlocksTheBatch() throws {
         // Per-run isolation: a candidate that fails reconciliation must be marked failed,
         // release its host claim, and never abort the loop for the candidates queued behind it.

@@ -391,26 +391,26 @@ public struct RunService: Sendable {
                     url: publication.prURL,
                     isDraft: publication.isDraft
                 )
-                try ledger.appendObservation(runID: run.id, kind: "ci_status_recorded", detail: publication.ciStatus)
-                guard let backend = WorkspaceBackend(rawValue: frozenConfig.worker.workspaceBackend) else {
-                    throw WorkspaceError.commandFailed("frozen workspace backend is invalid")
-                }
-                let manager = try workspaceManager(
-                    backend: backend,
-                    stateRoot: config.worker.stateRoot,
-                    environment: environment
-                )
-                try ledger.appendObservation(runID: run.id, kind: "workspace_disposition", detail: "clean_published_release_pending")
+                try? ledger.appendObservation(runID: run.id, kind: "ci_status_recorded", detail: publication.ciStatus)
+                try? ledger.appendObservation(runID: run.id, kind: "workspace_disposition", detail: "clean_published_release_pending")
                 _ = try ledger.transition(runID: run.id, to: .prOpened, detail: "publication reconciled")
                 do {
+                    guard let backend = WorkspaceBackend(rawValue: frozenConfig.worker.workspaceBackend) else {
+                        throw WorkspaceError.commandFailed("frozen workspace backend is invalid")
+                    }
+                    let manager = try workspaceManager(
+                        backend: backend,
+                        stateRoot: config.worker.stateRoot,
+                        environment: environment
+                    )
                     try manager.releaseCleanPublished(lease: lease, publicationReceipt: publication)
-                    try ledger.appendObservation(runID: run.id, kind: "workspace_disposition", detail: "clean_published_released")
+                    try? ledger.appendObservation(runID: run.id, kind: "workspace_disposition", detail: "clean_published_released")
                 } catch {
-                    try ledger.appendObservation(runID: run.id, kind: "workspace_disposition", detail: "clean_published_release_deferred:\(error)")
+                    try? ledger.appendObservation(runID: run.id, kind: "workspace_disposition", detail: "clean_published_release_deferred:\(error)")
                 }
-                if try ledger.currentHostClaim()?.runID == run.id {
+                if (try? ledger.currentHostClaim())??.runID == run.id {
                     do { try ledger.releaseHostClaim(runID: run.id) }
-                    catch { try ledger.appendObservation(runID: run.id, kind: "host_release_deferred", detail: String(describing: error)) }
+                    catch { try? ledger.appendObservation(runID: run.id, kind: "host_release_deferred", detail: String(describing: error)) }
                 }
                 _ = patchPath
             } catch {
@@ -585,14 +585,14 @@ public struct WorkerRunPipeline: RunExecutionDriving {
                 url: publication.prURL,
                 isDraft: publication.isDraft
             )
-            try ledger.appendObservation(runID: context.run.id, kind: "ci_status_recorded", detail: publication.ciStatus)
-            try ledger.appendObservation(runID: context.run.id, kind: "workspace_disposition", detail: "clean_published_release_pending")
+            try? ledger.appendObservation(runID: context.run.id, kind: "ci_status_recorded", detail: publication.ciStatus)
+            try? ledger.appendObservation(runID: context.run.id, kind: "workspace_disposition", detail: "clean_published_release_pending")
             _ = try ledger.transition(runID: context.run.id, to: .prOpened)
             do {
                 try selectedManager.releaseCleanPublished(lease: acquired, publicationReceipt: publication)
-                try ledger.appendObservation(runID: context.run.id, kind: "workspace_disposition", detail: "clean_published_released")
+                try? ledger.appendObservation(runID: context.run.id, kind: "workspace_disposition", detail: "clean_published_released")
             } catch {
-                try ledger.appendObservation(
+                try? ledger.appendObservation(
                     runID: context.run.id,
                     kind: "workspace_disposition",
                     detail: "clean_published_release_deferred:\(error)"
@@ -600,7 +600,7 @@ public struct WorkerRunPipeline: RunExecutionDriving {
             }
             do { try ledger.releaseHostClaim(runID: context.run.id) }
             catch {
-                try ledger.appendObservation(
+                try? ledger.appendObservation(
                     runID: context.run.id,
                     kind: "host_release_deferred",
                     detail: String(describing: error)
