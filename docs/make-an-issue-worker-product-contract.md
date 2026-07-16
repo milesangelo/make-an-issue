@@ -616,6 +616,10 @@ The adapter therefore:
 
 - runs Treehouse against the worker-owned repository store with an isolated worker HOME/config so
   user-level Treehouse shell hooks are not inherited;
+- supplies only its worker-owned Treehouse/git operations a short-lived credential helper sourced
+  at run time from `gh auth token` (via ephemeral `GIT_CONFIG_*` variables) so private HTTPS
+  repository stores fetch successfully — without persisting the token or changing global git
+  configuration — and fails with a `gh auth login` instruction when no credential is available;
 - acquires with `get --lease` and records the returned canonical path;
 - never calls `return --force` or `destroy`;
 - does not call normal `return` for dirty, failed, unvalidated, or unpublished work;
