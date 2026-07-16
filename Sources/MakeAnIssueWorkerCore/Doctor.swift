@@ -245,7 +245,14 @@ public struct Doctor: Sendable {
         case .codexOSS: authArguments = nil
         }
         if let authArguments {
-            let result = providerAuthProbe(provider, arguments: authArguments)
+            // Only kinds with a runtime adapter (today just claude-code) run under the adapter's
+            // sandboxed HOME/PATH/env, so their auth probe must use that same sandbox to prove
+            // parity. Kinds without an adapter never run sandboxed, so they keep the full
+            // supervisor-environment probe. Each future runtime adapter must bring its own
+            // probe-env parity here when it lands.
+            let result = provider.kind.hasRuntimeAdapter
+                ? providerAuthProbe(provider, arguments: authArguments)
+                : commands.run(executable: provider.executable.path, arguments: authArguments)
             let auth = providerAuthResult(provider.kind, result: result)
             append(DoctorCheck(
                 name: "provider \(provider.id) auth",

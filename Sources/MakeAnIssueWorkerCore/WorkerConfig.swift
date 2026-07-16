@@ -7,6 +7,13 @@ public enum ProviderKind: String, Codable, CaseIterable, Sendable {
     case claudeCode = "claude-code"
     case codex
     case codexOSS = "codex-oss"
+
+    public var hasRuntimeAdapter: Bool {
+        switch self {
+        case .claudeCode: return true
+        case .codex, .codexOSS: return false
+        }
+    }
 }
 
 public enum WorkspaceBackend: String, Codable, Sendable {

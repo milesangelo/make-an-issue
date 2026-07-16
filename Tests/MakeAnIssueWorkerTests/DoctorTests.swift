@@ -165,6 +165,55 @@ final class DoctorTests: XCTestCase {
         XCTAssertEqual(report.checks.first { $0.name == "provider claude-primary auth" }?.detail, "authenticated via token")
     }
 
+    func testCodexAuthProbeUsesFullSupervisorEnvironment() throws {
+        let fixture = try ConfigFixture()
+        let provider = try writeExecutable(
+            in: fixture.root,
+            name: "codex-auth-provider",
+            body: """
+            if [ "${1-}" = login ] && [ "${2-}" = status ] \\
+                && [ "${HOME}" = /interactive-home ] \\
+                && [ "${UNRELATED_SESSION_VALUE-unset}" = present ]; then
+              printf 'logged in\\n'; exit 0
+            fi
+            printf 'unexpected sandbox environment\\n' >&2
+            exit 1
+            """
+        )
+        var config = try String(contentsOf: fixture.configURL, encoding: .utf8)
+        config = config.replacingOccurrences(
+            of: "[[agents]]",
+            with: """
+            [[providers]]
+            id = "codex-secondary"
+            kind = "codex"
+            executable = "\(provider.path)"
+            argv = []
+            timeout_seconds = 2700
+
+            [[agents]]
+            """,
+            options: [],
+            range: config.range(of: "[[agents]]")
+        )
+        try Data(config.utf8).write(to: fixture.configURL, options: .atomic)
+
+        let commands = FixtureCommandRunner(
+            fixtureExecutable: provider.path,
+            fallback: passingCommands(capabilities: CommandResult(exitCode: 2)),
+            environment: ["HOME": "/interactive-home", "UNRELATED_SESSION_VALUE": "present"]
+        )
+
+        let report = Doctor(
+            commands: commands,
+            stateRoot: FakeStateRootProbe(result: .success(fixture.stateRoot.path)),
+            supervisorEnvironment: ["CLAUDE_CODE_OAUTH_TOKEN": "fixture-token", "UNRELATED_SESSION_VALUE": "present"]
+        ).run(configURL: fixture.configURL)
+
+        XCTAssertEqual(report.checks.first { $0.name == "provider codex-secondary auth" }?.status, .pass)
+        XCTAssertEqual(report.checks.first { $0.name == "provider codex-secondary auth" }?.detail, "logged in")
+    }
+
     func testChecksAreEmittedAsEachProbeCompletes() throws {
         let fixture = try ConfigFixture()
         let events = EventLog()
