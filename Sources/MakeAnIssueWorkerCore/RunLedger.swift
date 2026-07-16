@@ -501,8 +501,53 @@ public final class RunLedger: @unchecked Sendable {
         "id, repository, issue_number, issue_url, config_revision, route_id, agent_id, trigger_kind, state, failure_code, base_sha, branch_name, workspace_id, workspace_path, provider_pid, provider_exit, patch_path, log_dir, validated_sha, remote_branch_sha, pr_number, pr_url, pr_is_draft, created_at, claimed_at, updated_at, finished_at"
     }
 
+    private static let currentSchemaVersion: Int64 = 2
+
     private func migrate() throws {
-        try executeScript(
+        let existingVersion = try scalarInt64("PRAGMA user_version", [])
+        guard existingVersion <= Self.currentSchemaVersion else {
+            throw LedgerError.sqlite(
+                "worker ledger schema version \(existingVersion) is newer than this build supports "
+                    + "(\(Self.currentSchemaVersion)); refusing to start"
+            )
+        }
+        try transaction(immediate: true) {
+            try executeScript(Self.schemaScript)
+            try addMissingRunColumns()
+            try executeScript("PRAGMA user_version=\(Self.currentSchemaVersion);")
+        }
+    }
+
+    /// Additive migration for ledgers created before `runs` carried the publisher columns. Every
+    /// column is nullable, so `ALTER TABLE ADD COLUMN` preserves all existing runs/events/artifacts
+    /// rows and only backfills the missing surface with NULL defaults.
+    private func addMissingRunColumns() throws {
+        let existing = try runColumnNames()
+        let additive: [(name: String, type: String)] = [
+            ("base_sha", "TEXT"), ("branch_name", "TEXT"), ("workspace_id", "TEXT"),
+            ("workspace_path", "TEXT"), ("provider_pid", "INTEGER"), ("provider_exit", "INTEGER"),
+            ("patch_path", "TEXT"), ("log_dir", "TEXT"), ("validated_sha", "TEXT"),
+            ("remote_branch_sha", "TEXT"), ("pr_number", "INTEGER"), ("pr_url", "TEXT"),
+            ("pr_is_draft", "INTEGER"),
+        ]
+        for column in additive where !existing.contains(column.name) {
+            try execute("ALTER TABLE runs ADD COLUMN \(column.name) \(column.type)")
+        }
+    }
+
+    private func runColumnNames() throws -> Set<String> {
+        var statement: OpaquePointer?
+        try prepare("PRAGMA table_info(runs)", &statement)
+        defer { sqlite3_finalize(statement) }
+        var names: Set<String> = []
+        while sqlite3_step(statement) == SQLITE_ROW {
+            if let name = columnText(statement, 1) { names.insert(name) }
+        }
+        try checkStatement(statement)
+        return names
+    }
+
+    private static let schemaScript =
             """
             CREATE TABLE IF NOT EXISTS run_groups(
                 id INTEGER PRIMARY KEY,
@@ -618,11 +663,7 @@ public final class RunLedger: @unchecked Sendable {
                 (OLD.state = 'publishing' AND NEW.state IN ('pr_opened', 'failed'))
             )
             BEGIN SELECT RAISE(ABORT, 'invalid run state transition'); END;
-
-            PRAGMA user_version=1;
             """
-        )
-    }
 
     private func insertEvent(
         runID: String,

@@ -7,6 +7,7 @@ public enum GitSafetyError: Error, Equatable, CustomStringConvertible, Sendable 
     case defaultBranchMutation(String)
     case unexpectedBranch(expected: String, observed: String)
     case branchExists(String)
+    case protectedSurfaceTampered(String)
     case commandFailed(String)
 
     public var description: String {
@@ -15,6 +16,7 @@ public enum GitSafetyError: Error, Equatable, CustomStringConvertible, Sendable 
         case .defaultBranchMutation(let value): return "default branch mutation rejected: \(value)"
         case .unexpectedBranch(let expected, let observed): return "expected branch \(expected), observed \(observed)"
         case .branchExists(let value): return "remote branch already exists: \(value)"
+        case .protectedSurfaceTampered(let surface): return "provider tampered with protected git surface: \(surface)"
         case .commandFailed(let value): return value
         }
     }
@@ -91,8 +93,14 @@ public struct GitSupervisor: Sendable {
 
     public func verifyMetadataUnchanged(from snapshot: GitMetadataSnapshot) throws {
         let observed = try snapshotMetadata()
-        guard observed == snapshot else {
-            throw GitSafetyError.commandFailed("provider modified git metadata, refs, HEAD, or remotes")
+        if observed.headSHA != snapshot.headSHA { throw GitSafetyError.protectedSurfaceTampered("HEAD") }
+        if observed.refs != snapshot.refs { throw GitSafetyError.protectedSurfaceTampered("refs") }
+        if observed.config != snapshot.config {
+            throw GitSafetyError.protectedSurfaceTampered("config (including core.hooksPath and remote URLs)")
+        }
+        if observed.remotes != snapshot.remotes { throw GitSafetyError.protectedSurfaceTampered("remotes") }
+        if observed.protectedFilesDigest != snapshot.protectedFilesDigest {
+            throw GitSafetyError.protectedSurfaceTampered("protected files (HEAD, config, packed-refs, hooks)")
         }
     }
 
@@ -172,7 +180,6 @@ public struct GitSupervisor: Sendable {
             : workspace.appendingPathComponent(commonValue).standardizedFileURL
         var candidates = [
             gitDirectory.appendingPathComponent("HEAD"),
-            gitDirectory.appendingPathComponent("index"),
             commonDirectory.appendingPathComponent("config"),
             commonDirectory.appendingPathComponent("packed-refs"),
         ]

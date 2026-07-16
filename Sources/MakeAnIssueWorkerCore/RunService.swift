@@ -514,7 +514,11 @@ public struct WorkerRunPipeline: RunExecutionDriving {
             guard provider.exitCode == 0, !provider.timedOut else {
                 throw PipelineFailure(code: "provider_failed_retained", detail: concise(provider.stderrString))
             }
-            try git.verifyMetadataUnchanged(from: metadata)
+            do {
+                try git.verifyMetadataUnchanged(from: metadata)
+            } catch let error as GitSafetyError {
+                throw PipelineFailure(code: "provider_tampered_protected_git_surface_retained", detail: error.description)
+            }
             _ = try ledger.transition(runID: context.run.id, to: .validating)
 
             let inspection: DiffInspection

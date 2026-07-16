@@ -98,6 +98,37 @@ final class WorkspacePublisherSafetyTests: XCTestCase {
         }
     }
 
+    func testProviderIndexStagingIsAllowedButProtectedSurfaceTamperingIsLabeled() throws {
+        try withPreparedWorkspace(gitTimeoutSeconds: loadTolerantGitTimeoutSeconds) { workspace, _, _, git in
+            let baseline = try git.snapshotMetadata()
+
+            // A provider staging its own edits (git add) is explicitly permitted and must not be
+            // mistaken for tampering with the protected git surface.
+            try Data("provider change\n".utf8).write(to: workspace.appendingPathComponent("change.txt"))
+            try runProcess(
+                "/usr/bin/git",
+                ["add", "--all"],
+                cwd: workspace,
+                timeoutSeconds: loadTolerantGitTimeoutSeconds
+            )
+            XCTAssertNoThrow(try git.verifyMetadataUnchanged(from: baseline))
+
+            // Tampering with a protected surface (here: refs) is rejected with a specific label.
+            try runProcess(
+                "/usr/bin/git",
+                ["update-ref", "refs/heads/injected", "HEAD"],
+                cwd: workspace,
+                timeoutSeconds: loadTolerantGitTimeoutSeconds
+            )
+            XCTAssertThrowsError(try git.verifyMetadataUnchanged(from: baseline)) { error in
+                guard case GitSafetyError.protectedSurfaceTampered(let surface) = error else {
+                    return XCTFail("expected protectedSurfaceTampered, got \(error)")
+                }
+                XCTAssertEqual(surface, "refs")
+            }
+        }
+    }
+
     func testReconciliationRejectsNonDraftPullRequest() throws {
         let fixture = try ConfigFixture(publisherBackend: "builtin", workspaceBackend: "builtin")
         let origin = try makeBareOrigin(root: fixture.root)

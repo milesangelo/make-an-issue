@@ -44,6 +44,25 @@ final class ProcessExecutorTests: XCTestCase {
         XCTAssertLessThan(elapsed, 20, "timeout must terminate the child and return without hanging on pipe drain")
     }
 
+    func testDrainDoesNotDeadlockWhenDescendantHoldsPipeAfterChildExit() throws {
+        // The direct child exits promptly (exit 0) but leaves a backgrounded descendant holding the
+        // stdout write-end open. Without a bounded drain, outputGroup.wait() would block until the
+        // descendant exits. The bounded drain must return near the grace window while still
+        // capturing the output produced before the child exited.
+        let start = Date()
+        let execution = FoundationProcessExecutor().execute(ProcessRequest(
+            executable: "/bin/sh",
+            arguments: ["-c", "echo parent-output; /bin/sleep 30 & exit 0"],
+            timeoutSeconds: 30,
+            terminationGraceSeconds: 1
+        ))
+        let elapsed = Date().timeIntervalSince(start)
+        XCTAssertLessThan(elapsed, 20, "an escaped descendant holding the pipe must not deadlock the drain after child exit")
+        XCTAssertFalse(execution.timedOut, "a promptly-exiting child must not be reported as timed out")
+        XCTAssertEqual(execution.exitCode, 0)
+        XCTAssertTrue(execution.stdoutString.contains("parent-output"), "output produced before exit must still be captured")
+    }
+
     func testTimeoutTerminatesChildAndDescendants() throws {
         let start = Date()
         let execution = FoundationProcessExecutor().execute(ProcessRequest(
