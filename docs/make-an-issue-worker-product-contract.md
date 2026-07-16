@@ -486,6 +486,11 @@ process group. Provider stdout/stderr are untrusted bytes: logs are length-bound
 display; provider output never supplies a command, path, branch, commit message, PR title, or
 publication decision without supervisor validation.
 
+Provider commands run with a fresh sandboxed `HOME` and only the configured authentication
+allowlist, rather than the interactive shell environment. For Claude Code, export
+`CLAUDE_CODE_OAUTH_TOKEN` before launching the worker (for example, obtain one with
+`claude setup-token`); an interactive `claude.ai` login is not available inside the sandbox.
+
 On timeout or cancellation, send SIGTERM to the positive process-group ID, wait
 `provider_grace_seconds`, then SIGKILL the still-live group. The supervisor waits for process exit
 before inspecting the workspace.

@@ -5,24 +5,57 @@ public struct CommandResult: Equatable, Sendable {
     public let exitCode: Int32
     public let stdout: String
     public let stderr: String
+    public let timedOut: Bool
+    public let timeoutSeconds: Int?
 
-    public init(exitCode: Int32, stdout: String = "", stderr: String = "") {
+    public init(
+        exitCode: Int32,
+        stdout: String = "",
+        stderr: String = "",
+        timedOut: Bool = false,
+        timeoutSeconds: Int? = nil
+    ) {
         self.exitCode = exitCode
         self.stdout = stdout
         self.stderr = stderr
+        self.timedOut = timedOut
+        self.timeoutSeconds = timeoutSeconds
     }
 }
 
 public protocol CommandRunning: Sendable {
     func resolveExecutable(_ name: String) -> String?
     func run(executable: String, arguments: [String]) -> CommandResult
+    func run(executable: String, arguments: [String], environment: [String: String]) -> CommandResult
+    func run(executable: String, arguments: [String], environment: [String: String], workingDirectory: URL?) -> CommandResult
+}
+
+public extension CommandRunning {
+    func run(executable: String, arguments: [String], environment: [String: String]) -> CommandResult {
+        run(executable: executable, arguments: arguments)
+    }
+
+    func run(executable: String, arguments: [String], environment: [String: String], workingDirectory: URL?) -> CommandResult {
+        run(executable: executable, arguments: arguments, environment: environment)
+    }
 }
 
 public struct ProcessCommandRunner: CommandRunning {
     private let environment: [String: String]
+    private let processes: any ProcessExecuting
+    private let probeTimeoutSeconds: Int
 
-    public init(environment: [String: String] = ProcessInfo.processInfo.environment) {
+    /// Every doctor subprocess gets a 20-second wall-clock budget so capability probes cannot stall the CLI.
+    public static let probeTimeoutSeconds = 20
+
+    public init(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        processes: any ProcessExecuting = FoundationProcessExecutor(),
+        probeTimeoutSeconds: Int = Self.probeTimeoutSeconds
+    ) {
         self.environment = environment
+        self.processes = processes
+        self.probeTimeoutSeconds = probeTimeoutSeconds
     }
 
     public func resolveExecutable(_ name: String) -> String? {
@@ -37,35 +70,28 @@ public struct ProcessCommandRunner: CommandRunning {
     }
 
     public func run(executable: String, arguments: [String]) -> CommandResult {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: executable)
-        process.arguments = arguments
-        process.environment = environment
-        let stdout = Pipe()
-        let stderr = Pipe()
-        process.standardOutput = stdout
-        process.standardError = stderr
-        do {
-            try process.run()
-            let group = DispatchGroup()
-            nonisolated(unsafe) var stdoutData = Data()
-            nonisolated(unsafe) var stderrData = Data()
-            DispatchQueue.global().async(group: group) {
-                stdoutData = stdout.fileHandleForReading.readDataToEndOfFile()
-            }
-            DispatchQueue.global().async(group: group) {
-                stderrData = stderr.fileHandleForReading.readDataToEndOfFile()
-            }
-            process.waitUntilExit()
-            group.wait()
-            return CommandResult(
-                exitCode: process.terminationStatus,
-                stdout: String(decoding: stdoutData.prefix(1024 * 1024), as: UTF8.self),
-                stderr: String(decoding: stderrData.prefix(1024 * 1024), as: UTF8.self)
-            )
-        } catch {
-            return CommandResult(exitCode: -1, stderr: error.localizedDescription)
-        }
+        run(executable: executable, arguments: arguments, environment: environment)
+    }
+
+    public func run(executable: String, arguments: [String], environment: [String: String]) -> CommandResult {
+        run(executable: executable, arguments: arguments, environment: environment, workingDirectory: nil)
+    }
+
+    public func run(executable: String, arguments: [String], environment: [String: String], workingDirectory: URL?) -> CommandResult {
+        let execution = processes.execute(ProcessRequest(
+            executable: executable,
+            arguments: arguments,
+            workingDirectory: workingDirectory,
+            environment: environment,
+            timeoutSeconds: probeTimeoutSeconds
+        ))
+        return CommandResult(
+            exitCode: execution.exitCode,
+            stdout: execution.stdoutString,
+            stderr: execution.stderrString,
+            timedOut: execution.timedOut,
+            timeoutSeconds: execution.timedOut ? probeTimeoutSeconds : nil
+        )
     }
 }
 
@@ -121,15 +147,17 @@ public struct DoctorReport: Sendable {
     public var hasBlockingIssues: Bool { checks.contains { $0.status == .blocking } }
 
     public func humanReadable() -> String {
-        checks.map { check in
-            let marker: String
-            switch check.status {
-            case .pass: marker = "✓"
-            case .warning: marker = "!"
-            case .blocking: marker = "✗"
-            }
-            return "\(marker) \(check.name): \(check.detail)"
-        }.joined(separator: "\n")
+        checks.map(Self.humanReadable).joined(separator: "\n")
+    }
+
+    public static func humanReadable(_ check: DoctorCheck) -> String {
+        let marker: String
+        switch check.status {
+        case .pass: marker = "✓"
+        case .warning: marker = "!"
+        case .blocking: marker = "✗"
+        }
+        return "\(marker) \(check.name): \(check.detail)"
     }
 }
 
@@ -159,77 +187,106 @@ public struct Doctor: Sendable {
     private let configLoader: ConfigLoader
     private let commands: any CommandRunning
     private let stateRoot: any StateRootProbing
+    private let supervisorEnvironment: [String: String]
 
     public init(
         configLoader: ConfigLoader = ConfigLoader(),
         commands: any CommandRunning = ProcessCommandRunner(),
-        stateRoot: any StateRootProbing = StateRootProbe()
+        stateRoot: any StateRootProbing = StateRootProbe(),
+        supervisorEnvironment: [String: String] = ProcessInfo.processInfo.environment
     ) {
         self.configLoader = configLoader
         self.commands = commands
         self.stateRoot = stateRoot
+        self.supervisorEnvironment = supervisorEnvironment
     }
 
-    public func run(configURL: URL) -> DoctorReport {
+    public func run(configURL: URL, onCheck: (DoctorCheck) -> Void = { _ in }) -> DoctorReport {
         let config: WorkerConfigSnapshot
         do {
             config = try configLoader.load(from: configURL)
         } catch {
-            return DoctorReport(
-                checks: [DoctorCheck(name: "config", status: .blocking, detail: String(describing: error))],
-                config: nil
-            )
+            let check = DoctorCheck(name: "config", status: .blocking, detail: String(describing: error))
+            onCheck(check)
+            return DoctorReport(checks: [check], config: nil)
         }
 
-        var checks = [
-            DoctorCheck(
-                name: "config",
-                status: .pass,
-                detail: "schema v\(config.schemaVersion), revision \(config.revision.prefix(12))"
-            )
-        ]
-        checks.append(contentsOf: providerChecks(config.providers))
-        checks.append(workspaceCheck(config.worker.workspaceBackend))
-        checks.append(contentsOf: publisherChecks(config.worker.publisherBackend))
-        checks.append(ghCheck())
-        checks.append(stateRootCheck(config.worker.stateRoot))
+        var checks = [DoctorCheck]()
+        func append(_ check: DoctorCheck) {
+            checks.append(check)
+            onCheck(check)
+        }
+
+        append(DoctorCheck(
+            name: "config",
+            status: .pass,
+            detail: "schema v\(config.schemaVersion), revision \(config.revision.prefix(12))"
+        ))
+        for provider in config.providers {
+            providerChecks(provider, append: append)
+        }
+        append(workspaceCheck(config.worker.workspaceBackend))
+        publisherChecks(config.worker.publisherBackend, append: append)
+        append(ghCheck())
+        append(stateRootCheck(config.worker.stateRoot))
         return DoctorReport(checks: checks, config: config)
     }
 
-    private func providerChecks(_ providers: [ProviderConfig]) -> [DoctorCheck] {
-        providers.flatMap { provider in
-            var checks = [DoctorCheck(
-                name: "provider \(provider.id) executable",
-                status: FileManager.default.isExecutableFile(atPath: provider.executable.path) ? .pass : .blocking,
-                detail: provider.executable.path
-            )]
-            let authArguments: [String]?
-            switch provider.kind {
-            case .claudeCode: authArguments = ["auth", "status"]
-            case .codex: authArguments = ["login", "status"]
-            case .codexOSS: authArguments = nil
-            }
-            if let authArguments {
-                let result = commands.run(executable: provider.executable.path, arguments: authArguments)
-                let auth = providerAuthResult(provider.kind, result: result)
-                checks.append(
-                    DoctorCheck(
-                        name: "provider \(provider.id) auth",
-                        status: auth.authenticated ? .pass : .blocking,
-                        detail: auth.detail
-                    )
-                )
-            } else {
-                checks.append(
-                    DoctorCheck(
-                        name: "provider \(provider.id) auth",
-                        status: .pass,
-                        detail: "not required by the codex-oss adapter; endpoint credentials are adapter configuration"
-                    )
-                )
-            }
-            return checks
+    private func providerChecks(_ provider: ProviderConfig, append: (DoctorCheck) -> Void) {
+        append(DoctorCheck(
+            name: "provider \(provider.id) executable",
+            status: FileManager.default.isExecutableFile(atPath: provider.executable.path) ? .pass : .blocking,
+            detail: provider.executable.path
+        ))
+        let authArguments: [String]?
+        switch provider.kind {
+        case .claudeCode: authArguments = ["auth", "status"]
+        case .codex: authArguments = ["login", "status"]
+        case .codexOSS: authArguments = nil
         }
+        if let authArguments {
+            let result = providerAuthProbe(provider, arguments: authArguments)
+            let auth = providerAuthResult(provider.kind, result: result)
+            append(DoctorCheck(
+                name: "provider \(provider.id) auth",
+                status: auth.authenticated ? .pass : .blocking,
+                detail: auth.detail
+            ))
+        } else {
+            append(DoctorCheck(
+                name: "provider \(provider.id) auth",
+                status: .pass,
+                detail: "not required by the codex-oss adapter; endpoint credentials are adapter configuration"
+            ))
+        }
+    }
+
+    private func providerAuthProbe(_ provider: ProviderConfig, arguments: [String]) -> CommandResult {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("make-an-issue-doctor-\(UUID().uuidString)", isDirectory: true)
+        let home = root.appendingPathComponent("provider-home", isDirectory: true)
+        let temporary = root.appendingPathComponent("provider-tmp", isDirectory: true)
+        let workspace = root.appendingPathComponent("workspace", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        do {
+            try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(at: temporary, withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(at: workspace, withIntermediateDirectories: true)
+            chmod(home.path, 0o700)
+            chmod(temporary.path, 0o700)
+        } catch {
+            return CommandResult(exitCode: -1, stderr: error.localizedDescription)
+        }
+        return commands.run(
+            executable: provider.executable.path,
+            arguments: arguments,
+            environment: WorkerEnvironment.provider(
+                home: home,
+                temporaryDirectory: temporary,
+                workspace: workspace,
+                supervisorEnvironment: supervisorEnvironment
+            ),
+            workingDirectory: workspace
+        )
     }
 
     private func workspaceCheck(_ backend: WorkspaceBackend) -> DoctorCheck {
@@ -243,30 +300,43 @@ public struct Doctor: Sendable {
         return DoctorCheck(
             name: "workspace backend",
             status: result.exitCode == 0 ? .pass : .blocking,
-            detail: result.exitCode == 0 ? concise(result.stdout, fallback: executable) : concise(result.stderr, fallback: "treehouse version probe failed")
+            detail: result.timedOut ? timeoutDetail(result) : (result.exitCode == 0 ? concise(result.stdout, fallback: executable) : concise(result.stderr, fallback: "treehouse version probe failed"))
         )
     }
 
-    private func publisherChecks(_ backend: PublisherBackend) -> [DoctorCheck] {
+    private func publisherChecks(_ backend: PublisherBackend, append: (DoctorCheck) -> Void) {
         if backend == .builtin {
             let capabilities = BuiltinPublisher(stateRoot: FileManager.default.temporaryDirectory).capabilities()
-            return [DoctorCheck(
+            append(DoctorCheck(
                 name: "publisher backend",
                 status: capabilities.satisfiesContract ? .pass : .blocking,
                 detail: capabilities.satisfiesContract
                     ? "builtin selected; executable capability probe proves validation, no-force, artifact, draft, and reconciliation support"
                     : "builtin capability probe failed"
-            )]
+            ))
+            return
         }
         guard let executable = commands.resolveExecutable("no-mistakes") else {
             if backend == .auto {
-                return [DoctorCheck(name: "publisher backend", status: .pass, detail: "builtin selected under auto; no-mistakes is not installed")]
+                append(DoctorCheck(name: "publisher backend", status: .pass, detail: "builtin selected under auto; no-mistakes is not installed"))
+                return
             }
-            return [DoctorCheck(name: "publisher backend", status: .blocking, detail: "no-mistakes is selected but not found on PATH")]
+            append(DoctorCheck(name: "publisher backend", status: .blocking, detail: "no-mistakes is selected but not found on PATH"))
+            return
         }
 
         let version = commands.run(executable: executable, arguments: ["--version"])
         let capability = commands.run(executable: executable, arguments: ["publisher-capabilities", "--json"])
+        if version.timedOut || capability.timedOut {
+            let check = DoctorCheck(
+                name: "publisher backend",
+                status: backend == .auto ? .warning : .blocking,
+                detail: "no-mistakes probe \(timeoutDetail(version.timedOut ? version : capability))"
+                    + (backend == .auto ? "; builtin selected under auto" : "; explicit no-mistakes selection fails closed")
+            )
+            append(check)
+            return
+        }
         let capabilities = capability.exitCode == 0
             ? try? JSONDecoder().decode(DoctorPublisherCapabilities.self, from: Data(capability.stdout.utf8))
             : nil
@@ -275,13 +345,15 @@ public struct Doctor: Sendable {
             ? versionText
             : "no-mistakes \(versionText)"
         if capabilities?.satisfiesContract == true {
-            return [DoctorCheck(name: "publisher backend", status: .pass, detail: "\(versionLabel) proved all required capabilities including draft PR creation")]
+            append(DoctorCheck(name: "publisher backend", status: .pass, detail: "\(versionLabel) proved all required capabilities including draft PR creation"))
+            return
         }
         let missing = "\(versionLabel) did not prove draft PR creation, token isolation, no-force publication, artifact export, and startup reconciliation"
         if backend == .auto {
-            return [DoctorCheck(name: "publisher backend", status: .warning, detail: "\(missing); builtin selected under auto")]
+            append(DoctorCheck(name: "publisher backend", status: .warning, detail: "\(missing); builtin selected under auto"))
+            return
         }
-        return [DoctorCheck(name: "publisher backend", status: .blocking, detail: "\(missing); explicit no-mistakes selection fails closed")]
+        append(DoctorCheck(name: "publisher backend", status: .blocking, detail: "\(missing); explicit no-mistakes selection fails closed"))
     }
 
     private func ghCheck() -> DoctorCheck {
@@ -292,7 +364,7 @@ public struct Doctor: Sendable {
         return DoctorCheck(
             name: "gh auth",
             status: result.exitCode == 0 ? .pass : .blocking,
-            detail: result.exitCode == 0 ? "authenticated" : concise(result.stderr, fallback: "gh auth status failed")
+            detail: result.timedOut ? timeoutDetail(result) : (result.exitCode == 0 ? "authenticated" : concise(result.stderr, fallback: "gh auth status failed"))
         )
     }
 
@@ -307,7 +379,12 @@ public struct Doctor: Sendable {
         _ kind: ProviderKind,
         result: CommandResult
     ) -> (authenticated: Bool, detail: String) {
+        if result.timedOut { return (false, timeoutDetail(result)) }
         guard result.exitCode == 0 else {
+            if kind == .claudeCode {
+                let status = concise(result.stderr, fallback: "Claude Code is not authenticated in the worker sandbox")
+                return (false, "\(status); export CLAUDE_CODE_OAUTH_TOKEN (for example: `claude setup-token`)")
+            }
             return (false, concise(result.stderr, fallback: "authentication check failed"))
         }
         if kind == .claudeCode,
@@ -316,7 +393,7 @@ public struct Doctor: Sendable {
                 status.loggedIn,
                 status.loggedIn
                     ? "authenticated\(status.authMethod.map { " via \($0)" } ?? "")"
-                    : "Claude Code reports loggedIn=false"
+                    : "Claude Code is not authenticated in the worker sandbox; export CLAUDE_CODE_OAUTH_TOKEN (for example: `claude setup-token`)"
             )
         }
         return (true, concise(result.stdout, fallback: "authenticated"))
@@ -325,6 +402,10 @@ public struct Doctor: Sendable {
     private func concise(_ value: String, fallback: String) -> String {
         let line = value.split(whereSeparator: \.isNewline).first.map(String.init)?.trimmingCharacters(in: .whitespaces)
         return line?.isEmpty == false ? line! : fallback
+    }
+
+    private func timeoutDetail(_ result: CommandResult) -> String {
+        "timed out after \(result.timeoutSeconds ?? ProcessCommandRunner.probeTimeoutSeconds)s"
     }
 }
 
