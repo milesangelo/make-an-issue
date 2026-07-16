@@ -283,7 +283,7 @@ final class WorkspacePublisherSafetyTests: XCTestCase {
         let gh = fixture.root.appendingPathComponent("gh")
         try Data("""
         #!/bin/sh
-        if [ "$GIT_CONFIG_KEY_0" = credential.helper ] && [ "$MAI_TREEHOUSE_GIT_TOKEN" = gho_fixture_token ] && echo "$GIT_CONFIG_VALUE_0" | /usr/bin/grep -q '\\$MAI_TREEHOUSE_GIT_TOKEN'; then
+        if [ "$GIT_CONFIG_NOSYSTEM" = 1 ] && [ "$GIT_CONFIG_GLOBAL" = /dev/null ] && [ "$GIT_CONFIG_KEY_0" = credential.helper ] && [ "$MAI_TREEHOUSE_GIT_TOKEN" = gho_fixture_token ] && echo "$GIT_CONFIG_VALUE_0" | /usr/bin/grep -q '\\$MAI_TREEHOUSE_GIT_TOKEN'; then
           exit 0
         fi
         echo 'missing treehouse git credential helper' >&2

@@ -383,6 +383,8 @@ public struct TreehouseWorkspaceManager: WorkspaceManaging {
         }
         return WorkerEnvironment.minimal(home: home, path: path, extra: [
             "MAI_TREEHOUSE_GIT_TOKEN": token,
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_CONFIG_GLOBAL": "/dev/null",
             "GIT_CONFIG_COUNT": "1",
             "GIT_CONFIG_KEY_0": "credential.helper",
             "GIT_CONFIG_VALUE_0": "!f() { echo username=x-access-token; echo password=\"$MAI_TREEHOUSE_GIT_TOKEN\"; }; f",
