@@ -380,39 +380,12 @@ public struct RunService: Sendable {
                 toolVersion: "builtin-v1",
                 createdAt: run.updatedAt
             )
+            let publication: PublicationReceipt
             do {
-                guard case .opened(let publication) = try publisher.reconcile(
+                guard case .opened(let opened) = try publisher.reconcile(
                     PublicationIntent(request: request, validationReceipt: receipt)
                 ) else { throw PublisherError.commandFailed("reconciliation did not produce a draft PR") }
-                try ledger.recordRemoteBranch(runID: run.id, sha: publication.pushedSHA)
-                try ledger.recordPullRequest(
-                    runID: run.id,
-                    number: publication.prNumber,
-                    url: publication.prURL,
-                    isDraft: publication.isDraft
-                )
-                try? ledger.appendObservation(runID: run.id, kind: "ci_status_recorded", detail: publication.ciStatus)
-                try? ledger.appendObservation(runID: run.id, kind: "workspace_disposition", detail: "clean_published_release_pending")
-                _ = try ledger.transition(runID: run.id, to: .prOpened, detail: "publication reconciled")
-                do {
-                    guard let backend = WorkspaceBackend(rawValue: frozenConfig.worker.workspaceBackend) else {
-                        throw WorkspaceError.commandFailed("frozen workspace backend is invalid")
-                    }
-                    let manager = try workspaceManager(
-                        backend: backend,
-                        stateRoot: config.worker.stateRoot,
-                        environment: environment
-                    )
-                    try manager.releaseCleanPublished(lease: lease, publicationReceipt: publication)
-                    try? ledger.appendObservation(runID: run.id, kind: "workspace_disposition", detail: "clean_published_released")
-                } catch {
-                    try? ledger.appendObservation(runID: run.id, kind: "workspace_disposition", detail: "clean_published_release_deferred:\(error)")
-                }
-                if (try? ledger.currentHostClaim())??.runID == run.id {
-                    do { try ledger.releaseHostClaim(runID: run.id) }
-                    catch { try? ledger.appendObservation(runID: run.id, kind: "host_release_deferred", detail: String(describing: error)) }
-                }
-                _ = patchPath
+                publication = opened
             } catch {
                 let backend = WorkspaceBackend(rawValue: frozenConfig.worker.workspaceBackend) ?? .builtin
                 _ = try? workspaceManager(
@@ -425,6 +398,40 @@ public struct RunService: Sendable {
                     artifacts: [URL(fileURLWithPath: patchPath)]
                 )
                 try failReconciliation(run, detail: String(describing: error))
+                return
+            }
+            do {
+                _ = try ledger.recordPublicationAndOpen(
+                    runID: run.id,
+                    remoteBranchSHA: publication.pushedSHA,
+                    prNumber: publication.prNumber,
+                    prURL: publication.prURL,
+                    prIsDraft: publication.isDraft,
+                    detail: "publication reconciled"
+                )
+            } catch {
+                emitPublicationRecordingDeferred(ledger: ledger, runID: run.id, publication: publication, error: error)
+                return
+            }
+            try? ledger.appendObservation(runID: run.id, kind: "ci_status_recorded", detail: publication.ciStatus)
+            try? ledger.appendObservation(runID: run.id, kind: "workspace_disposition", detail: "clean_published_release_pending")
+            do {
+                guard let backend = WorkspaceBackend(rawValue: frozenConfig.worker.workspaceBackend) else {
+                    throw WorkspaceError.commandFailed("frozen workspace backend is invalid")
+                }
+                let manager = try workspaceManager(
+                    backend: backend,
+                    stateRoot: config.worker.stateRoot,
+                    environment: environment
+                )
+                try manager.releaseCleanPublished(lease: lease, publicationReceipt: publication)
+                try? ledger.appendObservation(runID: run.id, kind: "workspace_disposition", detail: "clean_published_released")
+            } catch {
+                try? ledger.appendObservation(runID: run.id, kind: "workspace_disposition", detail: "clean_published_release_deferred:\(error)")
+            }
+            if (try? ledger.currentHostClaim())??.runID == run.id {
+                do { try ledger.releaseHostClaim(runID: run.id) }
+                catch { try? ledger.appendObservation(runID: run.id, kind: "host_release_deferred", detail: String(describing: error)) }
             }
     }
 
@@ -578,16 +585,23 @@ public struct WorkerRunPipeline: RunExecutionDriving {
             } catch let error as PublisherError {
                 throw PipelineFailure(code: "publication_failed_retained", detail: error.description)
             }
-            try ledger.recordRemoteBranch(runID: context.run.id, sha: publication.pushedSHA)
-            try ledger.recordPullRequest(
-                runID: context.run.id,
-                number: publication.prNumber,
-                url: publication.prURL,
-                isDraft: publication.isDraft
-            )
+            do {
+                _ = try ledger.recordPublicationAndOpen(
+                    runID: context.run.id,
+                    remoteBranchSHA: publication.pushedSHA,
+                    prNumber: publication.prNumber,
+                    prURL: publication.prURL,
+                    prIsDraft: publication.isDraft
+                )
+            } catch {
+                return publicationRecordingDeferred(
+                    context: context,
+                    publication: publication,
+                    error: error
+                )
+            }
             try? ledger.appendObservation(runID: context.run.id, kind: "ci_status_recorded", detail: publication.ciStatus)
             try? ledger.appendObservation(runID: context.run.id, kind: "workspace_disposition", detail: "clean_published_release_pending")
-            _ = try ledger.transition(runID: context.run.id, to: .prOpened)
             do {
                 try selectedManager.releaseCleanPublished(lease: acquired, publicationReceipt: publication)
                 try? ledger.appendObservation(runID: context.run.id, kind: "workspace_disposition", detail: "clean_published_released")
@@ -666,6 +680,24 @@ public struct WorkerRunPipeline: RunExecutionDriving {
         return execution
     }
 
+    private func publicationRecordingDeferred(
+        context: RunExecutionContext,
+        publication: PublicationReceipt,
+        error: Error
+    ) -> RunOutcome {
+        emitPublicationRecordingDeferred(
+            ledger: context.ledger,
+            runID: context.run.id,
+            publication: publication,
+            error: error
+        )
+        return RunOutcome(
+            runID: context.run.id,
+            stateReached: .publishing,
+            message: "draft PR #\(publication.prNumber) opened at \(publication.prURL); local recording deferred to reconciliation"
+        )
+    }
+
     private func retainFailure(
         context: RunExecutionContext,
         failure: PipelineFailure,
@@ -724,6 +756,20 @@ public struct WorkerRunPipeline: RunExecutionDriving {
 private struct PipelineFailure: Error {
     let code: String
     let detail: String
+}
+
+func emitPublicationRecordingDeferred(
+    ledger: RunLedger,
+    runID: String,
+    publication: PublicationReceipt,
+    error: Error
+) {
+    let detail = "pr=#\(publication.prNumber) url=\(publication.prURL) error=\(concise(String(describing: error)))"
+    try? ledger.appendObservation(runID: runID, kind: "publication_recording_deferred", detail: detail)
+    try? ledger.releaseHostClaim(runID: runID)
+    FileHandle.standardError.write(
+        Data("make-an-issue-worker: publication recording deferred, run left in publishing for reconciliation (\(detail))\n".utf8)
+    )
 }
 
 private struct ReconciliationSnapshot: Decodable {

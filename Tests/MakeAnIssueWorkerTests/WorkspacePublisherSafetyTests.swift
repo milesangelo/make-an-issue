@@ -414,6 +414,115 @@ final class WorkspacePublisherSafetyTests: XCTestCase {
         )
     }
 
+    func testReconciliationRecordingFailureStaysPublishingAndConvergesExactlyOnce() throws {
+        // Regression: once publisher.reconcile has verified the remote draft PR open, a failure of
+        // the durable local recording (remote branch + PR metadata + the pr_opened transition, now
+        // one atomic write) must never reclassify the run as failed. The run stays in publishing so
+        // a later pass re-drives it idempotently — finding the already-open PR without a second
+        // create — and a persistent recording failure is visible without ever looping.
+        let fixture = try ConfigFixture(publisherBackend: "builtin", workspaceBackend: "builtin")
+        let origin = try makeBareOrigin(root: fixture.root, timeoutSeconds: loadTolerantGitTimeoutSeconds)
+        let config = try fixture.snapshot()
+        let prepared = try prepareWorkspace(fixture: fixture, config: config, origin: origin.origin)
+        let ledger = try RunLedger(stateRoot: fixture.stateRoot)
+        let inserted = try ledger.createRun(NewRun(
+            id: prepared.lease.id,
+            issue: makeIssue(),
+            configRevision: config.revision,
+            redactedConfigSnapshot: config.redactedSnapshot,
+            routeID: "bug",
+            agentID: "bugfix",
+            triggerKind: .cli
+        ))
+        guard case .created(let run) = inserted else { return XCTFail("expected run creation") }
+        _ = try ledger.claimHost(runID: run.id, ownerPID: Int32.max)
+        _ = try ledger.transition(runID: run.id, to: .claimed)
+        _ = try ledger.transition(runID: run.id, to: .preparing)
+        let artifacts = try ArtifactStore(stateRoot: fixture.stateRoot, runID: run.id)
+        try ledger.recordPreparation(
+            runID: run.id,
+            baseSHA: prepared.baseSHA,
+            branchName: prepared.branch,
+            workspace: prepared.lease,
+            artifacts: artifacts
+        )
+        _ = try ledger.transition(runID: run.id, to: .running)
+        try Data("recording\n".utf8).write(to: prepared.workspace.appendingPathComponent("recording.txt"))
+        try ledger.recordProviderExit(runID: run.id, pid: nil, exit: 0)
+        _ = try ledger.transition(runID: run.id, to: .validating)
+        let inspection = try DiffInspector(limits: config.worker.limits).inspect(git: prepared.git, baseSHA: prepared.baseSHA)
+        try artifacts.archive(inspection)
+        try ledger.recordInspection(runID: run.id, inspection: inspection)
+        let environment = try draftGHEnvironment(root: fixture.root, origin: origin.origin)
+        let publisher = BuiltinPublisher(stateRoot: fixture.stateRoot, environment: environment)
+        let receipt = try publisher.validate(ValidationRequest(
+            repository: "acme/widgets",
+            issueNumber: 42,
+            configRevision: config.revision,
+            validationProfile: "default",
+            baseSHA: prepared.baseSHA,
+            inspection: inspection,
+            git: prepared.git,
+            limits: config.worker.limits,
+            artifactStore: artifacts,
+            timeoutSeconds: 300
+        ))
+        try ledger.recordValidatedSHA(runID: run.id, sha: receipt.headSHA, receiptID: receipt.id)
+        try ledger.recordPublicationIntent(
+            runID: run.id,
+            branch: prepared.branch,
+            baseSHA: prepared.baseSHA,
+            headSHA: receipt.headSHA
+        )
+        _ = try ledger.transition(runID: run.id, to: .publishing)
+        _ = try prepared.git.pushFreshBranch(expectedSHA: receipt.headSHA)
+
+        let countURL = fixture.root.appendingPathComponent("create-count")
+        let service = RunService(config: config, ledger: ledger, environment: environment)
+
+        // Persistent recording failure: the remote PR is opened but the local write always throws.
+        ledger.recordPublicationFaultForTesting = { throw LedgerError.sqlite("injected recording failure") }
+        for pass in 1...2 {
+            try service.reconcilePublishingRuns()
+            let deferred = try ledger.run(id: run.id)
+            XCTAssertEqual(deferred.state, .publishing, "pass \(pass): recording failure must not reclassify the run")
+            XCTAssertNil(deferred.failureCode, "pass \(pass): a run with an open remote PR must not be marked failed")
+            XCTAssertNil(deferred.prNumber, "pass \(pass): the atomic recording must roll back, leaving no partial PR metadata")
+            XCTAssertNil(deferred.remoteBranchSHA, "pass \(pass): the atomic recording must roll back the remote branch too")
+            XCTAssertEqual(
+                try String(contentsOf: countURL, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines),
+                "1",
+                "pass \(pass): the remote draft PR must be created exactly once across retries"
+            )
+        }
+        let diagnostics = try ledger.events(runID: run.id).filter { $0.kind == "publication_recording_deferred" }
+        XCTAssertFalse(diagnostics.isEmpty, "the deferred recording must be recorded as a visible diagnostic")
+
+        // The ledger becomes writable again; reconciliation converges without a second remote create.
+        ledger.recordPublicationFaultForTesting = nil
+        try service.reconcilePublishingRuns()
+        let reconciled = try ledger.run(id: run.id)
+        XCTAssertEqual(reconciled.state, .prOpened)
+        XCTAssertNil(reconciled.failureCode)
+        XCTAssertEqual(reconciled.prNumber, 23)
+        XCTAssertEqual(reconciled.prURL, "https://github.com/acme/widgets/pull/23")
+        XCTAssertEqual(reconciled.prIsDraft, true)
+        XCTAssertNil(try ledger.currentHostClaim())
+        XCTAssertEqual(
+            try String(contentsOf: countURL, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines),
+            "1",
+            "convergence must reuse the existing remote PR, never create a second one"
+        )
+
+        // A terminal run is no longer a publishing candidate, so further passes are inert no-ops.
+        try service.reconcilePublishingRuns()
+        XCTAssertTrue(try ledger.publishingReconciliationCandidates().isEmpty)
+        XCTAssertEqual(
+            try String(contentsOf: countURL, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines),
+            "1"
+        )
+    }
+
     func testReconciliationIsolatesEachCandidateAndNeverBlocksTheBatch() throws {
         // Per-run isolation: a candidate that fails reconciliation must be marked failed,
         // release its host claim, and never abort the loop for the candidates queued behind it.

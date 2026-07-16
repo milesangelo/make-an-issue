@@ -143,6 +143,11 @@ public final class RunLedger: @unchecked Sendable {
     private let lock = NSLock()
     private let stateRoot: URL
 
+    /// Test-only seam invoked inside `recordPublicationAndOpen`'s transaction to deterministically
+    /// simulate a durable-write failure after the remote draft PR has been opened. Always nil in
+    /// production; throwing here rolls back the whole publication recording.
+    var recordPublicationFaultForTesting: (() throws -> Void)?
+
     public convenience init(stateRoot: URL) throws {
         try StateDirectory.ensure(stateRoot)
         try self.init(databaseURL: stateRoot.appendingPathComponent(Self.databaseFileName))
@@ -459,6 +464,54 @@ public final class RunLedger: @unchecked Sendable {
             event: "pull_request_verified",
             detail: "number=\(number) draft=\(isDraft) url=\(url)"
         )
+    }
+
+    /// Atomically records the verified remote branch, pull-request metadata, and the terminal
+    /// `pr_opened` transition in a single transaction: either every write lands or none do.
+    public func recordPublicationAndOpen(
+        runID: String,
+        remoteBranchSHA: String,
+        prNumber: Int,
+        prURL: String,
+        prIsDraft: Bool,
+        detail: String? = nil
+    ) throws -> RunRecord {
+        try synchronized {
+            try transaction(immediate: true) {
+                let current = try fetchRunUnlocked(id: runID)
+                guard current.state.permits(.prOpened) else {
+                    throw LedgerError.invalidTransition(from: current.state, to: .prOpened)
+                }
+                let now = Date().timeIntervalSince1970
+                try execute(
+                    """
+                    UPDATE runs
+                    SET remote_branch_sha = ?, pr_number = ?, pr_url = ?, pr_is_draft = ?,
+                        state = ?, failure_code = NULL, updated_at = ?, finished_at = ?
+                    WHERE id = ?
+                    """,
+                    [
+                        .text(remoteBranchSHA), .integer(Int64(prNumber)), .text(prURL),
+                        .integer(prIsDraft ? 1 : 0), .text(RunState.prOpened.rawValue),
+                        .double(now), .double(now), .text(runID),
+                    ]
+                )
+                try insertEvent(
+                    runID: runID, kind: "remote_branch_observed", from: nil, to: nil,
+                    detail: remoteBranchSHA, at: now
+                )
+                try insertEvent(
+                    runID: runID, kind: "pull_request_verified", from: nil, to: nil,
+                    detail: "number=\(prNumber) draft=\(prIsDraft) url=\(prURL)", at: now
+                )
+                try insertEvent(
+                    runID: runID, kind: "state_transition", from: current.state, to: .prOpened,
+                    detail: detail, at: now
+                )
+                try recordPublicationFaultForTesting?()
+                return try fetchRunUnlocked(id: runID)
+            }
+        }
     }
 
     public func appendObservation(runID: String, kind: String, detail: String?) throws {
