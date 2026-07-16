@@ -6,8 +6,8 @@ current_phase: 09
 status: verifying
 stopped_at: Completed 09-01-PLAN.md
 last_updated: "2026-07-15T19:56:00-06:00"
-last_activity: 2026-07-15
-last_activity_desc: Completed quick task 260715-r4z make-an-issue-worker workspace and publisher pipeline
+last_activity: 2026-07-16
+last_activity_desc: Completed quick task 260716-k7e Claude Code worker provider adapter
 progress:
   total_phases: 5
   completed_phases: 5
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-06-28)
 Phase: 09
 Plan: Not started
 Status: Phase complete — ready for verification
-Last activity: 2026-07-15 — Completed quick task 260715-r4z make-an-issue-worker workspace and publisher pipeline
+Last activity: 2026-07-16 — Completed quick task 260716-k7e Claude Code worker provider adapter
 
 ## Accumulated Context
 
@@ -100,12 +100,13 @@ Open items carried into the v1.1 milestone:
 
 ### Quick Tasks Completed
 
-| # | Description | Date | Commit | Directory |
-|---|-------------|------|--------|-----------|
-| 260715-k1m | Release app signing | 2026-07-15 | 8dcfb3d | [260715-k1m-release-app-signing](./quick/260715-k1m-release-app-signing/) |
-| 260715-k29 | Author make-an-issue-worker product contract and threat model design docs | 2026-07-15 | b05dbc3 | [260715-k29-author-make-an-issue-worker-product-cont](./quick/260715-k29-author-make-an-issue-worker-product-cont/) |
-| 260715-ptv | Implement make-an-issue-worker CLI foundation | 2026-07-15 | 45c50d7 | [260715-ptv-implement-make-an-issue-worker-cli-skele](./quick/260715-ptv-implement-make-an-issue-worker-cli-skele/) |
-| 260715-r4z | Implement make-an-issue-worker workspace and builtin publisher pipeline | 2026-07-15 | c2dbf29 | [260715-r4z-implement-the-make-an-issue-worker-works](./quick/260715-r4z-implement-the-make-an-issue-worker-works/) |
+| # | Description | Date | Commit | Status | Directory |
+|---|-------------|------|--------|--------|-----------|
+| 260715-k1m | Release app signing | 2026-07-15 | 8dcfb3d |  | [260715-k1m-release-app-signing](./quick/260715-k1m-release-app-signing/) |
+| 260715-k29 | Author make-an-issue-worker product contract and threat model design docs | 2026-07-15 | b05dbc3 |  | [260715-k29-author-make-an-issue-worker-product-cont](./quick/260715-k29-author-make-an-issue-worker-product-cont/) |
+| 260715-ptv | Implement make-an-issue-worker CLI foundation | 2026-07-15 | 45c50d7 |  | [260715-ptv-implement-make-an-issue-worker-cli-skele](./quick/260715-ptv-implement-make-an-issue-worker-cli-skele/) |
+| 260715-r4z | Implement make-an-issue-worker workspace and builtin publisher pipeline | 2026-07-15 | c2dbf29 |  | [260715-r4z-implement-the-make-an-issue-worker-works](./quick/260715-r4z-implement-the-make-an-issue-worker-works/) |
+| 260716-k7e | Implement the claude-code provider adapter for make-an-issue-worker under the normative safety contract | 2026-07-16 | 27ffe8b | Verified | [260716-k7e-implement-the-claude-code-provider-adapt](./quick/260716-k7e-implement-the-claude-code-provider-adapt/) |
 
 ## Deferred Items
 
