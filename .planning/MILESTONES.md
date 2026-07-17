@@ -1,5 +1,45 @@
 # Milestones
 
+## v1.1 Concurrent Filing & Control (Shipped: 2026-07-02)
+
+**Delivered:** Concurrent background filing with per-job cancellation and visible outcomes, plus
+an AppKit status-item shell, live recording indicator, and editable drafting instructions whose
+security-sensitive filing contract remains app-owned.
+
+**Phases completed:** 5 phases, 13 plans, 32 tasks
+
+**Key accomplishments:**
+
+- Replaced serial filing state with independent concurrent `FilingJob` tasks and deferred spoken
+  announcements safely around microphone capture.
+- Added process-group cancellation and quit teardown with TERM-to-KILL escalation, deterministic
+  MCP tempfile cleanup, and retained cancelled outcomes.
+- Replaced `MenuBarExtra` with an AppKit `NSStatusItem`/popover shell supporting left-click status,
+  right-click Settings/Quit, and a recording-only red menu-bar indicator.
+- Added persisted drafting instructions with Reset-to-Default while keeping tool scope and the
+  issue-URL output contract outside user-editable text.
+- Added the live filing-jobs list with per-job Stop, persistent recoverable errors, safe issue links,
+  dismiss, and terminal-only Clear-all controls.
+
+**Verification:** 15/15 requirements satisfied; 5/5 phases passed; 12/12 integrations and 5/5
+end-to-end flows wired. Five non-blocking tech-debt items and partial Nyquist coverage are retained
+in the archived audit.
+
+**Stats:**
+
+- 2,090 Swift additions and 299 Swift deletions from the v1.0 tag to the shipped boundary
+- 5 phases, 13 plans, 32 tasks
+- 4 days from milestone start to ship (2026-06-28 → 2026-07-02)
+
+**Git range:** `adff579` → `5c26f6c`
+
+**Archived:** 2026-07-17
+
+**What's next:** v1.2 Issue-to-PR Worker planning starts from the post-v1.1 groundwork merged in
+PRs #10–#15; that later work is not part of v1.1.
+
+---
+
 ## v1.0 MVP (Shipped: 2026-06-28)
 
 **Phases completed:** 4 phases, 15 plans, 19 tasks

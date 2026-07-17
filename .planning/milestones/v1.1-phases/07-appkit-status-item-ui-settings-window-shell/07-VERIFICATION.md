@@ -1,7 +1,7 @@
 ---
 phase: 07-appkit-status-item-ui-settings-window-shell
 verified: 2026-06-30T00:00:00Z
-status: verified
+status: passed
 score: 7/7 must-haves verified
 behavior_unverified: 0
 uat_closed: 2026-07-01 — 07-UAT.md, 6/6 human checks passed

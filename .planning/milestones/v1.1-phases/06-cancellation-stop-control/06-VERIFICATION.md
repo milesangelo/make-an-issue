@@ -1,7 +1,7 @@
 ---
 phase: 06-cancellation-stop-control
 verified: 2026-06-29T20:45:00Z
-status: verified
+status: passed
 resolved_at: 2026-06-30
 score: 4/4 must-haves verified
 behavior_unverified: 0

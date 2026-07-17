@@ -2,36 +2,36 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Concurrent Filing & Control
-current_phase: 09
-status: verifying
-stopped_at: Completed 09-01-PLAN.md
-last_updated: "2026-07-15T19:56:00-06:00"
-last_activity: 2026-07-16
-last_activity_desc: Completed quick task 260716-k7e Claude Code worker provider adapter
+current_phase: null
+status: milestone_complete
+stopped_at: v1.1 archived; v1.2 requirements and phases not yet defined
+last_updated: "2026-07-17"
+last_activity: 2026-07-17
+last_activity_desc: Milestone v1.1 completed and archived
 progress:
   total_phases: 5
   completed_phases: 5
   total_plans: 13
   completed_plans: 13
   percent: 100
-current_phase_name: jobs-list-ui-per-job-stop-surfaced-errors
+current_phase_name: null
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-28)
+See: .planning/PROJECT.md (updated 2026-07-17)
 
-**Core value:** Capture a repo-aware tracker issue (GitHub or Jira) by voice in seconds — spoken word to filed issue, end to end.
-**Current focus:** Phase 09 — jobs-list-ui-per-job-stop-surfaced-errors
+**Core value:** Capture a repo-aware GitHub issue by voice in seconds — spoken word to filed issue, end to end.
+**Current focus:** Plan v1.2 Issue-to-PR Worker from the merged PR #10–#15 baseline
 
 ## Current Position
 
-Phase: 09
-Plan: Not started
-Status: Phase complete — ready for verification
-Last activity: 2026-07-16 — Completed quick task 260716-k7e Claude Code worker provider adapter
+Phase: None active
+Plan: v1.2 requirements and roadmap not yet defined
+Status: v1.1 archived; v1.2 planning baseline established
+Last activity: 2026-07-17 — Milestone v1.1 completed and archived
 
 ## Accumulated Context
 
@@ -89,14 +89,22 @@ Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecti
 
 ### Blockers/Concerns
 
-Open items carried into the v1.1 milestone:
+Open items for v1.2 planning:
 
-- ~~**Cancellation correctness (Phase 6):**~~ RESOLVED in Phase 6 — process-group SIGTERM→2s grace→SIGKILL on cancel and quit paths; `make-an-issue-mcp-*.json` swept on quit (synchronous sweep fix, commit 30fd152). UAT verified, threats SECURED (06-SECURITY.md).
-- ~~**KeyboardShortcuts under NSPopover/NSMenu (Phase 7):**~~ RESOLVED in Phase 7 — the `MenuBarExtra` `.onDisappear` end-tracking workaround was removed; UAT Test 6 (2026-07-01) confirmed push-to-talk fires across popover/menu open-close cycles and while the popover is open (A4 closed). Threats SECURED (07-SECURITY.md).
-- **Editable-prompt parse safety (Phase 8):** keep the editable field instructions-only; the enforced contract (scoped `--allowedTools`, `method=create`, "Issue URL on last line") is appended by `buildPrompt` and the CLI flags live in `assembleCommand`. Harden `IssueResultParser` prose fallback to match the **last** URL/line, not the first occurrence anywhere, or user edits produce false "created #N".
-- **Distribution gap (carried):** the release `.app` (nested whisper Mach-O files, then the sealed outer bundle) is signed by `build-app.sh` with `CODESIGN_IDENTITY` (ad-hoc `-` by default) and strict-verified via `scripts/verify-app-signing.sh` — but an ad-hoc signature is not Gatekeeper-approved. Developer-ID signing + hardened-runtime notarization required before clean-machine distribution (deferred — DIST-01; see 03-CONTEXT.md D-04/D-05).
-- **Provider breadth deferred (carried):** `codex exec` non-interactive MCP writes broken upstream; Atlassian/Jira zero-token non-interactive write may be infeasible. v1 proven leg = `claude -p` + GitHub remote MCP. Re-spike before promising non-Claude/Jira providers (PROVIDER-01).
-- **Migration cost (Phase 5):** the jobs-model refactor intentionally rewrites serial-filing AppStateTests (`testFilingEntersFilingState`, `testPushToTalkDuringFilingIsIgnored` — re-press during filing is now *allowed*, the feature; `testStartRecordingAfterFilingReturnsToIdle`; `.filing` assertions in `testSuccessfulTranscriptionStoresText`).
+- **Worker completion:** label pickup/reconciliation, menu-app enqueue/status integration, and the
+  per-user worker lifecycle remain to be turned into requirements and phases.
+- **v1.1 audit debt:** four cancellation robustness/coverage observations and one
+  documentation-precision warning remain non-blocking; Nyquist coverage is partial on Phases 5–9.
+- **Distribution:** the release app is strictly verified with an ad-hoc signature, but
+  Developer-ID signing, hardened runtime, and notarization are still required for clean-machine
+  distribution.
+- **Provider breadth:** the app and worker have proven Claude/GitHub paths; any additional provider
+  commitment requires fresh feasibility and requirements work.
+
+### Post-v1.1 vNext Groundwork
+
+These quick-task artifacts were created after the v1.1 shipped boundary and are preserved as
+vNext groundwork. They are not v1.1 phase or requirement evidence.
 
 ### Quick Tasks Completed
 
@@ -153,5 +161,6 @@ Decision record: .planning/research/SUMMARY.md (v1.1 research)
 
 ## Operator Next Steps
 
-- Plan Phase 8 (Editable System Prompt + FINDING-06 Cleanup) with /gsd-plan-phase 8
-- Phase 9 follow-up captured: add an in-flight "Filing issue…" indicator (no UI feedback during background investigation today) — see 06-UAT.md follow-up
+- Start v1.2 Issue-to-PR Worker with `$gsd-new-milestone`.
+- Convert the remaining normative worker acceptance surface into fresh requirements and phases;
+  do not treat already-merged PR #10–#15 work as unimplemented.
