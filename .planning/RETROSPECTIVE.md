@@ -60,6 +60,66 @@
 
 ---
 
+## Milestone: v1.1 — Concurrent Filing & Control
+
+**Shipped:** 2026-07-02
+**Phases:** 5 | **Plans:** 13 | **Tasks:** 32
+
+### What Was Built
+
+- Concurrent, independently retained filing jobs that no longer block the next recording.
+- Full-process-tree per-job cancellation and quit teardown with scoped MCP-tempfile cleanup.
+- AppKit status-item/popover architecture with right-click Settings/Quit and a recording-only red
+  menu-bar indicator.
+- Persisted drafting instructions whose tool scope and issue-output contract remain app-owned.
+- A live jobs list with per-job Stop, terminal dismissal, safe issue links, and persistent
+  recoverable error context.
+
+### What Worked
+
+- Empirical process-group tests de-risked cancellation before the implementation depended on it.
+- Blocking human UAT caught a real quit-time tempfile race and proved status-item click routing,
+  focus, recording feedback, and global-shortcut survival on macOS.
+- The phase chain kept model, cancellation, shell, instructions, and jobs UI responsibilities
+  separate while still producing an end-to-end control surface.
+- Pure view-logic helpers made URL validation and terminal-row behavior testable without adding a
+  rendered SwiftUI test dependency.
+
+### What Was Inefficient
+
+- Legacy `status: verified` frontmatter on Phases 6 and 7 later made current GSD readiness report
+  those completed phases as unknown until closeout normalization.
+- Summary one-liners were inconsistent enough that the generic milestone extractor produced noisy
+  accomplishments and undercounted tasks; closeout required evidence-based manual correction.
+- Phase 6's first manual quit gate found a cleanup race after automated tests had passed, requiring
+  a targeted gap-closure loop.
+
+### Patterns Established
+
+- Keep capture state and long-running filing state in separate models.
+- Treat dismissal and cancellation as distinct user actions.
+- Keep editable prompt guidance separate from app-owned security and output constraints.
+- For AppKit/SwiftUI interaction behavior, pair source-level wiring checks with explicit human UAT.
+
+### Key Lessons
+
+1. Persist completion metadata in the schema the current workflow actually reads; otherwise valid
+   UAT evidence becomes invisible to readiness tooling.
+2. Process-tree and AppKit lifecycle behavior need real runtime gates even when unit seams are
+   strong.
+3. Milestone archives must use the shipped commit boundary, not later repository state, when
+   attributing requirements and accomplishments.
+4. Later groundwork should remain visible in current-state docs without being back-attributed to
+   the milestone being closed.
+
+### Cost Observations
+
+- Model mix / session count: not reliably instrumented.
+- Notable: 13 small plans kept implementation reviewable; human UAT and the cancellation
+  gap-closure loop carried most of the non-code coordination cost.
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -67,14 +127,18 @@
 | Milestone | Phases | Plans | Key Change |
 |-----------|--------|-------|------------|
 | v1.0 | 4 | 15 | Mid-milestone realignment (`/gsd-explore`): bundled whisper + merged AI-CLI/MCP filing, `gh` retired |
+| v1.1 | 5 | 13 | Filing became concurrent and user-controllable; AppKit status shell and editable instructions added |
 
 ### Cumulative Quality
 
 | Milestone | Swift LOC | Files | Carried Tech Debt |
 |-----------|-----------|-------|-------------------|
 | v1.0 | ~3,660 | 23 | Orphaned CLI Command field; Nyquist docs incomplete on Phases 1–3 |
+| v1.1 | ~5,448 | 29 | Five non-blocking audit items; Nyquist partial on Phases 5–9 |
 
 ### Top Lessons (Verified Across Milestones)
 
-1. Human-verify on real hardware catches what unit tests can't. *(v1.0 — re-confirm in future milestones)*
-2. Realign scope early; don't ship-then-rework. *(v1.0 — re-confirm in future milestones)*
+1. Human verification on real hardware catches lifecycle and integration defects that source and
+   unit checks cannot. *(v1.0, v1.1)*
+2. Empirical gates should precede risky platform assumptions. *(v1.1; re-confirm in future milestones)*
+3. Realign scope early; don't ship and then rework. *(v1.0; re-confirm in future milestones)*
